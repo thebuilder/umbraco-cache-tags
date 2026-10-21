@@ -13,9 +13,21 @@
     <!-- Lift Umbraco's vulnerable transitive versions; see Directory.Packages.props. -->
     <PackageReference Include="MessagePack" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
-    <!-- CACHE TAGS: reference the package here once src/TheBuilder.CacheTags exists, and call
-         AddCacheTags() in Program.cs.
+  </ItemGroup>
+  <!-- CACHE TAGS: the package goes in one of these two ways, and AddCacheTags() in Program.cs either way.
+       By default the project: uncomment the ProjectReference once src/TheBuilder.CacheTags exists.
+       To test the packed .nupkg instead, the artifact that gets published, pass its version (see
+       ../README.md). It is restored from ../../artifacts, or from CacheTagsPackageSource. -->
+  <ItemGroup Condition="'$(CacheTagsPackageVersion)' == ''">
+    <!--
     <ProjectReference Include="../../src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj" />
     -->
+  </ItemGroup>
+  <PropertyGroup Condition="'$(CacheTagsPackageVersion)' != ''">
+    <CacheTagsPackageSource Condition="'$(CacheTagsPackageSource)' == ''">$(MSBuildThisFileDirectory)../../artifacts</CacheTagsPackageSource>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(CacheTagsPackageSource)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(CacheTagsPackageVersion)' != ''">
+    <PackageReference Include="TheBuilder.CacheTags" VersionOverride="$(CacheTagsPackageVersion)" />
   </ItemGroup>
 </Project>

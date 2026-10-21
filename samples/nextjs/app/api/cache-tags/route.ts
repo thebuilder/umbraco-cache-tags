@@ -69,12 +69,13 @@ export async function POST(request: Request) {
       // One response or one item: the next request waits for fresh content.
       revalidateTag(key, { expire: 0 });
       expired.push(key);
-    } else if (key.startsWith("t-") || key === "umbraco") {
-      // Broad keys touch many pages: serve stale while they refresh.
+    } else if (/^(t|ch|s)-/.test(key) || key === "umbraco") {
+      // Listings (by content type, by parent, by other query) and everything: these touch many
+      // pages, so serve stale while they refresh.
       revalidateTag(key, "max");
       stale.push(key);
     } else {
-      // Other kinds (such as ch- and s-) are reported back, not purged, by this example.
+      // A kind this example does not know is reported back, not purged.
       ignored.push(key);
     }
   }

@@ -11,6 +11,8 @@ The package itself (`src/TheBuilder.CacheTags`) does not exist yet. The places t
 `CACHE TAGS` in the sample's csproj and `Program.cs`. Until it is added, Umbraco sends no cache
 keys, so see [Before the package exists](#before-the-package-exists).
 
+`pnpm e2e` checks the whole loop automatically: see [Check it automatically](#check-it-automatically).
+
 ## Run Umbraco
 
 Needs the .NET 10 SDK.
@@ -21,6 +23,17 @@ dotnet run --project samples/TheBuilder.CacheTags.Example
 
 The first start creates `umbraco/Data/Umbraco.sqlite.db` and seeds the content. The backoffice is
 http://localhost:5320/umbraco, user `local@example.invalid`, password `LocalOnly!42` (local only).
+
+Every start also makes sure there is an API user for scripts (`Seeding/ExampleApiUserSeeder.cs`), so
+a database seeded before it existed gets it too. It is in the Administrators group and signs in to
+the Management API with client credentials, client id `umbraco-back-office-cache-tags-e2e` and
+secret `example-local-e2e-client-secret` (local only, also in `nextjs/.env`):
+
+```bash
+curl -s http://localhost:5320/umbraco/management/api/v1/security/back-office/token -d 'grant_type=client_credentials&client_id=umbraco-back-office-cache-tags-e2e&client_secret=example-local-e2e-client-secret'
+```
+
+`Umbraco:CMS:Global:UseHttps` is `false`, so the token endpoint answers over plain HTTP on localhost.
 
 On a fresh database Umbraco fills its Delivery API index about a minute after the first start, so the
 article listing is empty until then. This shows the articles once it is ready:
@@ -62,7 +75,8 @@ are covered. Dusk is used by both the home page and the third article.
 
 ## Run Next.js
 
-Needs Node 22 or later and pnpm. In a second terminal:
+Needs Node 22.18 or later (it runs the TypeScript scripts in `scripts/` directly) and pnpm. In a second
+terminal:
 
 ```bash
 cd samples/nextjs
@@ -124,9 +138,9 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 - An event id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
   Ids are kept in memory, per process.
 - `q-`, `c-` and `m-` keys are expired at once (`revalidateTag(key, { expire: 0 })`): the next request
-  waits for fresh content. `t-` keys and `umbraco` are marked stale (`revalidateTag(key, 'max')`): the
-  next request still gets the old page and refreshes it in the background. Other keys are returned
-  under `ignored`.
+  waits for fresh content. `t-`, `ch-` and `s-` keys and `umbraco` are marked stale
+  (`revalidateTag(key, 'max')`): the next request still gets the old page and refreshes it in the
+  background. Other keys are returned under `ignored`.
 
 `pnpm purge` sends a signed webhook, the same way:
 
@@ -149,6 +163,63 @@ With the package added and both sites running:
    http://localhost:3000/en-us/about kept its time: it should, if the package limits a purge to the
    cultures that were published.
 6. Change the Harbour image's name in Media and save. The pages that show it refresh.
+
+### Check it automatically
+
+`samples/nextjs/scripts/e2e.mts` runs the steps above through the Management API. With Umbraco running
+and the Next.js site built and served with `pnpm start` (not `pnpm dev`, which caches differently):
+
+```bash
+cd samples/nextjs
+```
+
+```bash
+pnpm e2e
+```
+
+It reads each page's Cache box, publishes a change as the seeded API user, and waits for the pages
+to refresh:
+
+1. Harbour mornings' summary changes. The article and `/articles` must show it, `/` and Forest walks
+   must refetch their response, and `/en-us/about` must keep its cache.
+2. A new article is published under Articles. `/articles` must list it. The listing comes from the
+   Delivery API index, so this case waits twice as long. Right after Umbraco starts, the index can
+   take more than half a minute to pick up a publish, so give Umbraco a minute before the first run.
+3. Only da-DK of the about page is published. `/da-dk/om-os` must show it. Whether `/en-us/about` kept
+   its cache is reported, not judged.
+4. The Harbour image is renamed. The article and `/articles` must show the new name (it is the
+   image's alt text).
+
+Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
+page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its
+change when it ends, and a run first cleans up after one that was stopped halfway, so it can run
+again and again against the same database. Before a change, each case waits until the pages it checks
+are cached and steady, so a page that refetches only because its cache entry was empty cannot pass.
+
+`E2E_TIMEOUT` sets how many seconds a case waits (default 30). `UMBRACO_URL`, `FRONTEND_URL`,
+`UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the
+environment or `.env.local`.
+
+Until the package is added every case fails, with `tags: none` under each page: Umbraco sends no
+cache keys and no purge.
+
+### Check the packed package
+
+To check the `.nupkg` that gets published rather than the project, pack it into `artifacts/` at the
+repository root with a version of its own, and build the sample with that version:
+
+```bash
+dotnet pack src/TheBuilder.CacheTags -o artifacts -p:Version=0.0.0-local.1
+```
+
+```bash
+dotnet run --project samples/TheBuilder.CacheTags.Example -p:CacheTagsPackageVersion=0.0.0-local.1
+```
+
+`CacheTagsPackageVersion` swaps the project reference for a package reference, restored from
+`artifacts/` (or the folder in `CacheTagsPackageSource`). NuGet keeps every version it restores in its
+global packages folder and does not look at the file again, so give each pack a new version. Then run
+`pnpm e2e` as above.
 
 ### Before the package exists
 

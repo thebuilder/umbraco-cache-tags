@@ -18,7 +18,9 @@ namespace TheBuilder.CacheTags.Example.Seeding;
 public sealed class ExampleSeederComposer : IComposer
 {
     public void Compose(IUmbracoBuilder builder) =>
-        builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, ExampleSeeder>();
+        builder
+            .AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, ExampleSeeder>()
+            .AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, ExampleApiUserSeeder>();
 }
 
 /// <summary>
