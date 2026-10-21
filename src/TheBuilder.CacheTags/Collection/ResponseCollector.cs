@@ -67,7 +67,7 @@ internal sealed class ResponseCollector(
         IEnumerable<string> shown = items.Count <= options.MaxItemKeys ? items : TypeKeys(items);
         return string.Join(", ", new[] { responseKey }
             .Concat(shown)
-            .Concat(keys.Where(CacheKeys.IsSelector).Order(StringComparer.Ordinal))
+            .Concat(keys.Where(key => CacheKeys.IsSelector(key) || CacheKeys.IsSchema(key)).Order(StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .Select(key => CacheKeys.WithPrefix(options.KeyPrefix, key)));
     }

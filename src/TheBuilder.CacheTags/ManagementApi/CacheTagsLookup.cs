@@ -135,6 +135,7 @@ internal sealed class CacheTagsLookup(
         _ when key.StartsWith(CacheKeys.TypePrefix, StringComparison.Ordinal) => "type",
         _ when key.StartsWith(CacheKeys.ChildrenPrefix, StringComparison.Ordinal) => "children",
         _ when key.StartsWith(CacheKeys.SearchPrefix, StringComparison.Ordinal) => "search",
+        _ when key.StartsWith(CacheKeys.SchemaPrefix, StringComparison.Ordinal) => "schema",
         CacheKeys.All => "everything",
         _ => "unknown",
     };

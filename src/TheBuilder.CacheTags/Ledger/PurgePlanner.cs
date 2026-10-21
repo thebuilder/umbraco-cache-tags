@@ -20,7 +20,9 @@ internal sealed class PurgePlanner(IDescendants descendants)
         var keys = new SortedSet<string>(StringComparer.Ordinal);
         if (change.Kind == ChangeKind.TypesChanged)
         {
+            // Listings of the type, and every response that renders an item of it.
             keys.UnionWith(change.TypeAliases.Select(CacheKeys.Type));
+            keys.UnionWith(change.TypeAliases.Select(CacheKeys.Schema));
             return new PurgePlan(keys, Everything: false, change.Cultures);
         }
 

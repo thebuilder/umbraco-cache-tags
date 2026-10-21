@@ -11,6 +11,7 @@ internal static class CacheKeys
     public const string TypePrefix = "type-";
     public const string ChildrenPrefix = "children-";
     public const string SearchPrefix = "search-";
+    public const string SchemaPrefix = "schema-";
     public const string All = "umbraco";
 
     public static string Content(Guid key) => ContentPrefix + key.ToString("D");
@@ -18,6 +19,9 @@ internal static class CacheKeys
     public static string Media(Guid key) => MediaPrefix + key.ToString("D");
 
     public static string Type(string alias) => TypePrefix + alias.ToLowerInvariant();
+
+    /// <summary>A response that renders an item, element or media of this type: its shape changes with the type.</summary>
+    public static string Schema(string alias) => SchemaPrefix + alias.ToLowerInvariant();
 
     public static string Children(Guid parentKey) => ChildrenPrefix + parentKey.ToString("D");
 
@@ -42,6 +46,9 @@ internal static class CacheKeys
         var bare = key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
         return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare);
     }
+
+    /// <summary>Whether a key names a type whose items a response renders (<c>schema-</c>).</summary>
+    public static bool IsSchema(string key) => key.StartsWith(SchemaPrefix, StringComparison.Ordinal);
 
     /// <summary>Applies the configured prefix to a key, for the header and the purge payload.</summary>
     public static string WithPrefix(string prefix, string key) => prefix.Length == 0 ? key : prefix + key;

@@ -2,15 +2,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Ledger;
 
 namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>
-///     The loop every server runs: acknowledge the refreshes it applied, release the changes every
+///     The loop every server runs: record the changes that failed to record before, acknowledge the
+///     refreshes it applied, release the changes every
 ///     server has applied, and send the purges that are due. Leases make sure only one server
 ///     releases each change and sends each purge.
 /// </summary>
 internal sealed class DeliveryWorker(
+    ChangeRecorder recorder,
     AckProcessor acks,
     Releaser releaser,
     PurgeSender sender,
@@ -38,10 +41,11 @@ internal sealed class DeliveryWorker(
     {
         try
         {
+            recorder.RecordUnrecorded();
             await acks.ProcessAsync(cancellationToken);
             var waiting = await releaser.ReleaseAsync(cancellationToken);
             var pending = await sender.SendAsync(cancellationToken);
-            return acks.HasQueued || waiting > 0 || pending > 0;
+            return recorder.HasUnrecorded || acks.HasQueued || waiting > 0 || pending > 0;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

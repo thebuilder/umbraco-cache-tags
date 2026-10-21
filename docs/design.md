@@ -14,7 +14,8 @@ case-sensitively, so a key that differed only in case would behave differently p
 | `response-<hash>` | One Delivery API response: path, normalised query, culture, segment, start item | expire now |
 | `content-<guid>` | One document | expire now |
 | `media-<guid>` | One media item | expire now |
-| `type-<alias>` | Every response listing or showing a content type (alias lowercased) | stale, refresh in background |
+| `type-<alias>` | Every listing filtered by a content or media type (alias lowercased) | stale, refresh in background |
+| `schema-<alias>` | Every response that renders a document, media or block element of a type, whose shape a type or data type change alters | stale, refresh in background |
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale, refresh in background |
 | `search-<index>` | Every other query against an index (`search-deliveryapicontentindex`) | stale, refresh in background |
 | `umbraco` | Everything | stale, refresh in background |
@@ -42,8 +43,11 @@ identity is the path, the query string normalised (parameters sorted, empty valu
 `skip=0` and `take=10` dropped), the request culture, the segment and the start item. The same
 request always gives the same key on every server.
 
-The package records which `content-`, `media-` and selector keys (`type-`, `children-`, `search-`)
-each response key covers. A change is planned as item and selector keys and resolved to the response
+The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
+`search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
+their `type-` keys). Only the Delivery API's own query parameters (`id`, `fetch`, `filter`, `sort`,
+`skip`, `take`, `expand`, `fields`) are part of the key; any other parameter leaves it unchanged. A
+request whose segment or start item is too long to record gets `no-store` and no key. A change is planned as item and selector keys and resolved to the response
 keys that cover them. With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
 itself), the header lists the item keys instead, up to `MaxItemKeys` (64), then falls back to
 `type-` keys. The header name is `CacheTags:HeaderName`.
@@ -51,7 +55,10 @@ itself), the header lists the item keys instead, up to `MaxItemKeys` (64), then 
 No keys, and the given `Cache-Control`, on:
 
 - preview requests: `no-store`;
-- requests with a member's bearer token: `private`.
+- requests with a member's bearer token, or any authenticated user: `private`.
+
+The package does not send `Vary`. A frontend or CDN that forwards `Accept-Language`, `Accept-Segment`
+or `Start-Item` to Umbraco must include them in its own cache key.
 
 ## The purge webhook
 
