@@ -23,6 +23,8 @@ export type ApiLink = {
 };
 
 export type ApiContent<P = Record<string, unknown>> = ApiLink & {
+  createDate: string;
+  updateDate: string;
   properties: P;
   cultures: Record<string, ApiRoute>;
 };
@@ -35,9 +37,60 @@ export type ApiImage = {
   height: number;
 };
 
-export type ApiRichText = { markup: string };
+/** Any media item. Files have no width or height; crops and focal point come from the picker. */
+export type ApiMedia = {
+  id: string;
+  name: string;
+  mediaType: string;
+  url: string;
+  extension: string | null;
+  width: number | null;
+  height: number | null;
+  bytes: number | null;
+  focalPoint: { left: number; top: number } | null;
+  crops: ApiCrop[];
+};
 
-export type ApiBlockList<P> = { items: { content: { id: string; properties: P } }[] };
+/** A crop: the output size, and the fractions cut from each edge (null when the editor set none). */
+export type ApiCrop = {
+  alias: string;
+  width: number;
+  height: number;
+  coordinates: { x1: number; y1: number; x2: number; y2: number } | null;
+};
+
+/** A media item in a listing (`media?fetch=...`), which has a path of its own. */
+export type ApiMediaItem = ApiMedia & { path: string };
+
+/** Rich text as markup. Blocks sit in the markup as `umb-rte-block` placeholders. */
+export type ApiRichText = { markup: string; blocks?: ApiBlock[] };
+
+export type ApiBlock<P = Record<string, unknown>> = {
+  content: { id: string; contentType: string; properties: P };
+};
+
+export type ApiBlockList<P = Record<string, unknown>> = { items: ApiBlock<P>[] };
+
+export type ApiGridItem = ApiBlock & {
+  columnSpan: number;
+  rowSpan: number;
+  areaGridColumns: number | null;
+  areas: { alias: string; columnSpan: number; rowSpan: number; items: ApiGridItem[] }[];
+};
+
+export type ApiBlockGrid = { gridColumns: number; items: ApiGridItem[] };
+
+/** A multi URL picker link. */
+export type ApiMultiLink = {
+  title: string | null;
+  url: string | null;
+  queryString: string | null;
+  target: string | null;
+  destinationId: string | null;
+  destinationType: string | null;
+  route: ApiRoute | null;
+  linkType: "Content" | "Media" | "External";
+};
 
 export type ApiPaged<T> = { total: number; items: T[] };
 
@@ -103,17 +156,33 @@ export function contentByRoute<P>(path: string, culture: Culture | null = null) 
 }
 
 /** Media URLs are relative to the Umbraco site. */
-export function mediaUrl(image: ApiImage) {
+export function mediaUrl(image: Pick<ApiImage, "url">) {
   return `${umbracoUrl}${image.url}`;
 }
 
 export const cultures: Record<string, Culture> = { "en-us": "en-US", "da-dk": "da-DK" };
 
-/** Where a Delivery API item lives in this app. Culture-variant pages sit under a locale prefix. */
-export function href(item: ApiLink, culture: Culture = "en-US") {
-  if (item.contentType === "aboutPage") {
+/** The content types that vary by culture. Their pages sit under a locale prefix. */
+const variantTypes = new Set(["aboutPage", "event"]);
+
+/** Where a Delivery API item lives in this app. */
+export function href(item: Pick<ApiLink, "contentType" | "route">, culture: Culture = "en-US") {
+  if (variantTypes.has(item.contentType)) {
     return `/${culture.toLowerCase()}${item.route.path}`.replace(/\/$/, "");
   }
 
   return item.route.path === "/" ? "/" : item.route.path.replace(/\/$/, "");
+}
+
+/** Where a multi URL picker link goes: a page in this app, a file on Umbraco, or an external URL. */
+export function linkHref(link: ApiMultiLink) {
+  if (link.linkType === "Content" && link.route && link.destinationType) {
+    return href({ contentType: link.destinationType, route: link.route }) + (link.queryString ?? "");
+  }
+
+  if (link.linkType === "Media" && link.url) {
+    return mediaUrl({ url: link.url });
+  }
+
+  return link.url ?? "#";
 }
