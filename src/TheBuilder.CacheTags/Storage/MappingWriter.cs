@@ -27,13 +27,15 @@ internal sealed class MappingWriter : BackgroundService
 
     private readonly MemoryCache _recent = new(new MemoryCacheOptions { SizeLimit = 100_000 });
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly DatabaseGate _gate;
     private readonly IOptionsMonitor<CacheTagsOptions> _options;
     private readonly TimeProvider _time;
     private readonly ILogger<MappingWriter> _logger;
 
-    public MappingWriter(IServiceScopeFactory scopeFactory, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
+    public MappingWriter(IServiceScopeFactory scopeFactory, DatabaseGate gate, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
     {
         _scopeFactory = scopeFactory;
+        _gate = gate;
         _options = options;
         _time = time;
         _logger = logger;
@@ -90,7 +92,7 @@ internal sealed class MappingWriter : BackgroundService
 
             try
             {
-                await WriteAsync(batch, stoppingToken);
+                await _gate.RunAsync(() => WriteAsync(batch, stoppingToken), stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

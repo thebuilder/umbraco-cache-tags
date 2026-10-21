@@ -54,7 +54,7 @@ No keys, and the given `Cache-Control`, on:
 
 ## The purge webhook
 
-Defined by the Next.js sample (`samples/README.md`) and sent by the package from Milestone 3:
+Defined by the Next.js sample (`samples/README.md`) and sent by the package to each configured target:
 
 ```http
 POST <target path>
@@ -68,6 +68,36 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 HMAC-SHA256 with the secret's UTF-8 bytes over `<METHOD>\n<path>\n<timestamp>\n<raw body>`. A 5-minute
 window; two secrets accepted for rotation; duplicate event ids ignored.
 
+## Delivery
+
+1. **Ledger.** The server making a change records it (with its plan and an ack signal) as pending,
+   and acknowledges it itself: it applied the cache refresh before the change was recorded.
+2. **Acks.** Every server sends a heartbeat every 30 seconds. When a server applies a cache refresh
+   that completes a pending change (the refresh must carry what the change did: published cultures
+   for a publish, a branch refresh for a move, and so on, so a draft save does not count), it evicts
+   the change's responses from its Delivery API output cache and acknowledges the change. A refresh
+   can arrive before its change is recorded, so unmatched refreshes are tried again for 10 seconds.
+3. **Release.** Any server releases a change once every active server that was running when it was
+   made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
+   not. It resolves the plan to response keys and queues one purge per target (split at
+   `MaxKeysPerRequest`), plus purges of the listing responses again after
+   `CacheTags:ListingRepurgeDelays` (5, 20 and 45 seconds), since listings come from an index updated
+   in the background, slowly right after a restart.
+4. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
+   time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
+   `CacheTags:MaxAttempts` (10).
+
+Every package write takes the package's own Umbraco write lock first (`umbracoLock` id -91730).
+On SQLite, two transactions that each read and then write deadlock otherwise.
+
+```json
+"CacheTags": {
+  "Targets": [
+    { "Name": "nextjs", "Url": "https://www.example.com/api/cache-tags", "Secret": "<at least 16 characters>" }
+  ]
+}
+```
+
 ## Decisions
 
 | Date | Decision |
@@ -80,7 +110,7 @@ window; two secrets accepted for rotation; duplicate event ids ignored.
 
 ## Debugging
 
-Milestone 2 ships the data and an admin-only Management API lookup:
+An admin-only Management API lookup:
 
 - a `response-` key gives the request it stands for (path, query, culture, segment, start item) and
   the items and selectors it covers, with names;
@@ -98,8 +128,8 @@ Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's key
 1. Spike (done, `spike/FINDINGS.md`).
 2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
    purge planner, the lookup API.
-3. Outbox, ack barrier, webhook target, signing.
-4. Second purge for listings, more event sources, Umbraco output cache eviction. Listing keys
+3. Outbox, ack barrier, webhook target, signing (and the listing re-purge, pulled forward from 4).
+4. More event sources, distributed output cache eviction for the listing re-purge. Listing keys
    (`type-`, `children-`, `search-`) must be purged once the Delivery API index has the change:
    purged earlier, the frontend refetches the old listing and keeps it until its safety revalidate.
    On a fresh boot the samples measured the index taking over half a minute.

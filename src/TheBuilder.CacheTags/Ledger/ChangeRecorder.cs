@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Infrastructure.Scoping;
 
@@ -9,12 +10,14 @@ namespace TheBuilder.CacheTags.Ledger;
 
 /// <summary>
 ///     Plans each change, resolves it to the responses it purges, and records both in the ledger.
-///     Milestone 3 sends the result; until then the ledger and the log are where a plan can be checked.
+///     The delivery worker sends the purge once every server has acknowledged the change.
 /// </summary>
 internal sealed class ChangeRecorder(
     PurgePlanner planner,
     IServiceScopeFactory scopeFactory,
     IScopeProvider scopeProvider,
+    ServerIdentity identity,
+    DeliverySignal signal,
     IOptionsMonitor<CacheTagsOptions> options,
     ILogger<ChangeRecorder> logger)
 {
@@ -29,19 +32,25 @@ internal sealed class ChangeRecorder(
         }
 
         PurgePlan plan = planner.Plan(change, settings.DescendantBudget);
-        using (IScope scope = scopeProvider.CreateScope())
+        using (IScope scope = WriteScope.Create(scopeProvider))
         {
             scope.Database.Insert(new EventRow
             {
                 Id = change.Id,
                 CreatedUtc = change.CreatedUtc,
                 Kind = change.Kind.ToString(),
-                Server = Environment.MachineName,
+                // The recording server applied the change's cache refresh before this handler ran,
+                // so it counts as having acknowledged it.
+                Server = identity.Name,
                 Change = JsonSerializer.Serialize(change, Json),
                 Plan = JsonSerializer.Serialize(plan, Json),
+                Signal = JsonSerializer.Serialize(AckSignal.For(change), Json),
+                Status = EventStatuses.Pending,
             });
             scope.Complete();
         }
+
+        signal.Wake();
 
         if (logger.IsEnabled(LogLevel.Information))
         {

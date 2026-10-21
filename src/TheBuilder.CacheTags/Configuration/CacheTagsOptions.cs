@@ -31,6 +31,63 @@ public sealed class CacheTagsOptions
     ///     purges every response instead. Defaults to 500.
     /// </summary>
     public int DescendantBudget { get; set; } = 500;
+
+    /// <summary>
+    ///     Where purges are sent once every server has applied a change. A change is still planned
+    ///     and recorded without any.
+    /// </summary>
+    public List<CacheTagsTargetOptions> Targets { get; set; } = [];
+
+    /// <summary>
+    ///     How long a change waits for every active server to acknowledge it before it is sent anyway.
+    ///     Defaults to 60 seconds.
+    /// </summary>
+    public TimeSpan AckTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    ///     How long since its last heartbeat a server still counts as active. Defaults to 2 minutes;
+    ///     servers send one every 30 seconds.
+    /// </summary>
+    public TimeSpan ServerTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>How often each server looks for changes to release and purges to send. Defaults to 1 second.</summary>
+    public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>How many times a purge is tried before it is given up and kept for inspection. Defaults to 10.</summary>
+    public int MaxAttempts { get; set; } = 10;
+
+    /// <summary>
+    ///     Listings come from Umbraco's Delivery API index, which is updated in the background after
+    ///     a change, so a listing purged at once can be refetched before the index has the change.
+    ///     Listing responses are purged again after each of these delays. Defaults to 5, 20 and 45
+    ///     seconds: the index usually takes a few seconds, and over half a minute right after a
+    ///     restart. Empty turns the re-purge off.
+    /// </summary>
+    public List<TimeSpan> ListingRepurgeDelays { get; set; } = [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(45)];
+
+    /// <summary>How long released changes and sent purges are kept for the lookup API. Defaults to 7 days.</summary>
+    public TimeSpan LedgerRetention { get; set; } = TimeSpan.FromDays(7);
+}
+
+/// <summary>
+///     One place purges are sent: a URL that receives the signed purge webhook (see docs/design.md).
+/// </summary>
+public sealed class CacheTagsTargetOptions
+{
+    /// <summary>A name for logs and the lookup API, unique among the targets.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>The absolute URL the webhook is posted to.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>The secret the webhook is signed with (HMAC-SHA256). At least 16 characters.</summary>
+    public string Secret { get; set; } = string.Empty;
+
+    /// <summary>Whether purges are sent to this target. Defaults to <c>true</c>.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>The most keys one request carries; more are split over several requests. Defaults to 500.</summary>
+    public int MaxKeysPerRequest { get; set; } = 500;
 }
 
 /// <summary>

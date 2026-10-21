@@ -2,6 +2,7 @@ using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.Storage;
@@ -26,7 +27,7 @@ namespace TheBuilder.CacheTags.ManagementApi;
 [MapToApi(Constants.ApiName)]
 [ApiExplorerSettings(GroupName = Constants.PackageName)]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-public sealed class CacheTagsLookupController(ICacheTagStore store, IEntityService entityService, IScopeProvider scopeProvider) : ControllerBase
+public sealed class CacheTagsLookupController(ICacheTagStore store, IAckTransport ackTransport, IEntityService entityService, IScopeProvider scopeProvider) : ControllerBase
 {
     private const int MaxResponses = 200;
 
@@ -67,7 +68,7 @@ public sealed class CacheTagsLookupController(ICacheTagStore store, IEntityServi
         return Ok(new { key, kind = Kind(key), name = NameOf(key), responseCount = responses.Count, responses = described });
     }
 
-    /// <summary>The latest changes, newest first, with what each planned and the responses that plan reaches now.</summary>
+    /// <summary>The latest changes, newest first: what each planned, the responses that plan reaches now, which servers acknowledged it, and its purges.</summary>
     [HttpGet("changes")]
     public async Task<IActionResult> Changes([FromQuery] int take = 20, CancellationToken cancellationToken = default)
     {
@@ -85,15 +86,37 @@ public sealed class CacheTagsLookupController(ICacheTagStore store, IEntityServi
             IReadOnlyCollection<string> responses = plan is null || plan.Everything
                 ? []
                 : await store.FindResponseKeysAsync(plan.Keys, plan.Cultures, cancellationToken);
+            List<OutboxRow> purges;
+            using (IScope scope = scopeProvider.CreateScope(autoComplete: true))
+            {
+                purges = scope.Database.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", row.Id);
+            }
+
+            IReadOnlyDictionary<Guid, IReadOnlySet<string>> acks = await ackTransport.GetAcksAsync([row.Id], cancellationToken);
             changes.Add(new
             {
                 row.Id,
                 row.CreatedUtc,
                 row.Kind,
                 row.Server,
+                row.Status,
+                row.ReleasedUtc,
+                acknowledgedBy = acks.TryGetValue(row.Id, out IReadOnlySet<string>? by) ? by.Order(StringComparer.Ordinal) : Enumerable.Empty<string>(),
+                notAcknowledgedBy = row.Missing is null ? null : JsonSerializer.Deserialize<string[]>(row.Missing),
                 change = JsonSerializer.Deserialize<JsonElement>(row.Change),
                 plan,
                 responses = responses.Order(StringComparer.Ordinal),
+                purges = purges.Select(p => new
+                {
+                    p.Id,
+                    p.Target,
+                    p.State,
+                    p.Attempts,
+                    p.NotBeforeUtc,
+                    p.SentUtc,
+                    p.LastError,
+                    keys = JsonSerializer.Deserialize<string[]>(p.Keys),
+                }),
             });
         }
 

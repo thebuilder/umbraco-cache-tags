@@ -9,8 +9,9 @@ Two sites to check TheBuilder.CacheTags end to end:
   response under the keys in `X-Umbraco-Cache-Keys`, and purges them when the webhook calls it.
 
 The Umbraco sample references the package (`src/TheBuilder.CacheTags`), which installs itself through
-its composer. It tags every Delivery API response and plans the purge for every change. Sending the
-purge comes with Milestone 3, so until then see [Until purges are sent](#until-purges-are-sent).
+its composer. It tags every Delivery API response, and once a change has reached every server it sends
+the signed purge webhook to the Next.js site (`CacheTags:Targets` in `appsettings.json`, with the
+secret from `samples/nextjs/.env`).
 
 `pnpm e2e` checks the whole loop automatically: see [Check it automatically](#check-it-automatically).
 
@@ -267,8 +268,8 @@ are cached and steady, so a page that refetches only because its cache entry was
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the
 environment or `.env.local`.
 
-Until Milestone 3 sends purges, every case fails: the pages carry their `response-` tags, but nothing
-purges them.
+A run needs both sites started fresh enough that Umbraco's Delivery API index is filled (about a
+minute after a first start).
 
 ### Check the packed package
 
@@ -288,18 +289,18 @@ dotnet run --project samples/TheBuilder.CacheTags.Example -p:CacheTagsPackageVer
 global packages folder and does not look at the file again, so give each pack a new version. Then run
 `pnpm e2e` as above.
 
-### Until purges are sent
+### What the package logged
 
-Umbraco sends `X-Umbraco-Cache-Keys`, so the Cache box shows a `response-` tag per call, but the
-package does not send the purge webhook until Milestone 3. A publish then shows up only after the
-hourly revalidate, or after restarting `pnpm start` (the cache is in memory). What each change would
-purge is already planned and can be checked:
+Each change is logged when it is planned and when it is released:
+`Cache tags change <id> (Published) plans content-..., type-...` and
+`Cache tags change <id> released: 10 keys in 2 purges.` The later purges re-purge listings
+(`CacheTags:ListingRepurgeDelays`, 5, 20 and 45 seconds), as the Delivery API index catches up with
+the change.
 
-- Umbraco's log has a line per change: `Cache tags change <id> (Published) plans content-..., type-...`.
-- The admin-only lookup API answers what a key covers and what recent changes planned:
-  `GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
-  `GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
-  API user works; see `scripts/e2e.mts` for getting a token).
+The admin-only lookup API answers what a key covers and what recent changes planned, sent and to whom:
+`GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
+`GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
+API user works; see `scripts/e2e.mts` for getting a token).
 
 `pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
 `stale`.

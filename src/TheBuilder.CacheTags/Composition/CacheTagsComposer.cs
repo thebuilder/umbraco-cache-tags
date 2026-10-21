@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.ManagementApi;
 using TheBuilder.CacheTags.Migrations;
@@ -32,6 +33,12 @@ public sealed class CacheTagsComposer : IComposer
             .Validate(options => options.DirectKeyBudget > 0, "CacheTags:DirectKeyBudget must be above 0.")
             .Validate(options => options.MappingRetention > TimeSpan.Zero, "CacheTags:MappingRetention must be above zero.")
             .Validate(options => options.DescendantBudget >= 0, "CacheTags:DescendantBudget must be 0 or more.")
+            .Validate(options => options.Targets.All(t => t.Name.Length > 0), "Each CacheTags:Targets entry needs a Name.")
+            .Validate(options => options.Targets.Select(t => t.Name).Distinct(StringComparer.Ordinal).Count() == options.Targets.Count, "CacheTags:Targets names must be unique.")
+            .Validate(options => options.Targets.All(t => Uri.TryCreate(t.Url, UriKind.Absolute, out Uri? url) && url.Scheme is "http" or "https"), "Each CacheTags:Targets entry needs an absolute http or https Url.")
+            .Validate(options => options.Targets.All(t => t.Enabled is false || t.Secret.Length >= 16), "Each enabled CacheTags:Targets entry needs a Secret of at least 16 characters.")
+            .Validate(options => options.Targets.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
+            .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
             .ValidateOnStart();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
@@ -70,6 +77,23 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationHandler<DomainDeletedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<LanguageSavedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<LanguageDeletedNotification, SourceChangeHandlers>();
+
+        // Delivery: heartbeats, acks from every server's cache refreshes, and the purge outbox.
+        builder.Services.AddSingleton<ServerIdentity>();
+        builder.Services.AddSingleton<DatabaseGate>();
+        builder.Services.AddSingleton<DeliverySignal>();
+        builder.Services.TryAddSingleton<IAckTransport, DatabaseAckTransport>();
+        builder.Services.AddSingleton<AckProcessor>();
+        builder.Services.AddHostedService<Heartbeat>();
+        builder.Services.AddHostedService<DeliveryWorker>();
+        builder.Services.AddHttpClient(DeliveryWorker.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        builder
+            .AddNotificationAsyncHandler<ContentCacheRefresherNotification, RefresherHandlers>()
+            .AddNotificationAsyncHandler<MediaCacheRefresherNotification, RefresherHandlers>()
+            .AddNotificationAsyncHandler<ContentTypeCacheRefresherNotification, RefresherHandlers>()
+            .AddNotificationAsyncHandler<DataTypeCacheRefresherNotification, RefresherHandlers>()
+            .AddNotificationAsyncHandler<DomainCacheRefresherNotification, RefresherHandlers>()
+            .AddNotificationAsyncHandler<LanguageCacheRefresherNotification, RefresherHandlers>();
 
         // The lookup API.
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();

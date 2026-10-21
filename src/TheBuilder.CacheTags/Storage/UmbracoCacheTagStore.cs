@@ -30,14 +30,14 @@ internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICach
 
     private void RecordOne(CachedResponse response)
     {
-        using IScope scope = scopeProvider.CreateScope();
+        using IScope scope = WriteScope.Create(scopeProvider);
         CacheTagSql.Record(scope.Database, response);
         scope.Complete();
     }
 
     public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default)
     {
-        using IScope scope = scopeProvider.CreateScope();
+        using IScope scope = WriteScope.Create(scopeProvider);
         CacheTagSql.Touch(scope.Database, responseKeys, seenUtc);
         scope.Complete();
         return Task.CompletedTask;
@@ -57,7 +57,7 @@ internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICach
 
     public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
     {
-        using IScope scope = scopeProvider.CreateScope();
+        using IScope scope = WriteScope.Create(scopeProvider);
         var removed = CacheTagSql.Prune(scope.Database, cutoffUtc);
         scope.Complete();
         return Task.FromResult(removed);
