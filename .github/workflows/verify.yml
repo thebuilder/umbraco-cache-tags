@@ -1,0 +1,192 @@
+name: Verify package
+
+# Everything a change has to pass. CI runs it on every push and pull request with the project
+# file's version. The inputs are for the publish workflow that comes with Milestone 5, which will
+# run it with the version from the release tag and publish the package it uploads.
+on:
+  workflow_call:
+    inputs:
+      package-version:
+        description: The version for the NuGet package. Empty uses the project file's.
+        type: string
+        default: ""
+      release-tag:
+        description: The GitHub Release tag the NuGet release notes link to.
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  # The package and its tests across the Umbraco range: the lowest release it allows and the
+  # newest of each major, so a dependency floor or an API that moved shows up before a site meets it.
+  # Only the tests project, because the sample and the spike pin their own Umbraco release
+  # (SampleUmbracoVersion) and would conflict with an overridden range.
+  dotnet:
+    name: .NET (Umbraco ${{ matrix.umbraco-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        umbraco-version:
+          - 17.4.0
+          - 17.*
+          - 18.*
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Central package management, so there is no lock file to key on: the versions all
+      # live in Directory.Packages.props and the projects decide which to reference.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ matrix.umbraco-version }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-${{ matrix.umbraco-version }}-
+
+      # TreatWarningsAsErrors is on for every project, so this is the warning gate too.
+      - name: Test
+        env:
+          UMBRACO_VERSION: ${{ matrix.umbraco-version }}
+        run: dotnet test tests/TheBuilder.CacheTags.Tests -c Release "-p:UmbracoVersion=$UMBRACO_VERSION"
+
+  # The sample frontend, so a change to the webhook route or the fetch helper that does not
+  # type-check or build fails here. `pnpm e2e` needs a running Umbraco, so it stays local.
+  nextjs:
+    name: Next.js sample
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: samples/nextjs
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      # There is no root package.json, so the pnpm version comes from the sample's packageManager field.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: samples/nextjs/package.json
+
+      # The sample's engines field asks for 22.18 or later; 22 resolves to the newest 22.x.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: samples/nextjs/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+  package:
+    name: Solution and package
+    runs-on: ubuntu-latest
+    # Not after the matrix: one Umbraco release failing its tests should not hide whether the
+    # package builds, packs and installs.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-default-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-default-
+
+      # The package, the sample site, the tests and the spike, on the versions the repository
+      # declares. Never with an UmbracoVersion override: the package's dependency range comes from it.
+      - name: Build solution
+        run: dotnet build TheBuilder.CacheTags.slnx -c Release
+
+      # The project file holds the only local version, so CI reads it rather than keeping a copy.
+      # Written to GITHUB_ENV so the steps after this one check the same version.
+      - name: Resolve version
+        env:
+          INPUT_VERSION: ${{ inputs.package-version }}
+        run: |
+          version="${INPUT_VERSION:-$(dotnet msbuild src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj -getProperty:Version)}"
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+
+      # EnablePackageValidation checks the package's own consistency (assets, target frameworks).
+      - name: Pack
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          # From the run rather than written out, so a renamed repository or a fork links to itself.
+          RELEASES_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag
+        run: |
+          arguments=(
+            src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj
+            -c Release
+            -o artifacts
+            "-p:Version=$PACKAGE_VERSION"
+            -p:ContinuousIntegrationBuild=true
+            -p:EnablePackageValidation=true
+          )
+          if [[ -n "$RELEASE_TAG" ]]; then
+            arguments+=("-p:PackageReleaseNotes=$RELEASES_URL/$RELEASE_TAG")
+          fi
+          dotnet pack "${arguments[@]}"
+
+      # What nuget.org and the Umbraco Marketplace need from the package, checked in the archive itself.
+      - name: Validate package
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASES_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag
+        run: |
+          package="artifacts/TheBuilder.CacheTags.$PACKAGE_VERSION.nupkg"
+          unzip -t "$package"
+          entries="$(unzip -Z1 "$package")"
+          nuspec="$(unzip -p "$package" TheBuilder.CacheTags.nuspec)"
+
+          for entry in README.md LICENSE lib/net10.0/TheBuilder.CacheTags.dll lib/net10.0/TheBuilder.CacheTags.xml; do
+            grep -Fqx "$entry" <<< "$entries" || { echo "The package is missing $entry." >&2; exit 1; }
+          done
+          grep -Fq "<version>$PACKAGE_VERSION</version>" <<< "$nuspec"
+          # The Marketplace lists packages from nuget.org by this tag.
+          grep -Fq "umbraco-marketplace" <<< "$nuspec"
+          # Every Umbraco dependency carries the range Directory.Packages.props declares, not one
+          # release or a floating version. The nuspec writes [17.4.0,19.0.0) as [17.4.0, 19.0.0).
+          range="$(dotnet msbuild src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj -getProperty:UmbracoVersion)"
+          range="${range/,/, }"
+          for dependency in Umbraco.Cms.Api.Common Umbraco.Cms.Api.Management Umbraco.Cms.Web.Common; do
+            grep -Fq "<dependency id=\"$dependency\" version=\"$range\"" <<< "$nuspec" \
+              || { echo "$dependency does not depend on $range." >&2; exit 1; }
+          done
+          if [[ -n "$RELEASE_TAG" ]]; then
+            grep -Fq "<releaseNotes>$RELEASES_URL/$RELEASE_TAG</releaseNotes>" <<< "$nuspec"
+          fi
+
+      # The sample site restored from the packed file instead of the project, which is what an
+      # installer does: it catches a dependency nuget.org does not have, which packing does not.
+      # The cached copy goes first, because every run packs the same version and restore would
+      # otherwise take the one an earlier run left in the cache.
+      - name: Build sample from the package
+        run: |
+          rm -rf ~/.nuget/packages/thebuilder.cachetags
+          dotnet build samples/TheBuilder.CacheTags.Example -c Release "-p:CacheTagsPackageVersion=$PACKAGE_VERSION"
+
+      # The publish workflow will push this exact file, so what is published is what was checked.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TheBuilder.CacheTags-package
+          path: artifacts/*.nupkg
+          if-no-files-found: error
