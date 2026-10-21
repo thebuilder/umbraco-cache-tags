@@ -30,12 +30,17 @@ public sealed class OutputWalkerTests
             [],
             [new RichTextGenericElement("a", new Dictionary<string, object> { ["destinationId"] = InJson.ToString(), ["linkType"] = "Content" }, [])],
             []);
+        // Umbraco 18 adds a constructor and marks this one obsolete; 17 has only this one, and the
+        // tests build against both.
+#pragma warning disable CS0618
+        var block = new ApiElement(Block, "linkBlock", new Dictionary<string, object?> { ["target"] = Content(InBlock) });
+#pragma warning restore CS0618
         ApiContent page = Content(Page, new Dictionary<string, object?>
         {
             ["picker"] = Content(Picked),
             ["links"] = new[] { ApiLink.Content("D", null, null, Linked, "page", Route, null), ApiLink.External("Out", "https://example.com", null, null) },
             ["image"] = new[] { new ApiMedia(Image, "Image 1", "Image", "/media/1.png", ".png", 1, 1, 1, new Dictionary<string, object?>()) },
-            ["blocks"] = new ApiBlockListModel([new ApiBlockItem(new ApiElement(Block, "linkBlock", new Dictionary<string, object?> { ["target"] = Content(InBlock) }), null)]),
+            ["blocks"] = new ApiBlockListModel([new ApiBlockItem(block, null)]),
             ["body"] = new RichTextModel { Markup = markup, Blocks = [] },
             ["bodyJson"] = json,
         });
