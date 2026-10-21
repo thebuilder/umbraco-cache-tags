@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- The site TheBuilder.CacheTags is verified against end to end, with ../nextjs as its frontend.
+       See ../README.md. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>TheBuilder.CacheTags.Example</UserSecretsId>
+    <IsPackable>false</IsPackable>
+    <BuildInParallel>false</BuildInParallel>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Umbraco.Cms" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
+    <!-- Lift Umbraco's vulnerable transitive versions; see Directory.Packages.props. -->
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- CACHE TAGS: reference the package here once src/TheBuilder.CacheTags exists, and call
+         AddCacheTags() in Program.cs.
+    <ProjectReference Include="../../src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj" />
+    -->
+  </ItemGroup>
+</Project>

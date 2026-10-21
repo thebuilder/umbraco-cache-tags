@@ -1,0 +1,86 @@
+:root {
+  --background: #fdfcfa;
+  --foreground: #1c1b19;
+  --muted: #6b6760;
+  --accent: #1d5c8c;
+  --panel: #f1eee8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141412;
+    --foreground: #ecebe6;
+    --muted: #a19d94;
+    --accent: #7db7e3;
+    --panel: #23221f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, sans-serif;
+  line-height: 1.55;
+}
+
+header,
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+nav {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+a {
+  color: var(--accent);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.lead {
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  padding: 0;
+  list-style: none;
+}
+
+.cards li {
+  background: var(--panel);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.cache-info {
+  margin-top: 3rem;
+  padding: 1rem;
+  background: var(--panel);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.cache-info h2 {
+  margin-top: 0;
+  font-size: 1rem;
+}

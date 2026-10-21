@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="samples/TheBuilder.CacheTags.Example/TheBuilder.CacheTags.Example.csproj" />
   <Project Path="spike/TheBuilder.CacheTags.Spike/TheBuilder.CacheTags.Spike.csproj" />
 </Solution>
