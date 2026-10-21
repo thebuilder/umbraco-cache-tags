@@ -6,6 +6,8 @@ the package.
 
 Usage: python3 spike/check-package.py [base-url]   (default http://localhost:5330)
 Reads the site's SQLite database directly; needs the sqlite3 CLI.
+The last check prunes every mapping row, and the running site remembers for an hour which renders it
+wrote, so restart the site before running this again.
 """
 import json
 import os
@@ -82,7 +84,9 @@ check("en-US records only the en-US picker", recorded(en) == {c(fx["variant"]), 
 listing = key_of(API + "/content?filter=contentType:spikePage&take=50")
 check("a content type listing records its type selector", "type-spikepage" in recorded(listing), sorted(recorded(listing)))
 children = key_of(API + "/content?fetch=children:/")
-check("a children listing records its parent selector", any(k.startswith("children-") for k in recorded(children)), sorted(recorded(children)))
+check("the root listing records the children of the page routed at /", "children-" + fx["site"] in recorded(children), sorted(recorded(children)))
+cultures = dict(row.split("|") for row in sql(f"SELECT ResponseKey, Culture FROM theBuilderCacheTagsResponse WHERE ResponseKey IN ('{page_key}', '{da}')"))
+check("the mapping stores the culture served, not the header", cultures == {page_key: "en-us", da: "da-dk"}, cultures)
 
 preview_headers, _ = call(API + f"/content/item/{fx['page']}", {"Preview": "true", "Api-Key": "spike-local-preview-key"})
 check("preview gets no key", "X-Umbraco-Cache-Keys" not in preview_headers)
@@ -104,6 +108,7 @@ check("publishing A plans A, its parent's listings, its type and the index",
 reached = set(sql("SELECT DISTINCT ResponseKey FROM theBuilderCacheTagsResponseKey WHERE CacheKey IN ('" + "','".join(plan["keys"]) + "')"))
 check("that plan reaches the fixture page's response", page_key in reached, sorted(reached))
 check("that plan reaches the type listing", listing in reached)
+check("that plan reaches the root listing", children in reached)
 check("that plan does not reach the variant's responses", da not in reached and en not in reached)
 
 op("rename-c")
@@ -151,6 +156,10 @@ covering = lookup(c(fx["a"]))
 check("the lookup lists the responses that cover an item", page_key in {r["key"] for r in covering["responses"]}, covering)
 changes = json.loads(call(BASE + "/umbraco/management/api/v1/cache-tags/changes?take=5", bearer)[1])
 check("the change list shows the latest change first", changes and changes[0]["kind"] == "MediaSaved", [c_["kind"] for c_ in changes])
+
+removed = int(op("prune-everything")["outcome"])
+left = int(sql("SELECT COUNT(*) FROM theBuilderCacheTagsResponse")[0]) + int(sql("SELECT COUNT(*) FROM theBuilderCacheTagsResponseKey")[0])
+check("pruning runs on Umbraco's database provider and removes rows past the cutoff", removed > 0 and left == 0, (removed, left))
 
 print(f"\n{len(failures)} failed" if failures else "\nall passed")
 sys.exit(1 if failures else 0)

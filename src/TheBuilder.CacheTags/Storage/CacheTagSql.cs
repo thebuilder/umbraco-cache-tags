@@ -15,8 +15,9 @@ internal static class CacheTagSql
     public static void Record(IDatabase database, CachedResponse response)
     {
         var updated = database.Execute(
-            $"UPDATE {Constants.Tables.Responses} SET RenderedUtc = @0, SeenUtc = @0 WHERE ResponseKey = @1",
+            $"UPDATE {Constants.Tables.Responses} SET RenderedUtc = @0, SeenUtc = @0, Culture = @1 WHERE ResponseKey = @2",
             response.RenderedUtc,
+            response.Culture,
             response.ResponseKey);
         if (updated == 0)
         {

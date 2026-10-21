@@ -92,12 +92,16 @@ internal sealed class CacheKeyResultFilter : IAsyncResultFilter
         http.Items[ResponseKeyItem] = responseKey;
         http.Response.Headers[Constants.HeaderName] = HeaderValue(options, responseKey, keys, services);
 
+        // The key hashes the culture as requested; the mapping stores the culture actually served
+        // (Accept-Language: da resolves to da-DK, no header to the default), which a culture-limited
+        // purge compares against.
+        var servedCulture = services.GetRequiredService<IVariationContextAccessor>().VariationContext?.Culture?.ToLowerInvariant() ?? identity.Culture;
         DateTime now = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
         services.GetRequiredService<MappingWriter>().Record(new CachedResponse(
             responseKey,
             identity.Path,
             identity.Query,
-            identity.Culture,
+            servedCulture,
             identity.Segment,
             identity.StartItem,
             keys.Order(StringComparer.Ordinal).ToArray(),
@@ -162,15 +166,12 @@ internal sealed class CacheKeyResultFilter : IAsyncResultFilter
             return key;
         }
 
-        if (target is "/" or "")
-        {
-            return Guid.Empty;
-        }
-
+        // "children:/" lists the children of the item routed at "/" (the site's root page). Only when
+        // nothing is routed there does it mean the root level itself.
         IPublishedContent? item = media
             ? services.GetRequiredService<IApiMediaQueryService>().GetByPath(target)
             : services.GetRequiredService<IApiContentPathResolver>().ResolveContentPath(target);
-        return item?.Key;
+        return item?.Key ?? (target is "/" or "" ? Guid.Empty : null);
     }
 
     private static string HeaderValue(CacheTagsOptions options, string responseKey, HashSet<string> keys, IServiceProvider services)

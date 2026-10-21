@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Logging;
 using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Web.Common.ApplicationBuilder;
@@ -10,7 +11,7 @@ namespace TheBuilder.CacheTags.Collection;
 ///     replays it and nothing of the package runs inside. Without this, a mapping could age out while
 ///     a frontend still holds the response, and that response would never be purged.
 /// </summary>
-internal sealed class SeenMiddleware(RequestDelegate next, MappingWriter writer)
+internal sealed class SeenMiddleware(RequestDelegate next, MappingWriter writer, ILogger<SeenMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -26,6 +27,7 @@ internal sealed class SeenMiddleware(RequestDelegate next, MappingWriter writer)
             var start = key.IndexOf(CacheKeys.ResponsePrefix, StringComparison.Ordinal);
             if (start >= 0)
             {
+                logger.LogDebug("Delivery API response {ResponseKey} served.", key[start..]);
                 writer.Touch(key[start..]);
             }
         }

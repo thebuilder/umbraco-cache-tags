@@ -8,16 +8,31 @@ namespace TheBuilder.CacheTags.Storage;
 /// </summary>
 internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICacheTagStore
 {
+    // One scope per response: when another server inserts the same row at the same moment, the
+    // unique index rejects one insert, and only that response is retried rather than the batch lost.
     public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default)
     {
-        using IScope scope = scopeProvider.CreateScope();
         foreach (CachedResponse response in responses)
         {
-            CacheTagSql.Record(scope.Database, response);
+            try
+            {
+                RecordOne(response);
+            }
+            catch (System.Data.Common.DbException)
+            {
+                // The rows now exist, so the retry updates them.
+                RecordOne(response);
+            }
         }
 
-        scope.Complete();
         return Task.CompletedTask;
+    }
+
+    private void RecordOne(CachedResponse response)
+    {
+        using IScope scope = scopeProvider.CreateScope();
+        CacheTagSql.Record(scope.Database, response);
+        scope.Complete();
     }
 
     public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default)

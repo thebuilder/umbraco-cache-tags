@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Models;
@@ -25,7 +26,8 @@ internal sealed class SourceChangeHandlers(
     UrlSegmentProviderCollection urlSegmentProviders,
     IContentTypeService contentTypeService,
     IMediaTypeService mediaTypeService,
-    TimeProvider time)
+    TimeProvider time,
+    ILogger<SourceChangeHandlers> logger)
     : INotificationHandler<ContentPublishingNotification>,
         INotificationHandler<ContentPublishedNotification>,
         INotificationHandler<ContentUnpublishedNotification>,
@@ -55,93 +57,113 @@ internal sealed class SourceChangeHandlers(
 
     // Before a publish: the URL segments now live, to tell afterwards whether the route changed.
     public void Handle(ContentPublishingNotification notification)
-        => notification.State[SegmentsState] = notification.PublishedEntities.ToDictionary(
+        => Guard(() => notification.State[SegmentsState] = notification.PublishedEntities.ToDictionary(
             content => content.Key,
-            content => Cultures(content).ToDictionary(culture => culture, culture => documentUrlService.GetUrlSegment(content.Key, culture, isDraft: false)));
+            content => Cultures(content).ToDictionary(culture => culture, culture => documentUrlService.GetUrlSegment(content.Key, culture, isDraft: false))));
 
     public void Handle(ContentPublishedNotification notification)
     {
-        var before = notification.State.TryGetValue(SegmentsState, out var state) && state is Dictionary<Guid, Dictionary<string, string?>> segments
-            ? segments
-            : [];
-        var published = CultureMap(PublishedCulturesProperty, notification);
-        var unpublished = CultureMap(PublishedUnpublishedCulturesProperty, notification);
-
-        var items = notification.PublishedEntities.Select(content =>
+        Guard(() =>
         {
-            var routeChanged = before.TryGetValue(content.Key, out var live) && live.Any(pair =>
-                pair.Value is not null && pair.Value != content.GetUrlSegment(shortStringHelper, urlSegmentProviders, Variant(content) ? pair.Key : null));
+            var before = notification.State.TryGetValue(SegmentsState, out var state) && state is Dictionary<Guid, Dictionary<string, string?>> segments
+                ? segments
+                : [];
+            var published = CultureMap(PublishedCulturesProperty, notification);
+            var unpublished = CultureMap(PublishedUnpublishedCulturesProperty, notification);
 
-            // Unpublishing one culture is raised as a publish of the rest; that culture's route is gone.
-            routeChanged |= unpublished?.TryGetValue(content.Key, out var gone) is true && gone.Count > 0;
-            return Item(content, routeChanged: routeChanged);
-        }).ToList();
+            var items = notification.PublishedEntities.Select(content =>
+            {
+                var routeChanged = before.TryGetValue(content.Key, out var live) && live.Any(pair =>
+                    pair.Value is not null && pair.Value != content.GetUrlSegment(shortStringHelper, urlSegmentProviders, Variant(content) ? pair.Key : null));
 
-        Record(ChangeKind.Published, items, Cultures(notification.PublishedEntities.Select(c => c.Key), published, unpublished));
+                // Unpublishing one culture is raised as a publish of the rest; that culture's route is gone.
+                routeChanged |= unpublished?.TryGetValue(content.Key, out var gone) is true && gone.Count > 0;
+                return Item(content, routeChanged: routeChanged);
+            }).ToList();
+
+            Record(ChangeKind.Published, items, Cultures(notification.PublishedEntities.Select(c => c.Key), published, unpublished));
+        });
     }
 
     public void Handle(ContentUnpublishedNotification notification)
-        => Record(
+        => Guard(() => Record(
             ChangeKind.Unpublished,
             notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true)).ToList(),
-            Cultures(notification.UnpublishedEntities.Select(c => c.Key), CultureMap(UnpublishedCulturesProperty, notification), null));
+            Cultures(notification.UnpublishedEntities.Select(c => c.Key), CultureMap(UnpublishedCulturesProperty, notification), null)));
 
     public void Handle(ContentMovedNotification notification)
-        => Record(
+        => Guard(() => Record(
             ChangeKind.Moved,
-            notification.MoveInfoCollection.Where(move => move.Entity.Published).Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList());
+            notification.MoveInfoCollection.Where(move => move.Entity.Published).Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
 
     public void Handle(ContentMovedToRecycleBinNotification notification)
-        => Record(
+        => Guard(() => Record(
             ChangeKind.Trashed,
-            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList());
+            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
 
     public void Handle(ContentDeletedNotification notification)
-        => Record(ChangeKind.Deleted, notification.DeletedEntities.Select(content => Item(content)).ToList());
+        => Guard(() => Record(ChangeKind.Deleted, notification.DeletedEntities.Select(content => Item(content)).ToList()));
 
     public void Handle(ContentSortedNotification notification)
-        => Record(ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).Take(1).ToList());
+        => Guard(() => Record(ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).Take(1).ToList()));
 
     public void Handle(MediaSavedNotification notification)
-        => Record(ChangeKind.MediaSaved, notification.SavedEntities.Select(media => Item(media)).ToList());
+        => Guard(() => Record(ChangeKind.MediaSaved, notification.SavedEntities.Select(media => Item(media)).ToList()));
 
     public void Handle(MediaMovedNotification notification)
-        => Record(
+        => Guard(() => Record(
             ChangeKind.MediaMoved,
-            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList());
+            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList()));
 
     public void Handle(MediaMovedToRecycleBinNotification notification)
-        => Record(
+        => Guard(() => Record(
             ChangeKind.MediaTrashed,
-            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList());
+            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList()));
 
     public void Handle(MediaDeletedNotification notification)
-        => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Select(media => Item(media)).ToList());
+        => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Select(media => Item(media)).ToList()));
 
     public void Handle(ContentTypeChangedNotification notification)
-        => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "content types changed");
+        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "content types changed"));
 
     public void Handle(MediaTypeChangedNotification notification)
-        => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "media types changed");
+        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "media types changed"));
 
     // A data type's configuration changes how every property using it renders.
     public void Handle(DataTypeSavedNotification notification)
     {
-        var keys = notification.SavedEntities.Select(dataType => dataType.Key).ToHashSet();
-        var aliases = contentTypeService.GetAll().Cast<IContentTypeComposition>()
-            .Concat(mediaTypeService.GetAll())
-            .Where(type => type.CompositionPropertyTypes.Any(property => keys.Contains(property.DataTypeKey)))
-            .Select(type => type.Alias);
-        RecordTypes(aliases, "data types saved");
+        Guard(() =>
+        {
+            var keys = notification.SavedEntities.Select(dataType => dataType.Key).ToHashSet();
+            var aliases = contentTypeService.GetAll().Cast<IContentTypeComposition>()
+                .Concat(mediaTypeService.GetAll())
+                .Where(type => type.CompositionPropertyTypes.Any(property => keys.Contains(property.DataTypeKey)))
+                .Select(type => type.Alias);
+            RecordTypes(aliases, "data types saved");
+        });
     }
 
-    public void Handle(DomainSavedNotification notification) => RecordEverything("domains saved");
+    public void Handle(DomainSavedNotification notification) => Guard(() => RecordEverything("domains saved"));
 
-    public void Handle(DomainDeletedNotification notification) => RecordEverything("domains deleted");
+    public void Handle(DomainDeletedNotification notification) => Guard(() => RecordEverything("domains deleted"));
 
-    public void Handle(LanguageSavedNotification notification) => RecordEverything("languages saved");
+    public void Handle(LanguageSavedNotification notification) => Guard(() => RecordEverything("languages saved"));
 
-    public void Handle(LanguageDeletedNotification notification) => RecordEverything("languages deleted");
+    public void Handle(LanguageDeletedNotification notification) => Guard(() => RecordEverything("languages deleted"));
+
+    // A throwing handler would stop Umbraco from publishing the operation's remaining notifications,
+    // including the one that refreshes every server's cache. Missing a purge is the lesser failure.
+    private void Guard(Action handle)
+    {
+        try
+        {
+            handle();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Cache tags could not record a change; its purge is not planned.");
+        }
+    }
 
     private void Record(ChangeKind kind, IReadOnlyList<ChangedItem> items, IReadOnlyList<string>? cultures = null)
     {
