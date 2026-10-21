@@ -1,0 +1,30 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Floating versions, so CI can build against the newest release of each major. -->
+    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+    <!-- The Umbraco versions the package supports. 17.4.0 is the floor: it added the Delivery API
+         output cache eviction and the resolved-items stash the package relies on (spike/FINDINGS.md).
+         CI overrides it to test the lowest release and the newest of each major. -->
+    <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
+    <!-- The sample site and the spike run a fixed, patched release rather than the lowest the range allows. -->
+    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.7.1</SampleUmbracoVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Build time only: fails the build when the public C# API differs from the PublicAPI.*.txt
+         files beside each shipped project. See AGENTS.md. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <!-- Umbraco 17.7.1 brings MessagePack 3.1.8 and System.Security.Cryptography.Pkcs 10.0.0, both with
+         advisories (NU1902, NU1903), so the sample lifts them. -->
+    <PackageVersion Include="MessagePack" Version="3.1.12" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <!-- The sample, the spike and the tests only, which run SQLite. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
+    <PackageVersion Include="Umbraco.Cms" Version="$(SampleUmbracoVersion)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Delivery" Version="$(UmbracoVersion)" />
+    <PackageVersion Include="Umbraco.Cms.Web.Common" Version="$(UmbracoVersion)" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+</Project>

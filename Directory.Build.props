@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <!-- Each project that ships in the package declares its public C# API in PublicAPI.Shipped.txt and
+       PublicAPI.Unshipped.txt beside it, and the build fails when the code disagrees. Having the files
+       is what opts a project in. See AGENTS.md. -->
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)/PublicAPI.Shipped.txt')">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="$(MSBuildProjectDirectory)/PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="$(MSBuildProjectDirectory)/PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+  <!-- SixLabors.ImageSharp 3.1.12 advisories, fixed only in 4.1.2. Umbraco 17 and 18 themselves
+       depend on 3.1.12 (Umbraco.Cms.Imaging.ImageSharp), so every Umbraco 17 and 18 site has it, with
+       or without this package. Suppressed by ID so any new advisory still fails the build. Drop these
+       once Umbraco ships a fixed ImageSharp. -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+  </ItemGroup>
+</Project>
