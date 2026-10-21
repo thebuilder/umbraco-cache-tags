@@ -58,9 +58,7 @@ internal sealed class LedgerStore(PackageDatabase database)
         => database.Read(db => LedgerSql.Unreleased(db, take)).Select(Entry).ToList();
 
     public IReadOnlyList<LedgerEntry> Latest(int take)
-        => database.Read(db => db.Fetch<EventRow>($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC").Take(take).ToList())
-            .Select(Entry)
-            .ToList();
+        => database.Read(db => LedgerSql.Latest(db, take)).Select(Entry).ToList();
 
     /// <summary>Takes the lease on releasing a change. False when another server holds it, or it is released.</summary>
     public bool ClaimRelease(Guid changeId, string owner, DateTime nowUtc, DateTime leaseUntilUtc)

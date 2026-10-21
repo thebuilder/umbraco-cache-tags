@@ -34,17 +34,19 @@ internal static class CacheTagSql
             });
         }
 
-        foreach (var key in response.Keys.Distinct(StringComparer.Ordinal))
+        var existing = database.Fetch<string>(
+            $"SELECT CacheKey FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey = @0",
+            response.ResponseKey).ToHashSet(StringComparer.Ordinal);
+        var keys = response.Keys.Distinct(StringComparer.Ordinal).ToList();
+        foreach (var chunk in keys.Where(existing.Contains).Chunk(ChunkSize))
         {
-            var refreshed = database.Execute(
-                $"UPDATE {Constants.Tables.ResponseKeys} SET RenderedUtc = @0 WHERE ResponseKey = @1 AND CacheKey = @2",
-                response.RenderedUtc,
-                response.ResponseKey,
-                key);
-            if (refreshed == 0)
-            {
-                database.Insert(new ResponseKeyRow { ResponseKey = response.ResponseKey, CacheKey = key, RenderedUtc = response.RenderedUtc });
-            }
+            database.Execute(
+                new Sql($"UPDATE {Constants.Tables.ResponseKeys} SET RenderedUtc = @rendered WHERE ResponseKey = @response AND CacheKey IN (@keys)", new { rendered = response.RenderedUtc, response = response.ResponseKey, keys = chunk }));
+        }
+
+        foreach (var key in keys.Where(key => existing.Contains(key) is false))
+        {
+            database.Insert(new ResponseKeyRow { ResponseKey = response.ResponseKey, CacheKey = key, RenderedUtc = response.RenderedUtc });
         }
     }
 

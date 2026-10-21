@@ -10,14 +10,12 @@ namespace TheBuilder.CacheTags.Delivery;
 internal sealed class PurgeSender(
     LedgerStore ledger,
     OutputCacheEviction eviction,
-    IHttpClientFactory httpClientFactory,
+    IEnumerable<IPurgeTarget> targets,
     ServerIdentity identity,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<PurgeSender> logger)
 {
-    public const string HttpClientName = "TheBuilder.CacheTags";
-
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
 
     /// <summary>Sends the purges that are due. Returns how many are still pending, now or later.</summary>
@@ -44,13 +42,18 @@ internal sealed class PurgeSender(
         return Math.Max(0, pending - due.Count);
     }
 
-    /// <summary>Posts one signed purge. Returns null on success, or what went wrong.</summary>
+    /// <summary>Sends one purge through its target's type. Returns null on success, or what went wrong.</summary>
     private async Task<string?> SendAsync(Purge purge, CacheTagsOptions settings, CancellationToken cancellationToken)
     {
-        CacheTagsTargetOptions? target = settings.Targets.FirstOrDefault(t => t.Name == purge.Target && t.Enabled);
-        if (target is null)
+        if (settings.Targets.TryGetValue(purge.Target, out CacheTagsTargetOptions? target) is false || target.Enabled is false)
         {
             return $"No enabled target named {purge.Target} is configured.";
+        }
+
+        IPurgeTarget? sender = targets.FirstOrDefault(t => string.Equals(t.Type, target.Type, StringComparison.OrdinalIgnoreCase));
+        if (sender is null)
+        {
+            return $"No purge target of type {target.Type} is registered.";
         }
 
         // The acks evicted the first purge's responses from every server's output cache; a listing
@@ -58,17 +61,22 @@ internal sealed class PurgeSender(
         var responsePrefix = settings.KeyPrefix + CacheKeys.ResponsePrefix;
         await eviction.EvictAsync(purge.Keys.Where(key => key.StartsWith(responsePrefix, StringComparison.Ordinal)).Select(key => key[settings.KeyPrefix.Length..]));
 
-        using HttpRequestMessage request = Webhook.Request(new Uri(target.Url), target.Secret, purge.Id, purge.Keys, time.GetUtcNow().ToUnixTimeSeconds());
+        var request = new PurgeRequest
+        {
+            Id = purge.Id,
+            ChangeId = purge.ChangeId,
+            TargetName = purge.Target,
+            Expire = purge.Keys.Where(key => CacheKeys.Expires(key, settings.KeyPrefix)).ToList(),
+            Stale = purge.Keys.Where(key => CacheKeys.Expires(key, settings.KeyPrefix) is false).ToList(),
+        };
+
         try
         {
-            using HttpResponseMessage response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
-            return response.IsSuccessStatusCode
-                ? null
-                : $"{(int)response.StatusCode} {response.ReasonPhrase}: {await response.Content.ReadAsStringAsync(cancellationToken)}";
+            return await sender.SendAsync(request, target, cancellationToken);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException || cancellationToken.IsCancellationRequested is false)
         {
-            return exception.Message;
+            return $"{target.Type} target failed: {exception.Message}";
         }
     }
 }

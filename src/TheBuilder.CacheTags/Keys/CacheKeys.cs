@@ -33,6 +33,16 @@ internal static class CacheKeys
             || key.StartsWith(ChildrenPrefix, StringComparison.Ordinal)
             || key.StartsWith(SearchPrefix, StringComparison.Ordinal);
 
+    /// <summary>
+    ///     Whether a (prefixed) key names one response or item, which a purge expires at once, rather
+    ///     than a listing selector or everything, which a purge marks stale.
+    /// </summary>
+    public static bool Expires(string key, string prefix)
+    {
+        var bare = key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
+        return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare);
+    }
+
     /// <summary>Applies the configured prefix to a key, for the header and the purge payload.</summary>
     public static string WithPrefix(string prefix, string key) => prefix.Length == 0 ? key : prefix + key;
 }

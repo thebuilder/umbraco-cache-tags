@@ -29,15 +29,14 @@ public sealed class CacheTagsComposer : IComposer
         builder.PackageMigrationPlans().Add(typeof(CacheTagsMigrationPlan));
         builder.Services.AddOptions<CacheTagsOptions>()
             .Bind(builder.Config.GetSection(CacheTagsOptions.SectionName))
-            .Validate(options => options.KeyPrefix.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-'), "CacheTags:KeyPrefix may contain only lowercase letters, digits and hyphens.")
-            .Validate(options => options.DirectKeyBudget > 0, "CacheTags:DirectKeyBudget must be above 0.")
-            .Validate(options => options.MappingRetention > TimeSpan.Zero, "CacheTags:MappingRetention must be above zero.")
-            .Validate(options => options.DescendantBudget >= 0, "CacheTags:DescendantBudget must be 0 or more.")
-            .Validate(options => options.Targets.All(t => t.Name.Length > 0), "Each CacheTags:Targets entry needs a Name.")
-            .Validate(options => options.Targets.Select(t => t.Name).Distinct(StringComparer.Ordinal).Count() == options.Targets.Count, "CacheTags:Targets names must be unique.")
-            .Validate(options => options.Targets.All(t => Uri.TryCreate(t.Url, UriKind.Absolute, out Uri? url) && url.Scheme is "http" or "https"), "Each CacheTags:Targets entry needs an absolute http or https Url.")
-            .Validate(options => options.Targets.All(t => t.Enabled is false || t.Secret.Length >= 16), "Each enabled CacheTags:Targets entry needs a Secret of at least 16 characters.")
-            .Validate(options => options.Targets.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
+            .Validate(options => options.HeaderName.Length > 0 && options.HeaderName.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'), "CacheTags:HeaderName must be a header name of letters, digits and hyphens.")
+            .Validate(options => options.KeyPrefix.Length == 0 || (options.KeyPrefix.EndsWith('-') && options.KeyPrefix.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-')), "CacheTags:KeyPrefix may contain only lowercase letters, digits and hyphens, and must end in a hyphen.")
+            .Validate(options => options.MaxItemKeys > 0, "CacheTags:MaxItemKeys must be above 0.")
+            .Validate(options => options.MaxDescendants >= 0, "CacheTags:MaxDescendants must be 0 or more.")
+            .Validate(options => options.MappingRetention > TimeSpan.Zero && options.LedgerRetention > TimeSpan.Zero, "CacheTags:MappingRetention and LedgerRetention must be above zero.")
+            .Validate(options => options.ListingRepurgeDelays.All(delay => delay >= TimeSpan.Zero), "CacheTags:ListingRepurgeDelays must not be negative.")
+            .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
+            .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)
             .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
             .ValidateOnStart();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -93,7 +92,10 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<PurgeSender>();
         builder.Services.AddHostedService<Heartbeat>();
         builder.Services.AddHostedService<DeliveryWorker>();
-        builder.Services.AddHttpClient(PurgeSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        builder.Services.AddSingleton<IPurgeTarget, WebhookTarget>();
+        builder.Services.AddHttpClient(WebhookTarget.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            // A redirect would carry the signed purge to another host; a target must answer itself.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         builder
             .AddNotificationAsyncHandler<ContentCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<MediaCacheRefresherNotification, RefresherHandlers>()

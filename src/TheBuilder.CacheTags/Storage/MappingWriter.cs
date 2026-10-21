@@ -49,9 +49,14 @@ internal sealed class MappingWriter : BackgroundService
             return Touch(response.ResponseKey);
         }
 
-        _recent.Set(fingerprint, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
-        _recent.Set("t:" + response.ResponseKey, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
-        return Enqueue(new MappingWrite.Render(response));
+        if (Enqueue(new MappingWrite.Render(response)) is false)
+        {
+            return false;
+        }
+
+        Remember(fingerprint);
+        Remember("t:" + response.ResponseKey);
+        return true;
     }
 
     /// <summary>Queues a "served" touch for a response key, unless one was queued within the hour.</summary>
@@ -62,9 +67,18 @@ internal sealed class MappingWriter : BackgroundService
             return true;
         }
 
-        _recent.Set("t:" + responseKey, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
-        return Enqueue(new MappingWrite.Touch(responseKey, _time.GetUtcNow().UtcDateTime));
+        if (Enqueue(new MappingWrite.Touch(responseKey, _time.GetUtcNow().UtcDateTime)) is false)
+        {
+            return false;
+        }
+
+        Remember("t:" + responseKey);
+        return true;
     }
+
+    // Only a write that was queued is remembered: a dropped one is tried again on the next request.
+    private void Remember(string key)
+        => _recent.Set(key, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
 
     private bool Enqueue(MappingWrite item)
     {

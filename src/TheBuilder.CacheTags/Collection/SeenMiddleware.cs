@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Web.Common.ApplicationBuilder;
@@ -11,18 +13,19 @@ namespace TheBuilder.CacheTags.Collection;
 ///     replays it and nothing of the package runs inside. Without this, a mapping could age out while
 ///     a frontend still holds the response, and that response would never be purged.
 /// </summary>
-internal sealed class SeenMiddleware(RequestDelegate next, MappingWriter writer, ILogger<SeenMiddleware> logger)
+internal sealed class SeenMiddleware(RequestDelegate next, MappingWriter writer, IOptionsMonitor<CacheTagsOptions> options, ILogger<SeenMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
         await next(context);
 
-        if (context.Request.Path.StartsWithSegments("/umbraco/delivery/api", StringComparison.OrdinalIgnoreCase) is false)
+        CacheTagsOptions settings = options.CurrentValue;
+        if (settings.Enabled is false || context.Request.Path.StartsWithSegments("/umbraco/delivery/api", StringComparison.OrdinalIgnoreCase) is false)
         {
             return;
         }
 
-        foreach (var key in context.Response.Headers[Constants.HeaderName].ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        foreach (var key in context.Response.Headers[settings.HeaderName].ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             var start = key.IndexOf(CacheKeys.ResponsePrefix, StringComparison.Ordinal);
             if (start >= 0)

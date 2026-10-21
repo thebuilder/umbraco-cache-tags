@@ -14,7 +14,8 @@ namespace TheBuilder.CacheTags.Collection;
 /// <summary>
 ///     Runs after every Delivery API action: gives a cacheable response its key in the response
 ///     header and queues the record of what it covers. Preview responses get <c>no-store</c> and
-///     member responses <c>private</c>, and neither gets a key.
+///     member responses <c>private</c>, and neither gets a key. Nor does a response whose request headers
+///     are too long to record, which gets <c>no-store</c>.
 /// </summary>
 internal sealed class CacheKeyResultFilter(
     IOptionsMonitor<CacheTagsOptions> options,
@@ -51,7 +52,7 @@ internal sealed class CacheKeyResultFilter(
             return;
         }
 
-        if (http.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        if (http.User.Identity?.IsAuthenticated is true || http.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             // A member's response: the key does not vary by member, so it must not be shared.
             http.Response.Headers[HeaderNames.CacheControl] = "private";
@@ -69,11 +70,18 @@ internal sealed class CacheKeyResultFilter(
             requestCulture.GetRequestedCulture(),
             requestSegment.GetRequestedSegment(),
             startItem.RequestedStartItem());
+        if (identity.Fits is false)
+        {
+            // Headers too long to record: the response could not be purged, so it must not be cached.
+            http.Response.Headers[HeaderNames.CacheControl] = "no-store";
+            return;
+        }
+
         var responseKey = identity.ToKey();
         IReadOnlySet<string> keys = collector.Collect(value, http, endpoint);
 
         http.Items[ResponseKeyItem] = responseKey;
-        http.Response.Headers[Constants.HeaderName] = collector.Header(settings, responseKey, keys);
+        http.Response.Headers[settings.HeaderName] = collector.Header(settings, responseKey, keys);
 
         // The key hashes the culture as requested; the mapping stores the culture actually served
         // (Accept-Language: da resolves to da-DK, no header to the default), which a culture-limited

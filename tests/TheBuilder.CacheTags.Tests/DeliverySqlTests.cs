@@ -139,4 +139,16 @@ public sealed class DeliverySqlTests : IDisposable
         ServerPresence presence = Assert.Single(AckSql.Servers(_database));
         Assert.Equal(new ServerPresence("server-1", Now, Now.AddSeconds(30)), presence);
     }
+
+    [Fact]
+    public void Due_purges_are_read_oldest_first_and_at_most_as_many_as_asked_for()
+    {
+        Guid first = Guid.NewGuid();
+        Guid second = Guid.NewGuid();
+        _database.Insert(Purge(second, Now.AddSeconds(-1)));
+        _database.Insert(Purge(first, Now.AddSeconds(-2)));
+        _database.Insert(Purge(Guid.NewGuid(), Now));
+
+        Assert.Equal([first, second], LedgerSql.Due(_database, Now, 2).Select(p => p.Id));
+    }
 }

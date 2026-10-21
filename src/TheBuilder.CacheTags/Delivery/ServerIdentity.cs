@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace TheBuilder.CacheTags.Delivery;
 
@@ -15,7 +16,7 @@ internal sealed class ServerIdentity(TimeProvider time)
 }
 
 /// <summary>Sends this server's heartbeat every 30 seconds, and leaves on a clean shutdown.</summary>
-internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity, TimeProvider time, ILogger<Heartbeat> logger) : BackgroundService
+internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity, IOptionsMonitor<Configuration.CacheTagsOptions> options, TimeProvider time, ILogger<Heartbeat> logger) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
@@ -24,6 +25,11 @@ internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity
         using var timer = new PeriodicTimer(Interval, time);
         do
         {
+            if (options.CurrentValue.Enabled is false)
+            {
+                continue;
+            }
+
             try
             {
                 await transport.HeartbeatAsync(identity.Name, identity.StartedUtc, time.GetUtcNow().UtcDateTime, stoppingToken);

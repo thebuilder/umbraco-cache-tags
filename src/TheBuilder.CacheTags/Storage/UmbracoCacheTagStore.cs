@@ -1,10 +1,12 @@
+using Microsoft.Extensions.Logging;
+
 namespace TheBuilder.CacheTags.Storage;
 
 /// <summary>
 ///     The default <see cref="ICacheTagStore" />: the mapping lives in the Umbraco database. Every
 ///     server that serves the Delivery API writes to it, so it needs write access.
 /// </summary>
-internal sealed class UmbracoCacheTagStore(PackageDatabase database) : ICacheTagStore
+internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<UmbracoCacheTagStore> logger) : ICacheTagStore
 {
     // One transaction per response: when another server inserts the same row at the same moment, the
     // unique index rejects one insert, and only that response is retried rather than the batch lost.
@@ -18,8 +20,16 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database) : ICacheTag
             }
             catch (System.Data.Common.DbException)
             {
-                // The rows now exist, so the retry updates them.
-                database.Write(db => CacheTagSql.Record(db, response));
+                // The rows now exist, so the retry updates them. A response that fails again is
+                // skipped, so it does not cost the rest of the batch.
+                try
+                {
+                    database.Write(db => CacheTagSql.Record(db, response));
+                }
+                catch (System.Data.Common.DbException exception)
+                {
+                    logger.LogWarning(exception, "Recording cache tag response {ResponseKey} failed; it is recorded on its next render.", response.ResponseKey);
+                }
             }
         }
 

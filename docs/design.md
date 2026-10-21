@@ -44,8 +44,9 @@ request always gives the same key on every server.
 
 The package records which `content-`, `media-` and selector keys (`type-`, `children-`, `search-`)
 each response key covers. A change is planned as item and selector keys and resolved to the response
-keys that cover them. In **direct mode** (opt-in), the header lists the item keys instead, up to a
-budget of 64, then falls back to `type-` keys.
+keys that cover them. With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
+itself), the header lists the item keys instead, up to `MaxItemKeys` (64), then falls back to
+`type-` keys. The header name is `CacheTags:HeaderName`.
 
 No keys, and the given `Cache-Control`, on:
 
@@ -54,19 +55,39 @@ No keys, and the given `Cache-Control`, on:
 
 ## The purge webhook
 
-Defined by the Next.js sample (`samples/README.md`) and sent by the package to each configured target:
+Sent by the built-in `webhook` target type to each configured target, and received by the Next.js
+sample (`samples/README.md`):
 
 ```http
 POST <target path>
 Content-Type: application/json
+User-Agent: TheBuilder.CacheTags/<version>
 X-Cache-Tags-Timestamp: <unix seconds>
 X-Cache-Tags-Signature: sha256=<lowercase hex>
 
-{"id":"<event id>","keys":["response-...","content-..."]}
+{
+  "version": 1,
+  "id": "<purge id>",
+  "changeId": "<change id>",
+  "expire": ["response-...", "content-..."],
+  "stale": ["type-article", "children-..."]
+}
 ```
 
-HMAC-SHA256 with the secret's UTF-8 bytes over `<METHOD>\n<path>\n<timestamp>\n<raw body>`. A 5-minute
-window; two secrets accepted for rotation; duplicate event ids ignored.
+- `expire` holds `response-`, `content-` and `media-` keys: one response or item, purged at once.
+  `stale` holds `type-`, `children-`, `search-` and `umbraco`: listings or everything, served stale
+  while they refresh. The package decides, so a receiver needs no knowledge of key names.
+- `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
+  A change sends several purges: one per `MaxKeysPerRequest` keys, and the listing re-purges.
+- A receiver that does not know `version` must not purge, and answers with an error.
+- HMAC-SHA256 with the secret's UTF-8 bytes over `<METHOD>\n<path>\n<timestamp>\n<raw body>`. A
+  5-minute window; two secrets accepted for rotation; duplicate ids ignored.
+- The secret must be at least 32 characters (use 32 random bytes, base64), and differ between
+  environments: the host is not signed, so a purge for one receiver is valid at another with the
+  same secret and path. The URL must be https, except on localhost. Redirects are not followed.
+
+Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, and are configured with
+`"Type": "<their type>"` and their own `Settings`.
 
 ## Delivery
 
@@ -92,9 +113,9 @@ On SQLite, two transactions that each read and then write deadlock otherwise.
 
 ```json
 "CacheTags": {
-  "Targets": [
-    { "Name": "nextjs", "Url": "https://www.example.com/api/cache-tags", "Secret": "<at least 16 characters>" }
-  ]
+  "Targets": {
+    "nextjs": { "Url": "https://www.example.com/api/cache-tags", "Secret": "<at least 32 characters>" }
+  }
 }
 ```
 

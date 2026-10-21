@@ -2,6 +2,8 @@
 //
 //   pnpm purge content-e0000000-0000-0000-0000-000000000003 type-article
 //
+// Response and item keys (response-, content-, media-) are sent to expire, the rest to go stale.
+//
 // Reads CACHE_TAGS_WEBHOOK_SECRET and FRONTEND_URL from the environment, then .env.local, then .env.
 import { createHmac, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -20,7 +22,9 @@ if (keys.length === 0 || !secret) {
 }
 
 const url = new URL("/api/cache-tags", process.env.FRONTEND_URL ?? "http://localhost:3000");
-const body = JSON.stringify({ id: randomUUID(), keys });
+const expire = keys.filter((key) => /^(response|content|media)-/.test(key));
+const stale = keys.filter((key) => !expire.includes(key));
+const body = JSON.stringify({ version: 1, id: randomUUID(), changeId: randomUUID(), expire, stale });
 const timestamp = Math.floor(Date.now() / 1000).toString();
 const signature = createHmac("sha256", secret).update(`POST\n${url.pathname}\n${timestamp}\n${body}`).digest("hex");
 

@@ -75,9 +75,9 @@ internal sealed class Releaser(
         }
 
         var purges = settings.Targets
-            .Where(target => target.Enabled)
-            .SelectMany(target => sends.SelectMany(send => Webhook.Chunk(send.Keys, target.MaxKeysPerRequest)
-                .Select(chunk => new NewPurge(target.Name, chunk, send.NotBeforeUtc))))
+            .Where(target => target.Value.Enabled)
+            .SelectMany(target => sends.SelectMany(send => send.Keys.Chunk(target.Value.MaxKeysPerRequest)
+                .Select(chunk => new NewPurge(target.Key, chunk, send.NotBeforeUtc))))
             .ToList();
 
         if (ledger.CompleteRelease(change.Id, identity.Name, decision.Missing, decision.TimedOut, now, purges) is false)

@@ -100,4 +100,17 @@ public sealed class CacheTagSqlTests : IDisposable
         Assert.Equal(1, _database.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsResponseKey"));
         Assert.Equal(1, _database.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsResponse"));
     }
+
+    [Fact]
+    public void A_later_render_adds_its_new_keys_and_refreshes_the_ones_it_still_has()
+    {
+        CacheTagSql.Record(_database, Render("response-a", Monday, "", "content-1", "content-2"));
+        CacheTagSql.Record(_database, Render("response-a", Tuesday, "", "content-2", "content-3"));
+
+        CacheTagSql.Prune(_database, Monday.AddHours(1));
+
+        Assert.Empty(CacheTagSql.FindResponseKeys(_database, ["content-1"], null));
+        Assert.Equal(["response-a"], CacheTagSql.FindResponseKeys(_database, ["content-2"], null));
+        Assert.Equal(["response-a"], CacheTagSql.FindResponseKeys(_database, ["content-3"], null));
+    }
 }

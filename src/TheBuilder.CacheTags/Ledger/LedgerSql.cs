@@ -12,10 +12,13 @@ namespace TheBuilder.CacheTags.Ledger;
 internal static class LedgerSql
 {
     public static List<EventRow> Unreleased(IDatabase database, int take)
-        => database.Fetch<EventRow>(
+        => database.SkipTake<EventRow>(0, take, new Sql(
             $"SELECT * FROM {Constants.Tables.Events} WHERE Status = @0 OR Status = @1 ORDER BY CreatedUtc",
             EventStatuses.Pending,
-            EventStatuses.Releasing).Take(take).ToList();
+            EventStatuses.Releasing));
+
+    public static List<EventRow> Latest(IDatabase database, int take)
+        => database.SkipTake<EventRow>(0, take, new Sql($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC"));
 
     /// <summary>Takes the lease on releasing a change. False when another server holds it, or it is released.</summary>
     public static bool ClaimRelease(IDatabase database, Guid id, string owner, DateTime nowUtc, DateTime leaseUntilUtc)
@@ -50,10 +53,10 @@ internal static class LedgerSql
     }
 
     public static List<OutboxRow> Due(IDatabase database, DateTime nowUtc, int take)
-        => database.Fetch<OutboxRow>(
+        => database.SkipTake<OutboxRow>(0, take, new Sql(
             $"SELECT * FROM {Constants.Tables.Outbox} WHERE State = @0 AND NotBeforeUtc <= @1 AND (LeaseUntilUtc IS NULL OR LeaseUntilUtc < @1) ORDER BY NotBeforeUtc",
             OutboxStates.Pending,
-            nowUtc).Take(take).ToList();
+            nowUtc));
 
     public static int PendingCount(IDatabase database)
         => database.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Constants.Tables.Outbox} WHERE State = @0", OutboxStates.Pending);

@@ -26,6 +26,9 @@ internal sealed class ResponseCollector(
     private const string ResolvedContentItemsKey = "Umbraco.DeliveryApi.OutputCache.ResolvedContentItems";
     private const string ResolvedMediaItemsKey = "Umbraco.DeliveryApi.OutputCache.ResolvedMediaItems";
 
+    /// <summary>The most keys one response is recorded with.</summary>
+    public const int MaxKeys = 1000;
+
     public IReadOnlySet<string> Collect(object result, HttpContext http, DeliveryEndpoint endpoint)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -40,19 +43,28 @@ internal sealed class ResponseCollector(
                 endpoint.Media));
         }
 
+        if (keys.Count > MaxKeys)
+        {
+            // A request can ask for many items (take, expand); past this, the items are recorded as
+            // their types, which a change to any of them purges, to bound the mapping per response.
+            var items = keys.Where(CacheKeys.IsItem).ToList();
+            keys.ExceptWith(items);
+            keys.UnionWith(TypeKeys(items));
+        }
+
         return keys;
     }
 
     /// <summary>The header value: the response key, or in direct mode the item keys (or their types, past the budget) and selectors.</summary>
     public string Header(CacheTagsOptions options, string responseKey, IReadOnlySet<string> keys)
     {
-        if (options.Mode == CacheKeyMode.Response)
+        if (options.KeyMode == CacheKeyMode.ResponseKey)
         {
             return CacheKeys.WithPrefix(options.KeyPrefix, responseKey);
         }
 
         var items = keys.Where(CacheKeys.IsItem).Order(StringComparer.Ordinal).ToList();
-        IEnumerable<string> shown = items.Count <= options.DirectKeyBudget ? items : TypeKeys(items);
+        IEnumerable<string> shown = items.Count <= options.MaxItemKeys ? items : TypeKeys(items);
         return string.Join(", ", new[] { responseKey }
             .Concat(shown)
             .Concat(keys.Where(CacheKeys.IsSelector).Order(StringComparer.Ordinal))

@@ -192,8 +192,11 @@ Content-Type: application/json
 X-Cache-Tags-Timestamp: 1792612800
 X-Cache-Tags-Signature: sha256=<lowercase hex>
 
-{"id":"<event id>","keys":["response-3f9a0c...","content-e0000000-0000-0000-0000-000000000003","type-article"]}
+{"version":1,"id":"<purge id>","changeId":"<change id>","expire":["response-3f9a0c...","content-e0000000-0000-0000-0000-000000000003"],"stale":["type-article"]}
 ```
+
+- `expire` keys are purged at once; `stale` keys are served stale while they refresh. A body of
+  another version, or over 1 MB, is refused.
 
 - The signature is HMAC-SHA256, keyed with the secret's UTF-8 bytes, over
   `POST\n/api/cache-tags\n<timestamp>\n<raw body>`: method, path, timestamp and body, joined by
@@ -202,7 +205,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 - `CACHE_TAGS_WEBHOOK_SECRET` and `CACHE_TAGS_WEBHOOK_SECRET_PREVIOUS` are both accepted, so the secret
   can be rotated: set the new one as current and the old one as previous, switch Umbraco, then clear
   previous.
-- An event id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
+- A purge id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
   Ids are kept in memory, per process.
 - `response-`, `content-` and `media-` keys are expired at once (`revalidateTag(key, { expire: 0 })`):
   the next request waits for fresh content. `type-`, `children-` and `search-` keys and `umbraco` are
