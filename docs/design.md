@@ -99,5 +99,8 @@ Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's key
 2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
    purge planner, the lookup API.
 3. Outbox, ack barrier, webhook target, signing.
-4. Second purge for listings, more event sources, Umbraco output cache eviction.
+4. Second purge for listings, more event sources, Umbraco output cache eviction. Listing keys
+   (`type-`, `children-`, `search-`) must be purged once the Delivery API index has the change:
+   purged earlier, the frontend refetches the old listing and keeps it until its safety revalidate.
+   On a fresh boot the samples measured the index taking over half a minute.
 5. Backoffice, Cloudflare target, docs, NuGet preview.
