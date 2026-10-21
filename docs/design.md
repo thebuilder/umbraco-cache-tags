@@ -85,7 +85,11 @@ Milestone 2 ships the data and an admin-only Management API lookup:
 - a `response-` key gives the request it stands for (path, query, culture, segment, start item) and
   the items and selectors it covers, with names;
 - a `content-`, `media-` or selector key gives the response keys that cover it;
-- a ledger event id gives the keys the planner produced for it.
+- the latest changes list the keys each planned and the responses that plan reaches now.
+
+`GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
+`GET /umbraco/management/api/v1/cache-tags/changes?take=20`, for administrators. Each change is also
+logged: `Cache tags change <id> (<kind>) plans <keys>`.
 
 Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's keys and fetch times.
 

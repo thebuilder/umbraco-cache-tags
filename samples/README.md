@@ -8,9 +8,9 @@ Two sites to check TheBuilder.CacheTags end to end:
 - `nextjs`: a Next.js 16 frontend that renders that content from the Delivery API, caches each
   response under the keys in `X-Umbraco-Cache-Keys`, and purges them when the webhook calls it.
 
-The package itself (`src/TheBuilder.CacheTags`) does not exist yet. The places to add it are marked
-`CACHE TAGS` in the sample's csproj and `Program.cs`. Until it is added, Umbraco sends no cache
-keys, so see [Before the package exists](#before-the-package-exists).
+The Umbraco sample references the package (`src/TheBuilder.CacheTags`), which installs itself through
+its composer. It tags every Delivery API response and plans the purge for every change. Sending the
+purge comes with Milestone 3, so until then see [Until purges are sent](#until-purges-are-sent).
 
 `pnpm e2e` checks the whole loop automatically: see [Check it automatically](#check-it-automatically).
 
@@ -191,7 +191,7 @@ Content-Type: application/json
 X-Cache-Tags-Timestamp: 1792612800
 X-Cache-Tags-Signature: sha256=<lowercase hex>
 
-{"id":"<event id>","keys":["c-e0000000-0000-0000-0000-000000000003","t-article"]}
+{"id":"<event id>","keys":["response-3f9a0c...","content-e0000000-0000-0000-0000-000000000003","type-article"]}
 ```
 
 - The signature is HMAC-SHA256, keyed with the secret's UTF-8 bytes, over
@@ -203,23 +203,24 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   previous.
 - An event id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
   Ids are kept in memory, per process.
-- `q-`, `c-` and `m-` keys are expired at once (`revalidateTag(key, { expire: 0 })`): the next request
-  waits for fresh content. `t-`, `ch-` and `s-` keys and `umbraco` are marked stale
-  (`revalidateTag(key, 'max')`): the next request still gets the old page and refreshes it in the
-  background. Other keys are returned under `ignored`.
+- `response-`, `content-` and `media-` keys are expired at once (`revalidateTag(key, { expire: 0 })`):
+  the next request waits for fresh content. `type-`, `children-` and `search-` keys and `umbraco` are
+  marked stale (`revalidateTag(key, 'max')`): the next request still gets the old page and refreshes
+  it in the background. Other keys are returned under `ignored`. The key names are defined in
+  `docs/design.md`.
 
 `pnpm purge` sends a signed webhook, the same way:
 
 ```bash
-pnpm purge c-e0000000-0000-0000-0000-000000000003
+pnpm purge response-<the key in a page's Cache box>
 ```
 
 ## Check it end to end
 
 With the package added and both sites running:
 
-1. Open http://localhost:3000/articles/harbour-mornings. The Cache box lists tags such as
-   `c-e0000000-0000-0000-0000-000000000003`. Reload: the time stays the same.
+1. Open http://localhost:3000/articles/harbour-mornings. The Cache box lists one `response-` tag per
+   Delivery API call. Reload: the time stays the same.
 2. In the backoffice, change the article's Summary and choose Save and publish.
 3. Reload. The new summary shows, with a new time in the Cache box. The listing at
    http://localhost:3000/articles shows it too, since it renders the article.
@@ -266,8 +267,8 @@ are cached and steady, so a page that refetches only because its cache entry was
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the
 environment or `.env.local`.
 
-Until the package is added every case fails, with `tags: none` under each page: Umbraco sends no
-cache keys and no purge.
+Until Milestone 3 sends purges, every case fails: the pages carry their `response-` tags, but nothing
+purges them.
 
 ### Check the packed package
 
@@ -287,10 +288,18 @@ dotnet run --project samples/TheBuilder.CacheTags.Example -p:CacheTagsPackageVer
 global packages folder and does not look at the file again, so give each pack a new version. Then run
 `pnpm e2e` as above.
 
-### Before the package exists
+### Until purges are sent
 
-Umbraco sends no `X-Umbraco-Cache-Keys` yet, so the Cache box says `tags: none` and nothing can be
-purged by key. A publish then shows up only after the hourly revalidate, or after restarting
-`pnpm start` (the cache is in memory). That is how a frontend behaves without the package.
-`pnpm purge` still exercises the webhook: it should answer `200` with the keys under `expired` or
+Umbraco sends `X-Umbraco-Cache-Keys`, so the Cache box shows a `response-` tag per call, but the
+package does not send the purge webhook until Milestone 3. A publish then shows up only after the
+hourly revalidate, or after restarting `pnpm start` (the cache is in memory). What each change would
+purge is already planned and can be checked:
+
+- Umbraco's log has a line per change: `Cache tags change <id> (Published) plans content-..., type-...`.
+- The admin-only lookup API answers what a key covers and what recent changes planned:
+  `GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
+  `GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
+  API user works; see `scripts/e2e.mts` for getting a token).
+
+`pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
 `stale`.

@@ -7,7 +7,7 @@ import { revalidateTag } from "next/cache";
  *   POST /api/cache-tags
  *   X-Cache-Tags-Timestamp: <unix time in seconds>
  *   X-Cache-Tags-Signature: sha256=<lowercase hex HMAC-SHA256>
- *   { "id": "<event id>", "keys": ["c-<guid>", "t-article", ...] }
+ *   { "id": "<event id>", "keys": ["response-<hash>", "content-<guid>", "type-article", ...] }
  *
  * The signature covers `${method}\n${path}\n${timestamp}\n${body}`, with the raw body. Either the
  * current or the previous secret may have signed it, so secrets can be rotated without downtime.
@@ -65,11 +65,11 @@ export async function POST(request: Request) {
   const stale: string[] = [];
   const ignored: string[] = [];
   for (const key of new Set(keys as string[])) {
-    if (/^[qcm]-/.test(key)) {
+    if (/^(response|content|media)-/.test(key)) {
       // One response or one item: the next request waits for fresh content.
       revalidateTag(key, { expire: 0 });
       expired.push(key);
-    } else if (/^(t|ch|s)-/.test(key) || key === "umbraco") {
+    } else if (/^(type|children|search)-/.test(key) || key === "umbraco") {
       // Listings (by content type, by parent, by other query) and everything: these touch many
       // pages, so serve stale while they refresh.
       revalidateTag(key, "max");

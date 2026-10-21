@@ -14,14 +14,11 @@
     <PackageReference Include="MessagePack" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
-  <!-- CACHE TAGS: the package goes in one of these two ways, and AddCacheTags() in Program.cs either way.
-       By default the project: uncomment the ProjectReference once src/TheBuilder.CacheTags exists.
-       To test the packed .nupkg instead, the artifact that gets published, pass its version (see
-       ../README.md). It is restored from ../../artifacts, or from CacheTagsPackageSource. -->
+  <!-- The package, installed through its composer. By default the project; to test the packed
+       .nupkg instead, the artifact that gets published, pass its version (see ../README.md). It is
+       restored from ../../artifacts, or from CacheTagsPackageSource. -->
   <ItemGroup Condition="'$(CacheTagsPackageVersion)' == ''">
-    <!--
     <ProjectReference Include="../../src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj" />
-    -->
   </ItemGroup>
   <PropertyGroup Condition="'$(CacheTagsPackageVersion)' != ''">
     <CacheTagsPackageSource Condition="'$(CacheTagsPackageSource)' == ''">$(MSBuildThisFileDirectory)../../artifacts</CacheTagsPackageSource>
