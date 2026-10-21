@@ -19,23 +19,21 @@ internal sealed class MappingWriter : BackgroundService
 
     private const int BatchSize = 200;
 
-    private readonly Channel<object> _queue = Channel.CreateBounded<object>(new BoundedChannelOptions(10_000)
+    private readonly Channel<MappingWrite> _queue = Channel.CreateBounded<MappingWrite>(new BoundedChannelOptions(10_000)
     {
         FullMode = BoundedChannelFullMode.DropWrite,
         SingleReader = true,
     });
 
     private readonly MemoryCache _recent = new(new MemoryCacheOptions { SizeLimit = 100_000 });
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly DatabaseGate _gate;
+    private readonly ICacheTagStore _store;
     private readonly IOptionsMonitor<CacheTagsOptions> _options;
     private readonly TimeProvider _time;
     private readonly ILogger<MappingWriter> _logger;
 
-    public MappingWriter(IServiceScopeFactory scopeFactory, DatabaseGate gate, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
+    public MappingWriter(ICacheTagStore store, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
     {
-        _scopeFactory = scopeFactory;
-        _gate = gate;
+        _store = store;
         _options = options;
         _time = time;
         _logger = logger;
@@ -53,7 +51,7 @@ internal sealed class MappingWriter : BackgroundService
 
         _recent.Set(fingerprint, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
         _recent.Set("t:" + response.ResponseKey, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
-        return Enqueue(response);
+        return Enqueue(new MappingWrite.Render(response));
     }
 
     /// <summary>Queues a "served" touch for a response key, unless one was queued within the hour.</summary>
@@ -65,10 +63,10 @@ internal sealed class MappingWriter : BackgroundService
         }
 
         _recent.Set("t:" + responseKey, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
-        return Enqueue(new TouchRequest(responseKey, _time.GetUtcNow().UtcDateTime));
+        return Enqueue(new MappingWrite.Touch(responseKey, _time.GetUtcNow().UtcDateTime));
     }
 
-    private bool Enqueue(object item)
+    private bool Enqueue(MappingWrite item)
     {
         if (_queue.Writer.TryWrite(item))
         {
@@ -81,7 +79,7 @@ internal sealed class MappingWriter : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var batch = new List<object>(BatchSize);
+        var batch = new List<MappingWrite>(BatchSize);
         while (await _queue.Reader.WaitToReadAsync(stoppingToken))
         {
             batch.Clear();
@@ -92,7 +90,7 @@ internal sealed class MappingWriter : BackgroundService
 
             try
             {
-                await _gate.RunAsync(() => WriteAsync(batch, stoppingToken), stoppingToken);
+                await WriteAsync(batch, stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -103,25 +101,23 @@ internal sealed class MappingWriter : BackgroundService
         }
     }
 
-    private async Task WriteAsync(IReadOnlyList<object> batch, CancellationToken cancellationToken)
+    private async Task WriteAsync(IReadOnlyList<MappingWrite> batch, CancellationToken cancellationToken)
     {
         if (_options.CurrentValue.Enabled is false)
         {
             return;
         }
 
-        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
-        ICacheTagStore store = scope.ServiceProvider.GetRequiredService<ICacheTagStore>();
-
-        CachedResponse[] renders = batch.OfType<CachedResponse>().ToArray();
+        CachedResponse[] renders = batch.OfType<MappingWrite.Render>().Select(write => write.Response).ToArray();
         if (renders.Length > 0)
         {
-            await store.RecordAsync(renders, cancellationToken);
+            await _store.RecordAsync(renders, cancellationToken);
         }
 
-        foreach (IGrouping<DateTime, TouchRequest> touches in batch.OfType<TouchRequest>().GroupBy(t => t.SeenUtc.Date))
+        MappingWrite.Touch[] touches = batch.OfType<MappingWrite.Touch>().ToArray();
+        if (touches.Length > 0)
         {
-            await store.TouchAsync(touches.Select(t => t.ResponseKey).ToArray(), touches.Max(t => t.SeenUtc), cancellationToken);
+            await _store.TouchAsync(touches.Select(touch => touch.ResponseKey).ToArray(), touches.Max(touch => touch.SeenUtc), cancellationToken);
         }
     }
 
@@ -131,5 +127,10 @@ internal sealed class MappingWriter : BackgroundService
         base.Dispose();
     }
 
-    private sealed record TouchRequest(string ResponseKey, DateTime SeenUtc);
+    private abstract record MappingWrite
+    {
+        public sealed record Render(CachedResponse Response) : MappingWrite;
+
+        public sealed record Touch(string ResponseKey, DateTime SeenUtc) : MappingWrite;
+    }
 }

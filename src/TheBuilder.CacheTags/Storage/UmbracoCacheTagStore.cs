@@ -1,14 +1,12 @@
-using Umbraco.Cms.Infrastructure.Scoping;
-
 namespace TheBuilder.CacheTags.Storage;
 
 /// <summary>
 ///     The default <see cref="ICacheTagStore" />: the mapping lives in the Umbraco database. Every
 ///     server that serves the Delivery API writes to it, so it needs write access.
 /// </summary>
-internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICacheTagStore
+internal sealed class UmbracoCacheTagStore(PackageDatabase database) : ICacheTagStore
 {
-    // One scope per response: when another server inserts the same row at the same moment, the
+    // One transaction per response: when another server inserts the same row at the same moment, the
     // unique index rejects one insert, and only that response is retried rather than the batch lost.
     public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default)
     {
@@ -16,50 +14,30 @@ internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICach
         {
             try
             {
-                RecordOne(response);
+                database.Write(db => CacheTagSql.Record(db, response));
             }
             catch (System.Data.Common.DbException)
             {
                 // The rows now exist, so the retry updates them.
-                RecordOne(response);
+                database.Write(db => CacheTagSql.Record(db, response));
             }
         }
 
         return Task.CompletedTask;
     }
 
-    private void RecordOne(CachedResponse response)
-    {
-        using IScope scope = WriteScope.Create(scopeProvider);
-        CacheTagSql.Record(scope.Database, response);
-        scope.Complete();
-    }
-
     public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default)
     {
-        using IScope scope = WriteScope.Create(scopeProvider);
-        CacheTagSql.Touch(scope.Database, responseKeys, seenUtc);
-        scope.Complete();
+        database.Write(db => CacheTagSql.Touch(db, responseKeys, seenUtc));
         return Task.CompletedTask;
     }
 
     public Task<IReadOnlyCollection<string>> FindResponseKeysAsync(IReadOnlyCollection<string> keys, IReadOnlyCollection<string>? cultures, CancellationToken cancellationToken = default)
-    {
-        using IScope scope = scopeProvider.CreateScope(autoComplete: true);
-        return Task.FromResult(CacheTagSql.FindResponseKeys(scope.Database, keys, cultures));
-    }
+        => Task.FromResult(database.Read(db => CacheTagSql.FindResponseKeys(db, keys, cultures)));
 
     public Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default)
-    {
-        using IScope scope = scopeProvider.CreateScope(autoComplete: true);
-        return Task.FromResult(CacheTagSql.Get(scope.Database, responseKey));
-    }
+        => Task.FromResult(database.Read(db => CacheTagSql.Get(db, responseKey)));
 
     public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
-    {
-        using IScope scope = WriteScope.Create(scopeProvider);
-        var removed = CacheTagSql.Prune(scope.Database, cutoffUtc);
-        scope.Complete();
-        return Task.FromResult(removed);
-    }
+        => Task.FromResult(database.Write(db => CacheTagSql.Prune(db, cutoffUtc)));
 }

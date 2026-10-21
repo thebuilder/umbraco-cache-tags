@@ -64,9 +64,10 @@ TheBuilder.CacheTags.Delivery.ServerPresence.Server.get -> string!
 TheBuilder.CacheTags.Delivery.ServerPresence.Server.init -> void
 TheBuilder.CacheTags.Delivery.ServerPresence.ServerPresence(string! Server, System.DateTime FirstSeenUtc, System.DateTime LastSeenUtc) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController
-TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.CacheTagsLookupController(TheBuilder.CacheTags.Storage.ICacheTagStore! store, TheBuilder.CacheTags.Delivery.IAckTransport! ackTransport, Umbraco.Cms.Core.Services.IEntityService! entityService, Umbraco.Cms.Infrastructure.Scoping.IScopeProvider! scopeProvider) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.CacheTagsLookupController(TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup! lookup) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Changes(int take = 20, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Lookup(string! key, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup
 TheBuilder.CacheTags.Storage.CachedResponse
 TheBuilder.CacheTags.Storage.CachedResponse.<Clone>$() -> TheBuilder.CacheTags.Storage.CachedResponse!
 TheBuilder.CacheTags.Storage.CachedResponse.CachedResponse(string! ResponseKey, string! Path, string! Query, string! Culture, string! Segment, string! StartItem, System.Collections.Generic.IReadOnlyCollection<string!>! Keys, System.DateTime RenderedUtc, System.DateTime SeenUtc) -> void

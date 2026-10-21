@@ -44,12 +44,15 @@ public sealed class CacheTagsComposer : IComposer
 
         // Collecting.
         builder.Services.AddSingleton<ReferenceReader>();
-        builder.Services.Configure<MvcOptions>(options => options.Filters.Add(new CacheKeyResultFilter()));
+        builder.Services.AddScoped<ResponseCollector>();
+        builder.Services.AddScoped<CacheKeyResultFilter>();
+        builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
         builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, ResponseKeyOutputCacheTags>();
         builder.Services.Configure<UmbracoPipelineOptions>(options => options.AddFilter(SeenPipeline.Filter()));
 
         // The mapping.
-        builder.Services.TryAddScoped<ICacheTagStore, UmbracoCacheTagStore>();
+        builder.Services.AddSingleton<PackageDatabase>();
+        builder.Services.TryAddSingleton<ICacheTagStore, UmbracoCacheTagStore>();
         builder.Services.AddSingleton<MappingWriter>();
         builder.Services.AddHostedService(services => services.GetRequiredService<MappingWriter>());
         builder.Services.AddRecurringBackgroundJob<MappingPruneJob>();
@@ -57,6 +60,7 @@ public sealed class CacheTagsComposer : IComposer
         // The ledger, on the server that makes each change.
         builder.Services.AddSingleton<IDescendants, NavigationDescendants>();
         builder.Services.AddSingleton<PurgePlanner>();
+        builder.Services.AddSingleton<LedgerStore>();
         builder.Services.AddSingleton<ChangeRecorder>();
         builder
             .AddNotificationHandler<ContentPublishingNotification, SourceChangeHandlers>()
@@ -80,13 +84,16 @@ public sealed class CacheTagsComposer : IComposer
 
         // Delivery: heartbeats, acks from every server's cache refreshes, and the purge outbox.
         builder.Services.AddSingleton<ServerIdentity>();
-        builder.Services.AddSingleton<DatabaseGate>();
         builder.Services.AddSingleton<DeliverySignal>();
         builder.Services.TryAddSingleton<IAckTransport, DatabaseAckTransport>();
+        builder.Services.AddSingleton<PurgeResolver>();
+        builder.Services.AddSingleton<OutputCacheEviction>();
         builder.Services.AddSingleton<AckProcessor>();
+        builder.Services.AddSingleton<Releaser>();
+        builder.Services.AddSingleton<PurgeSender>();
         builder.Services.AddHostedService<Heartbeat>();
         builder.Services.AddHostedService<DeliveryWorker>();
-        builder.Services.AddHttpClient(DeliveryWorker.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        builder.Services.AddHttpClient(PurgeSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
         builder
             .AddNotificationAsyncHandler<ContentCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<MediaCacheRefresherNotification, RefresherHandlers>()
@@ -96,6 +103,7 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationAsyncHandler<LanguageCacheRefresherNotification, RefresherHandlers>();
 
         // The lookup API.
+        builder.Services.AddSingleton<ICacheTagsLookup, CacheTagsLookup>();
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();
         builder.Services.AddAuthorization(options => options.AddPolicy(
             AdministratorRequirement.Policy,

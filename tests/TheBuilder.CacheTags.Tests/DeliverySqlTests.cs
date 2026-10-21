@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using NPoco;
 using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.Storage;
 
 namespace TheBuilder.CacheTags.Tests;

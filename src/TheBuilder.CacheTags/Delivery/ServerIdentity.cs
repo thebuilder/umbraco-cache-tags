@@ -15,7 +15,7 @@ internal sealed class ServerIdentity(TimeProvider time)
 }
 
 /// <summary>Sends this server's heartbeat every 30 seconds, and leaves on a clean shutdown.</summary>
-internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity, Storage.DatabaseGate gate, TimeProvider time, ILogger<Heartbeat> logger) : BackgroundService
+internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity, TimeProvider time, ILogger<Heartbeat> logger) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
@@ -26,7 +26,7 @@ internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity
         {
             try
             {
-                await gate.RunAsync(() => transport.HeartbeatAsync(identity.Name, identity.StartedUtc, time.GetUtcNow().UtcDateTime, stoppingToken), stoppingToken);
+                await transport.HeartbeatAsync(identity.Name, identity.StartedUtc, time.GetUtcNow().UtcDateTime, stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

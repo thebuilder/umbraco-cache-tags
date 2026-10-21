@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Ledger;
 using Umbraco.Cms.Core.Sync;
 using Umbraco.Cms.Infrastructure.BackgroundJobs;
 
@@ -11,8 +13,9 @@ namespace TheBuilder.CacheTags.Storage;
 ///     one server.
 /// </summary>
 internal sealed class MappingPruneJob(
-    IServiceScopeFactory scopeFactory,
-    DatabaseGate gate,
+    ICacheTagStore store,
+    IAckTransport transport,
+    LedgerStore ledger,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<MappingPruneJob> logger) : IRecurringBackgroundJob
@@ -25,21 +28,15 @@ internal sealed class MappingPruneJob(
 
     public event EventHandler PeriodChanged { add { } remove { } }
 
-    public Task RunJobAsync() => gate.RunAsync(PruneAsync);
-
-    private async Task PruneAsync()
+    public async Task RunJobAsync()
     {
-        DateTime cutoff = time.GetUtcNow().UtcDateTime - options.CurrentValue.MappingRetention;
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        var removed = await scope.ServiceProvider.GetRequiredService<ICacheTagStore>().PruneAsync(cutoff);
-        logger.LogInformation("Pruned {Count} cache tag mapping rows older than {Cutoff:u}.", removed, cutoff);
+        DateTime now = time.GetUtcNow().UtcDateTime;
+        DateTime mappingCutoff = now - options.CurrentValue.MappingRetention;
+        var removed = await store.PruneAsync(mappingCutoff);
+        logger.LogInformation("Pruned {Count} cache tag mapping rows older than {Cutoff:u}.", removed, mappingCutoff);
 
-        DateTime ledgerCutoff = time.GetUtcNow().UtcDateTime - options.CurrentValue.LedgerRetention;
-        await scope.ServiceProvider.GetRequiredService<Delivery.IAckTransport>().PruneAsync(ledgerCutoff);
-        using (Umbraco.Cms.Infrastructure.Scoping.IScope ledger = WriteScope.Create(scope.ServiceProvider.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>()))
-        {
-            Delivery.LedgerSql.Prune(ledger.Database, ledgerCutoff);
-            ledger.Complete();
-        }
+        DateTime ledgerCutoff = now - options.CurrentValue.LedgerRetention;
+        await transport.PruneAsync(ledgerCutoff);
+        ledger.Prune(ledgerCutoff);
     }
 }

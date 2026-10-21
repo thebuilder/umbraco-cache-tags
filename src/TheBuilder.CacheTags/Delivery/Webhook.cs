@@ -13,6 +13,19 @@ internal static class Webhook
     public const string TimestampHeader = "X-Cache-Tags-Timestamp";
     public const string SignatureHeader = "X-Cache-Tags-Signature";
 
+    /// <summary>The signed POST of one purge to a target.</summary>
+    public static HttpRequestMessage Request(Uri url, string secret, Guid id, IReadOnlyCollection<string> keys, long timestamp)
+    {
+        var body = Body(id, keys);
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add(TimestampHeader, timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        request.Headers.Add(SignatureHeader, Sign(secret, "POST", url.AbsolutePath, timestamp, body));
+        return request;
+    }
+
     public static string Body(Guid id, IReadOnlyCollection<string> keys)
         => JsonSerializer.Serialize(new WebhookBody(id.ToString("D"), keys), WebhookJson.Default.WebhookBody);
 

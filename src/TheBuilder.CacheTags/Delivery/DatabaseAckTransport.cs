@@ -1,42 +1,33 @@
 using NPoco;
 using TheBuilder.CacheTags.Storage;
-using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>The default <see cref="IAckTransport" />: heartbeats and acks in the Umbraco database.</summary>
-internal sealed class DatabaseAckTransport(IScopeProvider scopeProvider) : IAckTransport
+internal sealed class DatabaseAckTransport(PackageDatabase database) : IAckTransport
 {
     public Task HeartbeatAsync(string server, DateTime firstSeenUtc, DateTime nowUtc, CancellationToken cancellationToken = default)
-        => Write(database => AckSql.Heartbeat(database, server, firstSeenUtc, nowUtc));
+        => Done(() => database.Write(db => AckSql.Heartbeat(db, server, firstSeenUtc, nowUtc)));
 
     public Task LeaveAsync(string server, CancellationToken cancellationToken = default)
-        => Write(database => database.Execute($"DELETE FROM {Constants.Tables.Servers} WHERE Server = @0", server));
+        => Done(() => database.Write(db => db.Execute($"DELETE FROM {Constants.Tables.Servers} WHERE Server = @0", server)));
 
     public Task<IReadOnlyCollection<ServerPresence>> GetServersAsync(CancellationToken cancellationToken = default)
-        => Read<IReadOnlyCollection<ServerPresence>>(AckSql.Servers);
+        => Task.FromResult(database.Read(AckSql.Servers));
 
     public Task AckAsync(string server, IReadOnlyCollection<Guid> changeIds, DateTime ackedUtc, CancellationToken cancellationToken = default)
-        => Write(database => AckSql.Ack(database, server, changeIds, ackedUtc));
+        => Done(() => database.Write(db => AckSql.Ack(db, server, changeIds, ackedUtc)));
 
     public Task<IReadOnlyDictionary<Guid, IReadOnlySet<string>>> GetAcksAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default)
-        => Read(database => AckSql.Acks(database, changeIds));
+        => Task.FromResult(database.Read(db => AckSql.Acks(db, changeIds)));
 
     public Task PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
-        => Write(database => AckSql.Prune(database, cutoffUtc));
+        => Done(() => database.Write(db => AckSql.Prune(db, cutoffUtc)));
 
-    private Task Write(Action<IDatabase> write)
+    private static Task Done(Action write)
     {
-        using IScope scope = WriteScope.Create(scopeProvider);
-        write(scope.Database);
-        scope.Complete();
+        write();
         return Task.CompletedTask;
-    }
-
-    private Task<T> Read<T>(Func<IDatabase, T> read)
-    {
-        using IScope scope = scopeProvider.CreateScope(autoComplete: true);
-        return Task.FromResult(read(scope.Database));
     }
 }
 
