@@ -88,15 +88,17 @@ internal sealed class CacheKeyResultFilter(
         // purge compares against.
         var servedCulture = variationContext.VariationContext?.Culture?.ToLowerInvariant() ?? identity.Culture;
         DateTime now = time.GetUtcNow().UtcDateTime;
-        writer.Record(new CachedResponse(
-            responseKey,
-            identity.Path,
-            identity.Query,
-            servedCulture,
-            identity.Segment,
-            identity.StartItem,
-            keys.Order(StringComparer.Ordinal).ToArray(),
-            now,
-            now));
+        writer.Record(new CachedResponse
+        {
+            ResponseKey = responseKey,
+            Path = identity.Path,
+            Query = identity.Query,
+            Culture = servedCulture,
+            Segment = identity.Segment,
+            StartItem = identity.StartItem,
+            Keys = keys.Order(StringComparer.Ordinal).ToArray(),
+            RenderedUtc = now,
+            SeenUtc = now,
+        });
     }
 }

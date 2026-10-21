@@ -88,12 +88,9 @@ TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Changes(int take = 
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Lookup(string! key, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup
 TheBuilder.CacheTags.Storage.CachedResponse
-TheBuilder.CacheTags.Storage.CachedResponse.<Clone>$() -> TheBuilder.CacheTags.Storage.CachedResponse!
-TheBuilder.CacheTags.Storage.CachedResponse.CachedResponse(string! ResponseKey, string! Path, string! Query, string! Culture, string! Segment, string! StartItem, System.Collections.Generic.IReadOnlyCollection<string!>! Keys, System.DateTime RenderedUtc, System.DateTime SeenUtc) -> void
+TheBuilder.CacheTags.Storage.CachedResponse.CachedResponse() -> void
 TheBuilder.CacheTags.Storage.CachedResponse.Culture.get -> string!
 TheBuilder.CacheTags.Storage.CachedResponse.Culture.init -> void
-TheBuilder.CacheTags.Storage.CachedResponse.Deconstruct(out string! ResponseKey, out string! Path, out string! Query, out string! Culture, out string! Segment, out string! StartItem, out System.Collections.Generic.IReadOnlyCollection<string!>! Keys, out System.DateTime RenderedUtc, out System.DateTime SeenUtc) -> void
-TheBuilder.CacheTags.Storage.CachedResponse.Equals(TheBuilder.CacheTags.Storage.CachedResponse? other) -> bool
 TheBuilder.CacheTags.Storage.CachedResponse.Keys.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
 TheBuilder.CacheTags.Storage.CachedResponse.Keys.init -> void
 TheBuilder.CacheTags.Storage.CachedResponse.Path.get -> string!
@@ -120,10 +117,5 @@ const TheBuilder.CacheTags.Configuration.CacheTagsOptions.SectionName = "CacheTa
 override TheBuilder.CacheTags.Delivery.ServerPresence.Equals(object? obj) -> bool
 override TheBuilder.CacheTags.Delivery.ServerPresence.GetHashCode() -> int
 override TheBuilder.CacheTags.Delivery.ServerPresence.ToString() -> string!
-override TheBuilder.CacheTags.Storage.CachedResponse.Equals(object? obj) -> bool
-override TheBuilder.CacheTags.Storage.CachedResponse.GetHashCode() -> int
-override TheBuilder.CacheTags.Storage.CachedResponse.ToString() -> string!
 static TheBuilder.CacheTags.Delivery.ServerPresence.operator !=(TheBuilder.CacheTags.Delivery.ServerPresence? left, TheBuilder.CacheTags.Delivery.ServerPresence? right) -> bool
 static TheBuilder.CacheTags.Delivery.ServerPresence.operator ==(TheBuilder.CacheTags.Delivery.ServerPresence? left, TheBuilder.CacheTags.Delivery.ServerPresence? right) -> bool
-static TheBuilder.CacheTags.Storage.CachedResponse.operator !=(TheBuilder.CacheTags.Storage.CachedResponse? left, TheBuilder.CacheTags.Storage.CachedResponse? right) -> bool
-static TheBuilder.CacheTags.Storage.CachedResponse.operator ==(TheBuilder.CacheTags.Storage.CachedResponse? left, TheBuilder.CacheTags.Storage.CachedResponse? right) -> bool

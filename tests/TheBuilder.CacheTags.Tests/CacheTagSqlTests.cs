@@ -37,7 +37,18 @@ public sealed class CacheTagSqlTests : IDisposable
     }
 
     private static CachedResponse Render(string responseKey, DateTime at, string culture, params string[] keys)
-        => new(responseKey, "/umbraco/delivery/api/v2/content/item/x/", string.Empty, culture, string.Empty, string.Empty, keys, at, at);
+        => new()
+        {
+            ResponseKey = responseKey,
+            Path = "/umbraco/delivery/api/v2/content/item/x/",
+            Query = string.Empty,
+            Culture = culture,
+            Segment = string.Empty,
+            StartItem = string.Empty,
+            Keys = keys,
+            RenderedUtc = at,
+            SeenUtc = at,
+        };
 
     [Fact]
     public void A_response_is_found_by_any_key_it_covers()

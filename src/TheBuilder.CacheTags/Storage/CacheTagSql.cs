@@ -94,7 +94,18 @@ internal static class CacheTagSql
             $"SELECT CacheKey FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey = @0 AND RenderedUtc = @1 ORDER BY CacheKey",
             responseKey,
             row.RenderedUtc);
-        return new CachedResponse(row.ResponseKey, row.Path, row.Query, row.Culture, row.Segment, row.StartItem, keys, row.RenderedUtc, row.SeenUtc);
+        return new CachedResponse
+        {
+            ResponseKey = row.ResponseKey,
+            Path = row.Path,
+            Query = row.Query,
+            Culture = row.Culture,
+            Segment = row.Segment,
+            StartItem = row.StartItem,
+            Keys = keys,
+            RenderedUtc = row.RenderedUtc,
+            SeenUtc = row.SeenUtc,
+        };
     }
 
     public static int Prune(IDatabase database, DateTime cutoffUtc)

@@ -3,7 +3,8 @@ namespace TheBuilder.CacheTags.Delivery;
 /// <summary>
 ///     How servers tell each other they are running and have applied a change. The default keeps
 ///     both in the Umbraco database, so every server needs write access to the package's tables; a
-///     site can register its own (for example over Redis) instead.
+///     site can register its own (for example over Redis) instead. Registered as a singleton and
+///     called from several threads at once.
 /// </summary>
 public interface IAckTransport
 {
@@ -22,7 +23,7 @@ public interface IAckTransport
     /// <summary>The servers that have acknowledged each of the given changes.</summary>
     Task<IReadOnlyDictionary<Guid, IReadOnlySet<string>>> GetAcksAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default);
 
-    /// <summary>Removes servers not seen since <paramref name="cutoffUtc" />, and acks of changes released before it.</summary>
+    /// <summary>Removes servers not seen since <paramref name="cutoffUtc" />, and acks recorded before it.</summary>
     Task PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default);
 }
 
