@@ -264,6 +264,13 @@ change when it ends, and a run first cleans up after one that was stopped halfwa
 again and again against the same database. Before a change, each case waits until the pages it checks
 are cached and steady, so a page that refetches only because its cache entry was empty cannot pass.
 
+**Known issue:** on SQLite, the sample can lock up after a few runs: requests and Umbraco's own
+background jobs wait on a database lock that nothing releases, and it needs a restart. It happens
+right after `pnpm e2e` creates and publishes its new article, and it reproduces with the package
+switched off (`CacheTags__Enabled=false`) and on `main` without the package, so it is Umbraco on
+SQLite under this load. Restart Umbraco between longer series of runs, or run the sample on SQL
+Server.
+
 `E2E_TIMEOUT` sets how many seconds a case waits (default 30). `UMBRACO_URL`, `FRONTEND_URL`,
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the
 environment or `.env.local`.
