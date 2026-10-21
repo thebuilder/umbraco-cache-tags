@@ -1,0 +1,56 @@
+namespace TheBuilder.CacheTags.Ledger;
+
+/// <summary>What happened, on the server where it happened.</summary>
+internal enum ChangeKind
+{
+    Published,
+    Unpublished,
+    Moved,
+    Trashed,
+    Deleted,
+    Sorted,
+    MediaSaved,
+    MediaMoved,
+    MediaTrashed,
+    MediaDeleted,
+    TypesChanged,
+    Everything,
+}
+
+/// <summary>
+///     One change to published output, recorded by the server that made it. Draft-only saves never
+///     become a change.
+/// </summary>
+/// <param name="Id">The event id, also sent with the purge so a frontend can ignore a repeat.</param>
+/// <param name="CreatedUtc">When it happened.</param>
+/// <param name="Kind">What happened.</param>
+/// <param name="Items">The documents or media affected.</param>
+/// <param name="TypeAliases">For <see cref="ChangeKind.TypesChanged" />: the content and media types whose output changed.</param>
+/// <param name="Cultures">The cultures that changed, or <c>null</c> for all.</param>
+/// <param name="Reason">Why, for the log and the lookup API (for example "language da-DK saved").</param>
+internal sealed record Change(
+    Guid Id,
+    DateTime CreatedUtc,
+    ChangeKind Kind,
+    IReadOnlyList<ChangedItem> Items,
+    IReadOnlyList<string> TypeAliases,
+    IReadOnlyList<string>? Cultures,
+    string? Reason = null);
+
+/// <param name="Key">The document or media key.</param>
+/// <param name="TypeAlias">Its content or media type alias.</param>
+/// <param name="ParentKey">Its parent's key; <see cref="Guid.Empty" /> at the root.</param>
+/// <param name="OldParentKey">For moves: the parent it left.</param>
+/// <param name="RouteChanged">
+///     Its route changed in a way its descendants' routes follow: a new URL segment, a move, an
+///     unpublish.
+/// </param>
+internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false);
+
+/// <summary>
+///     The keys a change purges, before they are resolved to <c>response-</c> keys.
+/// </summary>
+/// <param name="Keys">Item keys (<c>content-</c>, <c>media-</c>) and selector keys (<c>type-</c>, <c>children-</c>, <c>search-</c>).</param>
+/// <param name="Everything">Purge every response (<c>umbraco</c>), because the change is too wide to list.</param>
+/// <param name="Cultures">The cultures to limit the purge to, or <c>null</c> for all.</param>
+internal sealed record PurgePlan(IReadOnlyCollection<string> Keys, bool Everything, IReadOnlyList<string>? Cultures);

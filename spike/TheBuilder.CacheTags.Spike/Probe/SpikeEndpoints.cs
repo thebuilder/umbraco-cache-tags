@@ -232,5 +232,6 @@ public sealed class SpikeComposer : IComposer
         builder.AddNotificationHandler<ContentMovedNotification, SourceProbe>();
         builder.AddNotificationHandler<ContentMovedToRecycleBinNotification, SourceProbe>();
         builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, FixtureSeeder>();
+        builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, ApiUserSeeder>();
     }
 }

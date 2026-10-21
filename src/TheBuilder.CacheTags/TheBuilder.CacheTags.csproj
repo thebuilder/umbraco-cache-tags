@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>TheBuilder.CacheTags</PackageId>
+    <Product>Cache Tags for Umbraco</Product>
+    <Title>Cache keys and exact purges for the Umbraco Delivery API</Title>
+    <!-- The local fallback. A release sets the version from its tag. -->
+    <Version>0.1.0</Version>
+    <Authors>Daniel Schmidt</Authors>
+    <Description>Tag Umbraco Delivery API responses with cache keys, and purge exactly the right ones at the frontend once every delivery server has applied a change.</Description>
+    <PackageTags>umbraco;umbraco-marketplace;umbraco-cms;delivery-api;headless;cache;cache-tags;next.js;cdn</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/thebuilder/umbraco-cache-tags</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/thebuilder/umbraco-cache-tags.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>See https://github.com/thebuilder/umbraco-cache-tags/releases for release notes.</PackageReleaseNotes>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Umbraco.Cms.Web.Common" />
+    <PackageReference Include="Umbraco.Cms.Api.Common" />
+    <PackageReference Include="Umbraco.Cms.Api.Management" />
+    <!-- Security floors for dependencies inherited from the supported Umbraco range. -->
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TheBuilder.CacheTags.Tests" />
+  </ItemGroup>
+</Project>

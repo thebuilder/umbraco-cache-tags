@@ -1,0 +1,99 @@
+# Design
+
+`TheBuilder.CacheTags` lets a headless frontend cache Umbraco Delivery API responses and purges
+exactly the right ones once every delivery server has applied a change. This is the contract the
+package, its samples and its docs are held to. Evidence for the decisions is in `spike/FINDINGS.md`.
+
+## Keys
+
+Every key is lowercase ASCII. Cloudflare matches cache tags case-insensitively and Next.js
+case-sensitively, so a key that differed only in case would behave differently per target.
+
+| Key | Means | Purge behaviour at the frontend |
+|---|---|---|
+| `response-<hash>` | One Delivery API response: path, normalised query, culture, segment, start item | expire now |
+| `content-<guid>` | One document | expire now |
+| `media-<guid>` | One media item | expire now |
+| `type-<alias>` | Every response listing or showing a content type (alias lowercased) | stale, refresh in background |
+| `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale, refresh in background |
+| `search-<index>` | Every other query against an index (`search-deliveryapicontentindex`) | stale, refresh in background |
+| `umbraco` | Everything | stale, refresh in background |
+
+- "Expire now" is `revalidateTag(key, { expire: 0 })` in Next.js: the next request waits for fresh
+  content. "Stale" is `revalidateTag(key, 'max')`: the next request is served the old response and
+  refreshes it. Listings only change once Umbraco's index has caught up, which no ack covers, so the
+  broad keys are stale-while-revalidate (decided 2026-10-21).
+- `CacheTags:KeyPrefix` (default empty) prefixes every key, for a site that shares a CDN zone with
+  another app using the same names.
+- These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`).
+  Those are internal to Umbraco; one internal function maps a key to Umbraco's tag when the package
+  evicts Umbraco's output cache. Do not "align" them.
+
+## The response header
+
+Each cacheable Delivery API response carries one key:
+
+```http
+X-Umbraco-Cache-Keys: response-3f9a...
+```
+
+The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
+identity is the path, the query string normalised (parameters sorted, empty values and the defaults
+`skip=0` and `take=10` dropped), the request culture, the segment and the start item. The same
+request always gives the same key on every server.
+
+The package records which `content-`, `media-` and selector keys (`type-`, `children-`, `search-`)
+each response key covers. A change is planned as item and selector keys and resolved to the response
+keys that cover them. In **direct mode** (opt-in), the header lists the item keys instead, up to a
+budget of 64, then falls back to `type-` keys.
+
+No keys, and the given `Cache-Control`, on:
+
+- preview requests: `no-store`;
+- requests with a member's bearer token: `private`.
+
+## The purge webhook
+
+Defined by the Next.js sample (`samples/README.md`) and sent by the package from Milestone 3:
+
+```http
+POST <target path>
+Content-Type: application/json
+X-Cache-Tags-Timestamp: <unix seconds>
+X-Cache-Tags-Signature: sha256=<lowercase hex>
+
+{"id":"<event id>","keys":["response-...","content-..."]}
+```
+
+HMAC-SHA256 with the secret's UTF-8 bytes over `<METHOD>\n<path>\n<timestamp>\n<raw body>`. A 5-minute
+window; two secrets accepted for rotation; duplicate event ids ignored.
+
+## Decisions
+
+| Date | Decision |
+|---|---|
+| 2026-10-21 | Umbraco floor 17.4.0, range `[17.4.0,19.0.0)`. |
+| 2026-10-21 | Delivery servers need write access to the package's tables. Read-only delivery servers are not supported in v1. Acks get their own seam (`IAckTransport`), separate from `ICacheTagStore`. |
+| 2026-10-21 | Descendant routes are expanded at purge time (`IDocumentNavigationQueryService.TryGetDescendantsKeys`) for route-changing events, overflowing to `type-` or `umbraco` past the budget. The mapping stores no ancestor keys. |
+| 2026-10-21 | Readable key names (this table), lowercase, with an optional prefix. |
+| 2026-10-21 | `children-` and `search-` keys are purged stale-while-revalidate, like `type-`. |
+
+## Debugging
+
+Milestone 2 ships the data and an admin-only Management API lookup:
+
+- a `response-` key gives the request it stands for (path, query, culture, segment, start item) and
+  the items and selectors it covers, with names;
+- a `content-`, `media-` or selector key gives the response keys that cover it;
+- a ledger event id gives the keys the planner produced for it.
+
+Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's keys and fetch times.
+
+## Milestones
+
+1. Spike (done, `spike/FINDINGS.md`).
+2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
+   purge planner, the lookup API.
+3. Outbox, ack barrier, webhook target, signing.
+4. Second purge for listings, more event sources, Umbraco output cache eviction.
+5. Backoffice, Cloudflare target, docs, NuGet preview.

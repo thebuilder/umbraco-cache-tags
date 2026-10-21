@@ -16,13 +16,22 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <!-- Umbraco 17.7.1 brings MessagePack 3.1.8 and System.Security.Cryptography.Pkcs 10.0.0, both with
-         advisories (NU1902, NU1903), so the sample lifts them. -->
+         advisories (NU1902, NU1903), so the package and the sample lift them for every site. -->
     <PackageVersion Include="MessagePack" Version="3.1.12" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <!-- Umbraco 17.4.0, the lowest release the package supports, brings these below their fixes
+         (GHSA-v5pm-xwqc-g5wc; GHSA-7hqp-7c5m-4vq6 and others). Microsoft.OpenApi is raised to the
+         floor Umbraco 18 sets, which Umbraco 17 accepts. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <!-- The tests only: the mapping store's SQL runs against an in-memory SQLite database. -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <!-- The sample, the spike and the tests only, which run SQLite. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
     <PackageVersion Include="Umbraco.Cms" Version="$(SampleUmbracoVersion)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Common" Version="$(UmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Api.Delivery" Version="$(UmbracoVersion)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Management" Version="$(UmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Web.Common" Version="$(UmbracoVersion)" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />

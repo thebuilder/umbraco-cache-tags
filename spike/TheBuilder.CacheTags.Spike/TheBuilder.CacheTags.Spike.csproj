@@ -11,5 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Umbraco.Cms" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
+    <!-- From Milestone 2: the package itself, checked against the spike's fixture. -->
+    <ProjectReference Include="../../src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj" />
   </ItemGroup>
 </Project>

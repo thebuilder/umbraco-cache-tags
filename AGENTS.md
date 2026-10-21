@@ -12,21 +12,29 @@ applied a change.
 
 ## Layout
 
-- `src/TheBuilder.CacheTags`: the package (not started yet; Milestone 2).
+- `src/TheBuilder.CacheTags`: the package. `Collection/` tags Delivery API responses, `Storage/`
+  keeps which keys each response covers, `Ledger/` plans the purge for each change on the server
+  that makes it, `ManagementApi/` is the admin lookup.
+- `tests/TheBuilder.CacheTags.Tests`: unit tests, including the store's SQL against SQLite.
+- `docs/design.md`: the key scheme, the header and webhook contract, and the decisions. Keep it true.
 - `samples/TheBuilder.CacheTags.Example`: an Umbraco site with seeded content, on http://localhost:5320.
 - `samples/nextjs`: a Next.js site that renders it and receives purge webhooks. `samples/README.md`
   defines the webhook format the package must send.
-- `spike/`: the throwaway Milestone 1 probe and `spike/FINDINGS.md`, which records the design decisions.
+- `spike/`: the Milestone 1 probe and `spike/FINDINGS.md`. The spike site also references the
+  package, and `spike/check-package.py` checks the package against the spike's fixture.
 
 ## Commands
 
 ```bash
 dotnet build TheBuilder.CacheTags.slnx
+dotnet test tests/TheBuilder.CacheTags.Tests
 dotnet run --project samples/TheBuilder.CacheTags.Example
 cd samples/nextjs && pnpm install && pnpm dev
 ```
 
 See `samples/README.md` for checking a purge end to end, and `spike/FINDINGS.md` for rerunning the spike.
+To check the package against the spike fixture, run the spike site on port 5330 and then
+`python3 spike/check-package.py` (needs the `sqlite3` CLI).
 
 ## Public C# API
 
