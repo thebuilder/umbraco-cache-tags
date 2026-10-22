@@ -14,7 +14,7 @@ namespace TheBuilder.CacheTags.Ledger;
 /// <summary>
 ///     Turns edits into <see cref="Change" />s on the server that makes them. Only changes to published
 ///     output count: a draft save raises none of these notifications. Cache refresher payloads cannot
-///     tell a draft save from a sort (docs/findings.md, section 4), which is why the ledger is built
+///     tell a draft save from a sort, which is why the ledger is built
 ///     here, at the source.
 /// </summary>
 internal sealed class SourceChangeHandlers(

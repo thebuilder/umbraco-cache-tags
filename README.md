@@ -66,8 +66,7 @@ setting, Cloudflare, tagging your own APIs, and troubleshooting.
 - `samples`: an Umbraco site and a Next.js frontend that test the package end to end. See
   `samples/README.md`.
 - `apps/docs`: the documentation site.
-- `docs/design.md`: the design contract the package is held to, and `docs/findings.md`, the
-  findings of the first probe.
+- `docs/design.md`: the design contract the package is held to.
 
 ## License
 

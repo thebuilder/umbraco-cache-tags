@@ -3,7 +3,7 @@ using Umbraco.Cms.Infrastructure.Migrations;
 
 namespace TheBuilder.CacheTags.Migrations;
 
-/// <summary>Milestone 3: the ack barrier and the outbox.</summary>
+/// <summary>The ack barrier and the outbox.</summary>
 internal sealed class AddDeliverySchema(IMigrationContext context) : AsyncMigrationBase(context)
 {
     protected override Task MigrateAsync()

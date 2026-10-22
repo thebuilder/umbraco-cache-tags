@@ -2,8 +2,11 @@
 
 `TheBuilder.CacheTags` lets a headless frontend cache Umbraco Delivery API responses and purges
 exactly the right ones once every delivery server has applied a change. This is the contract the
-package, its samples and its docs are held to. Evidence for the decisions is in `docs/findings.md`,
-from the Milestone 1 spike.
+package, its samples and its docs are held to.
+
+It supports Umbraco `[17.4.0,19.0.0)`. 17.4.0 added the Delivery API output cache eviction and the
+resolved-items stash the package relies on. Every Umbraco server, delivery servers included, needs
+write access to the package's tables. Read-only delivery servers are not supported.
 
 ## Keys
 
@@ -24,7 +27,7 @@ case-sensitively, so a key that differed only in case would behave differently p
 - "Expire now" is `revalidateTag(key, { expire: 0 })` in Next.js: the next request waits for fresh
   content. "Stale" is `revalidateTag(key, 'max')`: the next request is served the old response and
   refreshes it. Listings only change once Umbraco's index has caught up, which no ack covers, so the
-  broad keys are stale-while-revalidate (decided 2026-10-21).
+  broad keys are stale-while-revalidate.
 - `CacheTags:KeyPrefix` (default empty) prefixes every key, for a site that shares a CDN zone with
   another app using the same names.
 - These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`).
@@ -160,6 +163,20 @@ caches the responses that carry the package's keys:
 - A failed call (a bad token, a rate limit) is retried like any purge, and its error is kept with the
   purge for the lookup API.
 
+## Planning
+
+The server where a change happens plans it as keys, in `PurgePlanner`:
+
+- A route change (rename, move, unpublish) also reaches the descendants, whose routes follow. The
+  planner expands them at purge time with `IDocumentNavigationQueryService.TryGetDescendantsKeys`,
+  up to `CacheTags:MaxDescendants`, and plans `type-` or `umbraco` keys past that. The mapping
+  stores no ancestor keys.
+- Unpublishing always purges every culture, because Umbraco raises it only when the whole document
+  goes.
+- A sort's re-publish of the sorted items is not recorded as a publish, and items deleted from the
+  recycle bin are not recorded again.
+- A domain, language or public access change purges everything.
+
 ## Delivery
 
 1. **Ledger.** The server making a change records it (with its plan and an ack signal) as pending.
@@ -193,6 +210,9 @@ caches the responses that carry the package's keys:
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
    `CacheTags:MaxAttempts` (10).
+
+Heartbeats and acks go through `IAckTransport`, which keeps them in the database by default. It is
+a seam of its own, separate from the mapping store (`ICacheTagStore`), so a site can replace either.
 
 A server that has just started applies other servers' changes only once Umbraco's instruction job
 first runs, about a minute after start; a change made in that minute waits for it (or the ack
@@ -262,23 +282,6 @@ keys, `["umbraco"]` for everything), lists purges by state (`GET .../purges?stat
 or discarded purge again (`POST .../purges/{id}/retry`), and sets a pending or dead one aside
 (`POST .../purges/{id}/discard`). All of it is for administrators.
 
-## Decisions
-
-| Date | Decision |
-|---|---|
-| 2026-10-21 | Umbraco floor 17.4.0, range `[17.4.0,19.0.0)`. |
-| 2026-10-21 | Delivery servers need write access to the package's tables. Read-only delivery servers are not supported in v1. Acks get their own seam (`IAckTransport`), separate from `ICacheTagStore`. |
-| 2026-10-21 | Descendant routes are expanded at purge time (`IDocumentNavigationQueryService.TryGetDescendantsKeys`) for route-changing events, overflowing to `type-` or `umbraco` past the budget. The mapping stores no ancestor keys. |
-| 2026-10-21 | Readable key names (this table), lowercase, with an optional prefix. |
-| 2026-10-21 | `children-` and `search-` keys are purged stale-while-revalidate, like `type-`. |
-| 2026-10-22 | Purge targets are a seam (`IPurgeTarget`), configured by name with a `Type`; the webhook is the built-in type. The webhook body is versioned and says which keys to expire and which to mark stale, so receivers need no knowledge of key names. |
-| 2026-10-22 | `schema-<alias>` keys: a content, media or element type change (or a data type used by it) purges every response that renders an item of that type, not only listings filtered by it. |
-| 2026-10-22 | Listings are purged a second time once every server's Delivery API index has the change, checked by comparing a stamp of the item's state written into each index document with its state in the database, replacing fixed re-purge delays. A time stamp was tried first and accepted a draft's document built just before the publish. |
-| 2026-10-22 | Sites extend the package through `[CacheTagged]`, `ICacheTagsResponse` and `ICacheTagsChanges`, with `x-` keys, and a change waits for a named signal each server reports rather than for a cache refresher the package would have to know. A manual purge is the same kind of change. |
-| 2026-10-22 | Targets can be added in the backoffice, with request headers. Secrets follow TheBuilder.AppTranslations: typed (plain text, shown to administrators) or an app setting's name, never encrypted by the package. No outgoing OIDC: the webhook signature already proves the sender. |
-| 2026-10-22 | Catch-all listings (search, name filters, other queries) carry their own keys and are not recorded, so user input cannot grow the mapping or the purges. Every response carries `umbraco`, so a change to everything reaches it. |
-| 2026-10-22 | Unpublishing always purges every culture: Umbraco raises it only when the whole document goes. A sort's re-publish of the sorted items is not recorded as a publish. Items deleted from the recycle bin are not recorded again. Public access changes purge everything. |
-
 ## Debugging
 
 An admin-only Management API lookup:
@@ -295,17 +298,3 @@ logged: `Cache tags change <id> (<kind>) plans <keys>`.
 The backoffice shows the same under **Settings > Advanced > Cache tags**, with a search, and a Cache
 box on each document's and media item's Info tab. The Next.js sample shows each page's keys and
 fetch times.
-
-## Milestones
-
-1. Spike (done, `docs/findings.md`; the probe itself is removed).
-2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
-   purge planner, the lookup API.
-3. Outbox, ack barrier, webhook target, signing (done; the listing purge was pulled forward from 4
-   as fixed delays).
-4. Listings purged once every server's index has the change, with each server evicting its own
-   listing responses (done). More event sources (public access, done in 3). Listing keys
-   (`type-`, `children-`, `search-`) must be purged once the Delivery API index has the change:
-   purged earlier, the frontend refetches the old listing and keeps it until its safety revalidate.
-   On a fresh boot the samples measured the index taking over half a minute.
-5. Backoffice, Cloudflare target, sites' own APIs, docs (`apps/docs`), NuGet preview (`RELEASE.md`).
