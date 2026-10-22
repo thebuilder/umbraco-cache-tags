@@ -5,7 +5,7 @@ seo:
   image: /og/configuration.png
 ---
 
-Everything lives under `CacheTags` in `appsettings.json`. Only `Targets` needs setting; the rest has defaults that suit most sites.
+Everything lives under `CacheTags` in `appsettings.json`. Targets can be added in the backoffice instead; the rest has defaults that suit most sites.
 
 ```json appsettings.json
 {
@@ -23,6 +23,7 @@ Everything lives under `CacheTags` in `appsettings.json`. Only `Targets` needs s
 | --- | --- | --- |
 | `Enabled` | `true` | Whether responses are tagged, and changes planned and sent. |
 | `Targets` | none | Where purges are sent, by name. See [Purge targets](/targets). Without any, changes are still planned and recorded. |
+| `AllowPrivateNetworkTargets` | `false` | Lets targets added in the backoffice connect to private and reserved addresses, such as `localhost`. See [Purge targets](/targets#in-the-backoffice). |
 | `HeaderName` | `X-Umbraco-Cache-Keys` | The response header that carries the keys. `Cache-Tag` for Cloudflare in front of Umbraco. |
 | `KeyPrefix` | none | Prefixed to every key, such as `shop-`, for a site sharing a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |
 | `KeyMode` | `ResponseKey` | `ItemKeys` lists the item keys in every header too, for a CDN that purges by tag itself. See [Keys](/keys#item-keys-mode). |
@@ -46,6 +47,7 @@ Times are written as .NET time spans, such as `"00:01:00"` for a minute.
 | `Enabled` | `true` | Whether purges are sent to this target. |
 | `Url` | none | For a webhook: where purges are posted. https, except on localhost. |
 | `Secret` | none | For a webhook: the signing secret, at least 32 characters. |
+| `Headers` | none | For a webhook: request headers sent with every purge. See [Purge targets](/targets#request-headers). |
 | `MaxKeysPerRequest` | `500` | The most keys one request carries; more are split over several. |
 | `Settings` | none | Settings for other types, such as Cloudflare's `ZoneId` and `ApiToken`. |
 

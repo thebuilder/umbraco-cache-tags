@@ -62,4 +62,5 @@ export const manifests = [
   view("Changes", "Changes", "changes", "icon-history", 300, () => import("./changes-view.element.js")),
   view("Lookup", "Look up", "lookup", "icon-search", 200, () => import("./lookup-view.element.js")),
   view("Purge", "Purge", "purge", "icon-trash", 100, () => import("./purge-view.element.js")),
+  view("Targets", "Targets", "targets", "icon-connection", 50, () => import("./targets-view.element.js")),
 ] as UmbExtensionManifest[];

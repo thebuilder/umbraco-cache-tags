@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Targets;
 
 namespace TheBuilder.CacheTags.Delivery;
 
@@ -15,6 +16,7 @@ internal sealed class Releaser(
     PurgeResolver resolver,
     IAckTransport transport,
     ServerIdentity identity,
+    PurgeTargets targets,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<Releaser> logger)
@@ -57,7 +59,7 @@ internal sealed class Releaser(
     private async Task ReleaseAsync(LedgerEntry change, StageBarrier barrier, CacheTagsOptions settings, DateTime now, CancellationToken cancellationToken)
     {
         IReadOnlyList<string> keys = (await resolver.ResolveAsync(change.Plan, cancellationToken)).Keys(settings.KeyPrefix);
-        IReadOnlyList<NewPurge> purges = NewPurge.ToTargets(settings.Targets, keys, now);
+        IReadOnlyList<NewPurge> purges = NewPurge.ToTargets(targets.Current().Values, keys, now);
 
         // Listing responses are in this purge too, so the items they show are fresh at once; their
         // membership and order follow in the indexing stage. A change waits there even with no

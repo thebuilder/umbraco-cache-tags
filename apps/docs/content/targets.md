@@ -5,7 +5,7 @@ seo:
   image: /og/targets.png
 ---
 
-A target is where purges go. Configure any number, by name, under `CacheTags:Targets`. Each has a `Type`: `webhook` (the default) or `cloudflare` built in, or one you register.
+A target is where purges go. Add them in the backoffice, under **Settings > Advanced > Cache tags > Targets**, or by name under `CacheTags:Targets` in `appsettings.json`. Each has a type: `webhook` (the default) or `cloudflare` built in, or one you register.
 
 ```json appsettings.json
 {
@@ -22,6 +22,33 @@ A target is where purges go. Configure any number, by name, under `CacheTags:Tar
 ```
 
 Every target gets every purge. Set `"Enabled": false` to pause one without removing it.
+
+## In the backoffice
+
+Administrators add, edit, test and remove targets under **Settings > Advanced > Cache tags > Targets**. Targets in `appsettings.json` are listed there too, read-only, without their secrets or header values.
+
+- **A secret is a typed value or an app setting.** Every value, the signing secret, a header or a Cloudflare token, is either typed in or names an app setting, such as `CacheTags:Vercel:Secret`, which is read when a purge is sent. A typed value is stored in the database in plain text and shown to administrators, so keep secrets in a setting: an environment variable (`CacheTags__Vercel__Secret`) or your host's secret store.
+- **A missing setting fails the purge, not the save.** If a setting a target names is not set on a server, the target shows a problem, and its purges from that server fail with an error naming the header or secret, never the setting. They are retried, and go through once the setting is deployed.
+- **Send test purge** sends the target, saved or not, a purge of `x-cache-tags-test`, a key nothing carries, and says whether it was accepted.
+- **The name never changes.** Purges are queued under it. Deleting a target sets its unsent purges aside.
+- **A name in `appsettings.json` wins.** A backoffice target with the same name is ignored, and the log says so.
+- **Public addresses only.** A backoffice target may only connect to public internet addresses, so an administrator cannot point one at a service inside your network. Set `CacheTags:AllowPrivateNetworkTargets` to `true` to allow private ones, such as `localhost` in development. Targets in `appsettings.json` are not limited. A target type you register does its own requests, so the limit covers only the built-in types.
+- **No outbound proxy.** To check the address it connects to, a backoffice target connects directly, not through `HTTPS_PROXY` or the system proxy. A site that reaches the internet only through a proxy must configure its targets in `appsettings.json`, which use the proxy as usual.
+- Other servers see a change to a target within a few seconds.
+
+## Request headers
+
+A webhook can send headers of its own with every purge, such as a gateway's API key, or `x-vercel-protection-bypass` for a protected Vercel deployment. In `appsettings.json`:
+
+```json appsettings.json
+"nextjs": {
+  "Url": "https://www.example.com/api/cache-tags",
+  "Secret": "<at least 32 characters>",
+  "Headers": { "x-vercel-protection-bypass": "<bypass secret>" }
+}
+```
+
+At most 20, with values on one line. Headers the purge sets itself (`Host`, `Content-Type`, `User-Agent`, the signature headers and the like) are refused. The webhook's signature is still what proves a purge came from Umbraco.
 
 ## The webhook
 
@@ -90,4 +117,4 @@ public sealed class FastlyTarget(IHttpClientFactory http) : IPurgeTarget
 builder.Services.AddSingleton<IPurgeTarget, FastlyTarget>();
 ```
 
-Then configure a target with `"Type": "fastly"` and its `Settings`.
+Then configure a target with `"Type": "fastly"` and its `Settings`, in `appsettings.json` or the backoffice. Its `Headers` are there too if your target wants them.

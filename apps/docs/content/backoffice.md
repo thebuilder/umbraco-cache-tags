@@ -34,6 +34,10 @@ Catch-all listings such as searches carry their keys themselves and are not reco
 
 Purge keys by hand, one per line, or purge everything. Purging everything makes every cached response fetch again from Umbraco, so expect more load for a while.
 
+## Targets
+
+Every target purges go to. Add a webhook, a Cloudflare zone, or a target type you registered, with request headers; send it a test purge before saving; and edit, disable or remove it later. Each secret is typed in or read from an app setting. Targets in `appsettings.json` are listed read-only. See [Purge targets](/targets#in-the-backoffice).
+
 ## The Info tab
 
 A document's or media item's **Info** tab has a **Cache** box: how many served responses include it, the first few of them, a link to all of them in Look up, and **Purge this item**.

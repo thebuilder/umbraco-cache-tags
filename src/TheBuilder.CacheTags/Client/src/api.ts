@@ -49,6 +49,41 @@ export interface SearchResult {
   responses: ResponseSummary[];
 }
 
+/** A value typed in, or the name of the app setting that holds it. Exactly one is set. */
+export interface TargetValue {
+  value?: string | null;
+  setting?: string | null;
+}
+
+/** A request header, or a target type's setting. */
+export interface NamedValue extends TargetValue {
+  name: string;
+}
+
+/** A target as the backoffice edits it. */
+export interface TargetDraft {
+  name: string;
+  type: string;
+  enabled: boolean;
+  url: string;
+  secret: TargetValue | null;
+  maxKeysPerRequest: number;
+  headers: NamedValue[];
+  settings: NamedValue[];
+}
+
+/** A target as listed. One from configuration shows only its header and setting names. */
+export interface TargetView extends TargetDraft {
+  fromConfiguration: boolean;
+  /** Why purges to it fail on this server, such as an app setting that is not set. */
+  problem: string | null;
+}
+
+export interface TargetsView {
+  types: string[];
+  targets: TargetView[];
+}
+
 export type PurgeState = "Pending" | "Sent" | "Dead" | "Discarded";
 
 export interface Purge {
@@ -91,7 +126,7 @@ export class ApiError extends Error {
   }
 }
 
-const request = async <T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> => {
+const request = async <T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> => {
   const token = typeof configuration.token === "function" ? await configuration.token() : configuration.token;
   const response = await fetch(`${configuration.baseUrl}/umbraco/management/api/v1/cache-tags/${path}`, {
     method,
@@ -128,5 +163,11 @@ export const api = {
   purges: (state: PurgeState, take = 50) => request<Purge[]>("GET", `purges?state=${state}&take=${take}`),
   purge: (keys: string[]) => request<{ changeId: string }>("POST", "purge", keys),
   retry: (id: string) => request<null>("POST", `purges/${id}/retry`),
+  targets: () => request<TargetsView>("GET", "targets"),
+  addTarget: (target: TargetDraft) => request<null>("POST", "targets", target),
+  updateTarget: (target: TargetDraft) => request<null>("PUT", `targets/${encodeURIComponent(target.name)}`, target),
+  deleteTarget: (name: string) => request<null>("DELETE", `targets/${encodeURIComponent(name)}`),
+  /** Sends a target, saved or not, a purge of one key nothing carries. */
+  testTarget: (target: TargetDraft) => request<{ success: boolean; error: string | null }>("POST", "targets/test", target),
   discard: (id: string) => request<null>("POST", `purges/${id}/discard`),
 };

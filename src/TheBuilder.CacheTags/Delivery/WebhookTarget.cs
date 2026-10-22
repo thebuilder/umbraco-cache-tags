@@ -15,6 +15,9 @@ internal sealed class WebhookTarget(IHttpClientFactory httpClientFactory, TimePr
 {
     public const string TypeName = "webhook";
     public const string HttpClientName = "TheBuilder.CacheTags";
+
+    /// <summary>The client for targets that may only reach public addresses (see <c>CacheTagsTargetOptions.PublicNetworkOnly</c>).</summary>
+    public const string PublicHttpClientName = "TheBuilder.CacheTags.Public";
     public const string TimestampHeader = "X-Cache-Tags-Timestamp";
     public const string SignatureHeader = "X-Cache-Tags-Signature";
 
@@ -37,10 +40,10 @@ internal sealed class WebhookTarget(IHttpClientFactory httpClientFactory, TimePr
 
     public async Task<string?> SendAsync(PurgeRequest request, CacheTagsTargetOptions target, CancellationToken cancellationToken)
     {
-        using HttpRequestMessage message = Request(new Uri(target.Url), target.Secret, request, time.GetUtcNow().ToUnixTimeSeconds());
+        using HttpRequestMessage message = Request(new Uri(target.Url), target.Secret, request, time.GetUtcNow().ToUnixTimeSeconds(), target.Headers);
         try
         {
-            using HttpResponseMessage response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(message, cancellationToken);
+            using HttpResponseMessage response = await httpClientFactory.CreateClient(ClientFor(target)).SendAsync(message, cancellationToken);
             return response.IsSuccessStatusCode ? null : $"{(int)response.StatusCode} {response.ReasonPhrase}";
         }
         catch (Exception exception) when (exception is HttpRequestException || (exception is TaskCanceledException && cancellationToken.IsCancellationRequested is false))
@@ -49,13 +52,23 @@ internal sealed class WebhookTarget(IHttpClientFactory httpClientFactory, TimePr
         }
     }
 
-    public static HttpRequestMessage Request(Uri url, string secret, PurgeRequest request, long timestamp)
+    /// <summary>The client a target's requests go through.</summary>
+    public static string ClientFor(CacheTagsTargetOptions target) => target.PublicNetworkOnly ? PublicHttpClientName : HttpClientName;
+
+    public static HttpRequestMessage Request(Uri url, string secret, PurgeRequest request, long timestamp, IReadOnlyDictionary<string, string>? headers = null)
     {
         var body = Body(request);
         var message = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
+
+        // The target's own headers first, so none of them can replace the signature.
+        foreach ((var name, var value) in headers ?? new Dictionary<string, string>())
+        {
+            message.Headers.TryAddWithoutValidation(name, value);
+        }
+
         message.Headers.Add(TimestampHeader, timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture));
         message.Headers.Add(SignatureHeader, Sign(secret, "POST", url.AbsolutePath, timestamp, body));
         message.Headers.UserAgent.ParseAdd(UserAgent);

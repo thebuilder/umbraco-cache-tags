@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
@@ -8,6 +9,7 @@ using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.ManagementApi;
 using TheBuilder.CacheTags.Migrations;
 using TheBuilder.CacheTags.Storage;
+using TheBuilder.CacheTags.Targets;
 using Umbraco.Cms.Core.Cache;
 using Umbraco.Cms.Core.Composing;
 using Umbraco.Cms.Core.DependencyInjection;
@@ -40,6 +42,7 @@ public sealed class CacheTagsComposer : IComposer
             .Validate(options => options.Targets.Values.All(CloudflareTarget.IsValid), CloudflareTarget.ValidationMessage)
             .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
             .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<CacheTagsOptions>, ConfiguredTargetHeaders>();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Collecting.
@@ -108,6 +111,12 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddHttpClient(WebhookTarget.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
             // A redirect would carry the signed purge to another host; a target must answer itself.
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        builder.Services.AddHttpClient(WebhookTarget.PublicHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(TargetNetwork.PublicOnlyHandler);
+
+        // Targets added in the backoffice, merged with those in configuration.
+        builder.Services.AddSingleton<TargetStore>();
+        builder.Services.AddSingleton<PurgeTargets>();
         builder
             .AddNotificationAsyncHandler<ContentCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<MediaCacheRefresherNotification, RefresherHandlers>()
@@ -120,6 +129,7 @@ public sealed class CacheTagsComposer : IComposer
         // The lookup API.
         builder.Services.AddSingleton<ICacheTagsLookup, CacheTagsLookup>();
         builder.Services.AddSingleton<ICacheTagsOutbox, CacheTagsOutbox>();
+        builder.Services.AddSingleton<ICacheTagsTargets, CacheTagsTargets>();
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();
         builder.Services.AddAuthorization(options => options.AddPolicy(
             AdministratorRequirement.Policy,
