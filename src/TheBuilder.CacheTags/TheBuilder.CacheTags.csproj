@@ -15,6 +15,7 @@
     <RepositoryUrl>https://github.com/thebuilder/umbraco-cache-tags.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageReleaseNotes>See https://github.com/thebuilder/umbraco-cache-tags/releases for release notes.</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <BackofficeClientDirectory>$(MSBuildProjectDirectory)/Client</BackofficeClientDirectory>
@@ -39,6 +40,7 @@
     <None Include="Client\umbraco-package.json" Pack="false" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="wwwroot/App_Plugins/TheBuilder.CacheTags/" />

@@ -1,8 +1,8 @@
 name: Verify package
 
 # Everything a change has to pass. CI runs it on every push and pull request with the project
-# file's version. The inputs are for the publish workflow that comes with Milestone 5, which will
-# run it with the version from the release tag and publish the package it uploads.
+# file's version. The publish workflow runs it with the version from the release tag, and
+# publishes the package it uploads.
 on:
   workflow_call:
     inputs:
@@ -60,6 +60,47 @@ jobs:
           UMBRACO_VERSION: ${{ matrix.umbraco-version }}
         run: dotnet test tests/TheBuilder.CacheTags.Tests -c Release "-p:UmbracoVersion=$UMBRACO_VERSION"
 
+  # The documentation site, so a page that does not build fails the change that broke it rather
+  # than the next deploy. The build also draws the Open Graph cards and the favicon from the logo.
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build documentation
+        run: pnpm docs:build
+
+  # The backoffice client, which only `dotnet pack` builds, so a type error shows up here rather
+  # than at release.
+  client:
+    name: Backoffice client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pnpm version from the root package.json's packageManager field, so CI and the
+      # csproj's `corepack pnpm` cannot end up on different majors.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
   # The sample frontend, so a change to the webhook route or the fetch helper that does not
   # type-check or build fails here. `pnpm e2e` needs a running Umbraco, so it stays local.
   nextjs:
@@ -73,7 +114,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # There is no root package.json, so the pnpm version comes from the sample's packageManager field.
+      # The sample is not in the root workspace: it is a site of its own, with its own lockfile and
+      # pnpm version, so the version comes from its packageManager field.
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: samples/nextjs/package.json
@@ -104,6 +146,18 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The backoffice bundle is not committed. `dotnet pack` builds it with `corepack pnpm build`,
+      # then refuses to pack if the manifest or the entry point is missing: a package without them
+      # installs into Umbraco and silently has no backoffice.
+      - name: Enable corepack
+        run: corepack enable
+
+      - run: corepack pnpm install --frozen-lockfile
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -156,10 +210,14 @@ jobs:
           unzip -t "$package"
           entries="$(unzip -Z1 "$package")"
           nuspec="$(unzip -p "$package" TheBuilder.CacheTags.nuspec)"
+          manifest="staticwebassets/App_Plugins/TheBuilder.CacheTags/umbraco-package.json"
 
-          for entry in README.md LICENSE lib/net10.0/TheBuilder.CacheTags.dll lib/net10.0/TheBuilder.CacheTags.xml; do
+          for entry in README.md LICENSE icon.png lib/net10.0/TheBuilder.CacheTags.dll lib/net10.0/TheBuilder.CacheTags.xml \
+            "$manifest" staticwebassets/App_Plugins/TheBuilder.CacheTags/cache-tags.js; do
             grep -Fqx "$entry" <<< "$entries" || { echo "The package is missing $entry." >&2; exit 1; }
           done
+          # Umbraco reads the version from the manifest, so it has to be the package's.
+          test "$(unzip -p "$package" "$manifest" | jq -r '.version')" = "$PACKAGE_VERSION"
           grep -Fq "<version>$PACKAGE_VERSION</version>" <<< "$nuspec"
           # The Marketplace lists packages from nuget.org by this tag.
           grep -Fq "umbraco-marketplace" <<< "$nuspec"
@@ -184,7 +242,7 @@ jobs:
           rm -rf ~/.nuget/packages/thebuilder.cachetags
           dotnet build samples/TheBuilder.CacheTags.Example -c Release "-p:CacheTagsPackageVersion=$PACKAGE_VERSION"
 
-      # The publish workflow will push this exact file, so what is published is what was checked.
+      # The publish workflow pushes this exact file, so what is published is what was checked.
       - uses: actions/upload-artifact@v4
         with:
           name: TheBuilder.CacheTags-package

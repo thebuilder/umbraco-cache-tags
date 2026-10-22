@@ -1,0 +1,36 @@
+{
+  "$schema": "https://marketplace.umbraco.com/umbraco-marketplace-schema.json",
+  "AuthorDetails": {
+    "Name": "Daniel Schmidt",
+    "Description": "Lead Engineer at Charlie Tango, working on headless Umbraco sites and the tools around them.",
+    "Url": "https://github.com/thebuilder",
+    "ImageUrl": "https://github.com/thebuilder.png",
+    "SyncContributorsFromRepository": true
+  },
+  "Category": "Headless",
+  "AlternateCategory": "Developer Tools",
+  "Title": "Cache Tags",
+  "Description": "Cache Delivery API responses at the frontend, and purge exactly the right ones once every Umbraco server has applied a change.",
+  "DocumentationUrl": "https://cache-tags.thebuilder.dk/",
+  "IssueTrackerUrl": "https://github.com/thebuilder/umbraco-cache-tags/issues",
+  "LicenseTypes": [
+    "Free"
+  ],
+  "PackageType": "Package",
+  "Tags": [
+    "cache",
+    "caching",
+    "cache tags",
+    "purge",
+    "invalidation",
+    "revalidation",
+    "headless",
+    "Delivery API",
+    "Next.js",
+    "revalidateTag",
+    "Cloudflare",
+    "CDN",
+    "load balancing",
+    "webhook"
+  ]
+}
