@@ -153,6 +153,18 @@ export const sharedStyles = css`
   dd {
     margin: 0;
   }
+  /* A table inside a box: rows divided by lines, no frame of its own. */
+  uui-box uui-table {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    --uui-table-cell-height: auto;
+    --uui-table-cell-padding: var(--uui-size-space-3) var(--uui-size-space-4) var(--uui-size-space-3) 0;
+  }
+  uui-table-head-cell {
+    color: var(--uui-color-text-alt);
+    font-weight: 600;
+  }
   uui-table-cell {
     vertical-align: top;
   }

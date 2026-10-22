@@ -21,19 +21,61 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
 
   #searchTimer?: ReturnType<typeof setTimeout>;
   #searchText = "";
+  #fromUrl = () => this.#show(new URLSearchParams(window.location.search));
 
   connectedCallback(): void {
     super.connectedCallback();
-    // Linked from a document's or media item's Info tab.
-    const key = new URLSearchParams(window.location.search).get("key");
-    if (key) {
-      this.#lookUp(key);
-    }
+    // The search or key is in the URL (?q= or ?key=), so Back returns to the results, and the
+    // Info tab links straight to a key.
+    window.addEventListener("popstate", this.#fromUrl);
+    this.#fromUrl();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener("popstate", this.#fromUrl);
     clearTimeout(this.#searchTimer);
+  }
+
+  #show(params: URLSearchParams): void {
+    const key = params.get("key");
+    const query = params.get("q");
+    if (key) {
+      this.#lookUp(key, false);
+    } else if (query) {
+      this._key = query;
+      this._lookup = undefined;
+      this.#searchFor(query);
+    } else {
+      this.#reset();
+    }
+  }
+
+  /** Puts the search or key in the URL: a new history entry for a key, the same one while typing. */
+  #remember(name: "q" | "key" | undefined, value: string, push: boolean): void {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("q");
+    url.searchParams.delete("key");
+    if (name) {
+      url.searchParams.set(name, value);
+    }
+    if (url.href !== window.location.href) {
+      window.history[push ? "pushState" : "replaceState"](window.history.state, "", url);
+    }
+  }
+
+  #reset(): void {
+    clearTimeout(this.#searchTimer);
+    this.#searchText = "";
+    this._key = "";
+    this._search = undefined;
+    this._lookup = undefined;
+    this._error = undefined;
+  }
+
+  #clear(): void {
+    this.#reset();
+    this.#remember(undefined, "", false);
   }
 
   #typed(text: string): void {
@@ -42,9 +84,13 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
     const query = text.trim();
     if (query.length < 2) {
       this._search = undefined;
+      this.#remember(undefined, "", false);
       return;
     }
-    this.#searchTimer = setTimeout(() => this.#searchFor(query), SEARCH_DELAY);
+    this.#searchTimer = setTimeout(() => {
+      this.#remember("q", query, false);
+      this.#searchFor(query);
+    }, SEARCH_DELAY);
   }
 
   async #searchFor(query: string): Promise<void> {
@@ -61,13 +107,16 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
     }
   }
 
-  async #lookUp(key: string): Promise<void> {
+  async #lookUp(key: string, push = true): Promise<void> {
     clearTimeout(this.#searchTimer);
     this.#searchText = "";
     this._search = undefined;
     this._key = key.trim();
     if (!this._key) {
       return;
+    }
+    if (push) {
+      this.#remember("key", this._key, true);
     }
     this._loading = true;
     this._error = undefined;
@@ -96,6 +145,11 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
               .value=${this._key}
               @input=${(event: Event) => this.#typed((event.target as HTMLInputElement).value)}>
               <uui-icon slot="prepend" name="icon-search"></uui-icon>
+              ${this._key
+                ? html`<uui-button slot="append" compact look="placeholder" label="Clear" @click=${() => this.#clear()}>
+                    <uui-icon name="icon-wrong"></uui-icon>
+                  </uui-button>`
+                : nothing}
             </uui-input>
             <uui-button type="submit" look="secondary" label="Look up key" ?disabled=${this._loading}></uui-button>
           </form>
@@ -266,7 +320,7 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
       form uui-input {
         flex: 1;
       }
-      form uui-icon {
+      form uui-icon[slot="prepend"] {
         margin-left: var(--uui-size-space-3);
         color: var(--uui-color-text-alt);
       }
