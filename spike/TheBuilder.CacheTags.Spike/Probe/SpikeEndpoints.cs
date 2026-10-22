@@ -159,6 +159,15 @@ internal static class SpikeEndpoints
                 outcome = contentService.MoveToRecycleBin(Get(Fixture.D)).Result.ToString() ?? string.Empty;
                 break;
 
+            case "prune-everything":
+                {
+                    // Runs the package's prune through Umbraco's own database provider, with a cutoff
+                    // in the future so every mapping row qualifies.
+                    var store = services.GetRequiredService<TheBuilder.CacheTags.Storage.ICacheTagStore>();
+                    outcome = store.PruneAsync(DateTime.UtcNow.AddDays(1)).GetAwaiter().GetResult().ToString();
+                    break;
+                }
+
             case "reset":
                 {
                     // Undo what the previous run's operations did to the fixture.
@@ -232,5 +241,6 @@ public sealed class SpikeComposer : IComposer
         builder.AddNotificationHandler<ContentMovedNotification, SourceProbe>();
         builder.AddNotificationHandler<ContentMovedToRecycleBinNotification, SourceProbe>();
         builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, FixtureSeeder>();
+        builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, ApiUserSeeder>();
     }
 }

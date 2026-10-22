@@ -1,6 +1,6 @@
 // Sends a signed purge webhook to app/api/cache-tags, the way TheBuilder.CacheTags will.
 //
-//   pnpm purge c-e0000000-0000-0000-0000-000000000003 t-article
+//   pnpm purge content-e0000000-0000-0000-0000-000000000003 type-article
 //
 // Reads CACHE_TAGS_WEBHOOK_SECRET and FRONTEND_URL from the environment, then .env.local, then .env.
 import { createHmac, randomUUID } from "node:crypto";

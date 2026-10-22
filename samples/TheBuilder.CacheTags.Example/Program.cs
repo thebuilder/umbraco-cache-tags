@@ -3,8 +3,6 @@ builder.CreateUmbracoBuilder()
     .AddBackOffice()
     .AddWebsite()
     .AddDeliveryApi()
-    // CACHE TAGS: call .AddCacheTags() here once src/TheBuilder.CacheTags exists and the csproj
-    // references it. Keep it after AddDeliveryApi(), which registers the handlers it builds on.
     .AddComposers()
     .Build();
 
