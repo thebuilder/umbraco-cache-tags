@@ -114,7 +114,7 @@ internal sealed class SourceChangeHandlers(
         => Guard(() => pending.MarkSorting(notification.SortedEntities.Where(content => content.Published).Select(content => content.Key)));
 
     public void Handle(ContentSortedNotification notification)
-        => Guard(() => Record(ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).Take(1).ToList()));
+        => Guard(() => Record(ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).ToList()));
 
     public void Handle(MediaSavedNotification notification)
         => Guard(() => Record(ChangeKind.MediaSaved, notification.SavedEntities.Select(media => Item(media)).ToList()));

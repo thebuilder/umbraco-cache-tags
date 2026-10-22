@@ -15,7 +15,12 @@ internal sealed record LedgerEntry(
     AckSignal? Signal,
     string Status,
     DateTime? ReleasedUtc,
-    IReadOnlyList<string> NotAcknowledgedBy);
+    IReadOnlyList<string> NotAcknowledgedBy,
+    string? ListingsState = null)
+{
+    /// <summary>The change itself, read back from the ledger.</summary>
+    public Change? ReadChange() => Change.ValueKind == JsonValueKind.Object ? JsonSerializer.Deserialize<Change>(Change, LedgerStore.Json) : null;
+}
 
 /// <summary>A purge request to one target, as queued in the outbox.</summary>
 internal sealed record Purge(
@@ -39,7 +44,7 @@ internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateT
 /// </summary>
 internal sealed class LedgerStore(PackageDatabase database)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>Records a change. Recording one that is already recorded does nothing, so a retry after a lost reply is safe.</summary>
     public void Add(Change change, PurgePlan plan, string server)
@@ -65,8 +70,12 @@ internal sealed class LedgerStore(PackageDatabase database)
     public bool ClaimRelease(Guid changeId, string owner, DateTime nowUtc, DateTime leaseUntilUtc)
         => database.Write(db => LedgerSql.ClaimRelease(db, changeId, owner, nowUtc, leaseUntilUtc));
 
-    /// <summary>Marks a change released and queues its purges, in one transaction, if this server still holds the lease.</summary>
-    public bool CompleteRelease(Guid changeId, string owner, IReadOnlyList<string> notAcknowledgedBy, bool timedOut, DateTime nowUtc, IEnumerable<NewPurge> purges)
+    /// <summary>
+    ///     Marks a change released and queues its purges, in one transaction, if this server still holds
+    ///     the lease. With <paramref name="listingsWait" />, its listings are purged again once every
+    ///     server's index has it.
+    /// </summary>
+    public bool CompleteRelease(Guid changeId, string owner, IReadOnlyList<string> notAcknowledgedBy, bool timedOut, bool listingsWait, DateTime nowUtc, IEnumerable<NewPurge> purges)
         => database.Write(db => LedgerSql.CompleteRelease(
             db,
             changeId,
@@ -74,16 +83,16 @@ internal sealed class LedgerStore(PackageDatabase database)
             timedOut ? EventStatuses.ReleasedAfterTimeout : EventStatuses.Released,
             nowUtc,
             notAcknowledgedBy.Count == 0 ? null : JsonSerializer.Serialize(notAcknowledgedBy, Json),
-            purges.Select(purge => new OutboxRow
-            {
-                Id = Guid.CreateVersion7(),
-                EventId = changeId,
-                Target = purge.Target,
-                Keys = JsonSerializer.Serialize(purge.Keys, Json),
-                State = OutboxStates.Pending,
-                CreatedUtc = nowUtc,
-                NotBeforeUtc = purge.NotBeforeUtc,
-            })));
+            listingsWait,
+            Rows(changeId, nowUtc, purges)));
+
+    /// <summary>Released changes whose listing purge waits for the servers' indexes.</summary>
+    public IReadOnlyList<LedgerEntry> ListingsWaiting(int take)
+        => database.Read(db => LedgerSql.ListingsWaiting(db, take)).Select(Entry).ToList();
+
+    /// <summary>Queues a change's listing purges, unless another server already has. Returns whether this call did.</summary>
+    public bool CompleteListings(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
+        => database.Write(db => LedgerSql.CompleteListings(db, changeId, Rows(changeId, nowUtc, purges)));
 
     /// <summary>The purges due now, and how many are pending at all (now or later).</summary>
     public (IReadOnlyList<Purge> Due, int Pending) Due(DateTime nowUtc, int take)
@@ -107,6 +116,18 @@ internal sealed class LedgerStore(PackageDatabase database)
 
     public void Prune(DateTime cutoffUtc) => database.Write(db => LedgerSql.Prune(db, cutoffUtc));
 
+    private static IEnumerable<OutboxRow> Rows(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
+        => purges.Select(purge => new OutboxRow
+        {
+            Id = Guid.CreateVersion7(),
+            EventId = changeId,
+            Target = purge.Target,
+            Keys = JsonSerializer.Serialize(purge.Keys, Json),
+            State = OutboxStates.Pending,
+            CreatedUtc = nowUtc,
+            NotBeforeUtc = purge.NotBeforeUtc,
+        }).ToList();
+
     private static LedgerEntry Entry(EventRow row) => new(
         row.Id,
         row.CreatedUtc,
@@ -118,7 +139,8 @@ internal sealed class LedgerStore(PackageDatabase database)
         row.Signal is null ? null : JsonSerializer.Deserialize<AckSignal>(row.Signal, Json),
         row.Status ?? EventStatuses.Released,
         row.ReleasedUtc,
-        row.Missing is null ? [] : JsonSerializer.Deserialize<string[]>(row.Missing) ?? []);
+        row.Missing is null ? [] : JsonSerializer.Deserialize<string[]>(row.Missing) ?? [],
+        row.ListingsState);
 
     private static Purge Purge(OutboxRow row) => new(
         row.Id,

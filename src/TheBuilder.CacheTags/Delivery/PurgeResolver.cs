@@ -15,7 +15,7 @@ internal sealed record ResolvedPurge(PurgePlan Plan, IReadOnlyList<string> Respo
     public IReadOnlyList<string> Keys(string prefix)
         => Plan.Everything ? [CacheKeys.WithPrefix(prefix, CacheKeys.All)] : Prefixed(Responses.Concat(Plan.Keys), prefix);
 
-    /// <summary>The keys of the listing re-purge: the listing responses and the selectors.</summary>
+    /// <summary>The keys of the listing purge, once every server's index has the change: the listing responses and the selectors.</summary>
     public IReadOnlyList<string> ListingKeys(string prefix)
         => Listings.Count == 0 ? [] : Prefixed(Listings.Concat(Plan.Keys.Where(CacheKeys.IsSelector)), prefix);
 

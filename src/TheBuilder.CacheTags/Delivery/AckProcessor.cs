@@ -15,6 +15,7 @@ internal sealed class AckProcessor(
     LedgerStore ledger,
     PurgeResolver resolver,
     OutputCacheEviction eviction,
+    IndexWatcher indexes,
     IAckTransport transport,
     ServerIdentity identity,
     DeliverySignal signal,
@@ -63,7 +64,7 @@ internal sealed class AckProcessor(
         }
 
         var used = new HashSet<ObservedRefresh>();
-        var completed = new List<LedgerEntry>();
+        var completed = new List<(LedgerEntry Change, DateTime AppliedUtc)>();
         try
         {
             IReadOnlyList<LedgerEntry> unreleased = ledger.Unreleased(500);
@@ -97,11 +98,11 @@ internal sealed class AckProcessor(
     }
 
     /// <summary>
-    ///     The changes the refreshes complete, adding the refreshes that completed one to <paramref name="used" />.
+    ///     The changes the refreshes complete, with when this server applied each, adding the refreshes that completed one to <paramref name="used" />.
     ///     A refresh acknowledges only a change made before it: a late refresh of an earlier change to
     ///     the same item must not count for a newer one.
     /// </summary>
-    public static IEnumerable<LedgerEntry> Match(IEnumerable<LedgerEntry> changes, IReadOnlyList<(DateTime ObservedUtc, ObservedRefresh Refresh)> refreshes, ISet<ObservedRefresh> used)
+    public static IEnumerable<(LedgerEntry Change, DateTime AppliedUtc)> Match(IEnumerable<LedgerEntry> changes, IReadOnlyList<(DateTime ObservedUtc, ObservedRefresh Refresh)> refreshes, ISet<ObservedRefresh> used)
     {
         foreach (LedgerEntry change in changes)
         {
@@ -111,30 +112,33 @@ internal sealed class AckProcessor(
             if (match.Refresh is not null)
             {
                 used.Add(match.Refresh);
-                yield return change;
+                yield return (change, match.ObservedUtc);
             }
         }
     }
 
-    private async Task AcknowledgeAsync(IReadOnlyList<LedgerEntry> changes, CancellationToken cancellationToken)
+    private async Task AcknowledgeAsync(IReadOnlyList<(LedgerEntry Change, DateTime AppliedUtc)> completed, CancellationToken cancellationToken)
     {
         if (eviction.Enabled)
         {
-            foreach (LedgerEntry change in changes)
+            foreach ((LedgerEntry change, _) in completed)
             {
                 await eviction.EvictAsync(await resolver.ResolveAsync(change.Plan, cancellationToken));
             }
         }
 
-        await transport.AckAsync(identity.Name, changes.Select(change => change.Id).ToList(), time.GetUtcNow().UtcDateTime, cancellationToken);
-        foreach (LedgerEntry change in changes)
+        await transport.AckAsync(identity.Name, completed.Select(item => item.Change.Id).ToList(), time.GetUtcNow().UtcDateTime, cancellationToken);
+        foreach ((LedgerEntry change, DateTime appliedUtc) in completed)
         {
             _acknowledged.TryAdd(change.Id, 0);
+
+            // Its listings are purged once this server's index has it too.
+            indexes.Watch(change, appliedUtc);
         }
 
         if (logger.IsEnabled(LogLevel.Debug))
         {
-            logger.LogDebug("Cache tags: {Server} acknowledged {Changes}.", identity.Name, string.Join(", ", changes.Select(change => change.Id)));
+            logger.LogDebug("Cache tags: {Server} acknowledged {Changes}.", identity.Name, string.Join(", ", completed.Select(item => item.Change.Id)));
         }
     }
 }

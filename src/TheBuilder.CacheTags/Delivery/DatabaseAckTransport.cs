@@ -21,6 +21,12 @@ internal sealed class DatabaseAckTransport(PackageDatabase database) : IAckTrans
     public Task<IReadOnlyDictionary<Guid, IReadOnlySet<string>>> GetAcksAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default)
         => Task.FromResult(database.Read(db => AckSql.Acks(db, changeIds)));
 
+    public Task IndexedAsync(string server, IReadOnlyCollection<Guid> changeIds, DateTime indexedUtc, CancellationToken cancellationToken = default)
+        => Done(() => database.Write(db => AckSql.Indexed(db, server, changeIds, indexedUtc)));
+
+    public Task<IReadOnlyDictionary<Guid, IReadOnlySet<string>>> GetIndexedAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default)
+        => Task.FromResult(database.Read(db => AckSql.Acks(db, changeIds, indexedOnly: true)));
+
     public Task PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
         => Done(() => database.Write(db => AckSql.Prune(db, cutoffUtc)));
 
@@ -62,13 +68,25 @@ internal static class AckSql
         }
     }
 
-    public static IReadOnlyDictionary<Guid, IReadOnlySet<string>> Acks(IDatabase database, IReadOnlyCollection<Guid> changeIds)
+    /// <summary>Marks a server's acks of the given changes indexed. A change it has not acknowledged is not marked.</summary>
+    public static void Indexed(IDatabase database, string server, IReadOnlyCollection<Guid> changeIds, DateTime indexedUtc)
+    {
+        foreach (Guid[] chunk in changeIds.Distinct().Chunk(500))
+        {
+            database.Execute(new Sql(
+                $"UPDATE {Constants.Tables.Acks} SET IndexedUtc = @indexed WHERE Server = @server AND IndexedUtc IS NULL AND EventId IN (@ids)",
+                new { indexed = indexedUtc, server, ids = chunk }));
+        }
+    }
+
+    public static IReadOnlyDictionary<Guid, IReadOnlySet<string>> Acks(IDatabase database, IReadOnlyCollection<Guid> changeIds, bool indexedOnly = false)
     {
         var acks = new Dictionary<Guid, IReadOnlySet<string>>();
+        var indexed = indexedOnly ? " AND IndexedUtc IS NOT NULL" : string.Empty;
         foreach (Guid[] chunk in changeIds.Distinct().Chunk(500))
         {
             foreach (IGrouping<Guid, AckRow> group in database
-                .Fetch<AckRow>(new Sql($"SELECT * FROM {Constants.Tables.Acks} WHERE EventId IN (@ids)", new { ids = chunk }))
+                .Fetch<AckRow>(new Sql($"SELECT * FROM {Constants.Tables.Acks} WHERE EventId IN (@ids){indexed}", new { ids = chunk }))
                 .GroupBy(row => row.EventId))
             {
                 acks[group.Key] = group.Select(row => row.Server).ToHashSet(StringComparer.Ordinal);

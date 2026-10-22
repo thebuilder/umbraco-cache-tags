@@ -7,7 +7,9 @@ namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>
 ///     Releases changes once every server that must apply them has acknowledged them (or the ack
-///     timeout passed), queueing one purge per target and the listing re-purges.
+///     timeout passed), queueing one purge per target. A change's listings are purged a second time
+///     once every server that acknowledged it has it in its Delivery API index (or the index timeout
+///     passed): listings come from the index, which Umbraco updates after the refresh.
 /// </summary>
 internal sealed class Releaser(
     LedgerStore ledger,
@@ -64,22 +66,12 @@ internal sealed class Releaser(
 
         ResolvedPurge resolved = await resolver.ResolveAsync(change.Plan, cancellationToken);
         IReadOnlyList<string> keys = resolved.Keys(settings.KeyPrefix);
-        IReadOnlyList<string> listingKeys = resolved.ListingKeys(settings.KeyPrefix);
 
-        // The purge now, then the listings again as the Delivery API index catches up with the change.
-        var sends = new List<(IReadOnlyList<string> Keys, DateTime NotBeforeUtc)> { (keys, now) };
-        if (listingKeys.Count > 0)
-        {
-            sends.AddRange(settings.ListingRepurgeDelays.Where(delay => delay > TimeSpan.Zero).Distinct().Select(delay => (listingKeys, now + delay)));
-        }
-
-        var purges = settings.Targets
-            .Where(target => target.Value.Enabled)
-            .SelectMany(target => sends.SelectMany(send => send.Keys.Chunk(target.Value.MaxKeysPerRequest)
-                .Select(chunk => new NewPurge(target.Key, chunk, send.NotBeforeUtc))))
-            .ToList();
-
-        if (ledger.CompleteRelease(change.Id, identity.Name, decision.Missing, decision.TimedOut, now, purges) is false)
+        // The listings are purged with everything else now, so the items they show are fresh at once,
+        // and again once every server's index has the change, so their membership and order are.
+        var listingsWait = resolved.Listings.Count > 0 && IndexCheck.WaitsFor(Enum.Parse<ChangeKind>(change.Kind), change.Plan);
+        List<NewPurge> purges = Purges(settings, keys, now);
+        if (ledger.CompleteRelease(change.Id, identity.Name, decision.Missing, decision.TimedOut, listingsWait, now, purges) is false)
         {
             return;
         }
@@ -95,4 +87,68 @@ internal sealed class Releaser(
 
         logger.LogInformation("Cache tags change {ChangeId} released: {KeyCount} keys in {PurgeCount} purges.", change.Id, keys.Count, purges.Count);
     }
+
+    /// <summary>Queues the listing purges of the released changes every server's index now has. Returns how many still wait.</summary>
+    public async Task<int> ReleaseListingsAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<LedgerEntry> waiting = ledger.ListingsWaiting(100);
+        if (waiting.Count == 0)
+        {
+            return 0;
+        }
+
+        CacheTagsOptions settings = options.CurrentValue;
+        IReadOnlyCollection<ServerPresence> servers = await transport.GetServersAsync(cancellationToken);
+        var ids = waiting.Select(change => change.Id).ToList();
+        IReadOnlyDictionary<Guid, IReadOnlySet<string>> acked = await transport.GetAcksAsync(ids, cancellationToken);
+        IReadOnlyDictionary<Guid, IReadOnlySet<string>> indexed = await transport.GetIndexedAsync(ids, cancellationToken);
+        DateTime now = time.GetUtcNow().UtcDateTime;
+
+        var stillWaiting = 0;
+        foreach (LedgerEntry change in waiting)
+        {
+            ListingDecision decision = ListingDecision.Decide(
+                change.ReleasedUtc ?? change.CreatedUtc,
+                now,
+                servers,
+                acked.GetValueOrDefault(change.Id) ?? new HashSet<string>(),
+                indexed.GetValueOrDefault(change.Id) ?? new HashSet<string>(),
+                settings.IndexTimeout,
+                settings.ServerTimeout);
+            if (decision.Release is false)
+            {
+                stillWaiting++;
+                continue;
+            }
+
+            // Resolved now, not at release: a listing first requested in between has a new response key.
+            ResolvedPurge resolved = await resolver.ResolveAsync(change.Plan, cancellationToken);
+            IReadOnlyList<string> keys = resolved.ListingKeys(settings.KeyPrefix);
+            if (ledger.CompleteListings(change.Id, now, Purges(settings, keys, now)) is false)
+            {
+                continue;
+            }
+
+            if (decision.TimedOut)
+            {
+                logger.LogWarning(
+                    "Cache tags change {ChangeId}'s listings were purged after {Timeout} without the Delivery API index of {Servers}. Their listings may still be old.",
+                    change.Id,
+                    settings.IndexTimeout,
+                    string.Join(", ", decision.Waiting));
+            }
+
+            logger.LogInformation("Cache tags change {ChangeId} indexed: {KeyCount} listing keys purged.", change.Id, keys.Count);
+        }
+
+        return stillWaiting;
+    }
+
+    private static List<NewPurge> Purges(CacheTagsOptions settings, IReadOnlyList<string> keys, DateTime now)
+        => keys.Count == 0
+            ? []
+            : settings.Targets
+                .Where(target => target.Value.Enabled)
+                .SelectMany(target => keys.Chunk(target.Value.MaxKeysPerRequest).Select(chunk => new NewPurge(target.Key, chunk, now)))
+                .ToList();
 }

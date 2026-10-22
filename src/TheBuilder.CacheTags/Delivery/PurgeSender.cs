@@ -9,7 +9,6 @@ namespace TheBuilder.CacheTags.Delivery;
 /// <summary>Sends the purges that are due as signed webhooks, under leases, retrying failures with backoff.</summary>
 internal sealed class PurgeSender(
     LedgerStore ledger,
-    OutputCacheEviction eviction,
     IEnumerable<IPurgeTarget> targets,
     ServerIdentity identity,
     IOptionsMonitor<CacheTagsOptions> options,
@@ -55,11 +54,6 @@ internal sealed class PurgeSender(
         {
             return $"No purge target of type {target.Type} is registered.";
         }
-
-        // The acks evicted the first purge's responses from every server's output cache; a listing
-        // re-purge comes later, so this evicts them on the sending server before the target refetches.
-        var responsePrefix = settings.KeyPrefix + CacheKeys.ResponsePrefix;
-        await eviction.EvictAsync(purge.Keys.Where(key => key.StartsWith(responsePrefix, StringComparison.Ordinal)).Select(key => key[settings.KeyPrefix.Length..]));
 
         var request = new PurgeRequest
         {

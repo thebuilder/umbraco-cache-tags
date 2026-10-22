@@ -9,14 +9,16 @@ namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>
 ///     The loop every server runs: record the changes that failed to record before, acknowledge the
-///     refreshes it applied, release the changes every
-///     server has applied, and send the purges that are due. Leases make sure only one server
+///     refreshes it applied, release the changes every server has applied, watch its Delivery API
+///     index for them, purge their listings once every server's index has them, and send the purges
+///     that are due. Leases make sure only one server
 ///     releases each change and sends each purge.
 /// </summary>
 internal sealed class DeliveryWorker(
     PackageDatabase database,
     ChangeRecorder recorder,
     AckProcessor acks,
+    IndexWatcher indexes,
     Releaser releaser,
     PurgeSender sender,
     DeliverySignal signal,
@@ -46,8 +48,10 @@ internal sealed class DeliveryWorker(
             recorder.RecordUnrecorded();
             await acks.ProcessAsync(cancellationToken);
             var waiting = await releaser.ReleaseAsync(cancellationToken);
+            await indexes.ProcessAsync(cancellationToken);
+            var listings = await releaser.ReleaseListingsAsync(cancellationToken);
             var pending = await sender.SendAsync(cancellationToken);
-            return recorder.HasUnrecorded || acks.HasQueued || waiting > 0 || pending > 0;
+            return recorder.HasUnrecorded || acks.HasQueued || indexes.HasWatched || waiting > 0 || listings > 0 || pending > 0;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

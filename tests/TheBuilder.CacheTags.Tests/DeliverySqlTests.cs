@@ -25,12 +25,12 @@ public sealed class DeliverySqlTests : IDisposable
         _database.Execute("""
             CREATE TABLE theBuilderCacheTagsEvent (Id TEXT PRIMARY KEY, CreatedUtc TEXT NOT NULL, Kind TEXT NOT NULL, Server TEXT NOT NULL,
                 Change TEXT NOT NULL, Plan TEXT NOT NULL, Signal TEXT NULL, Status TEXT NULL, ReleasedUtc TEXT NULL, Missing TEXT NULL,
-                LeaseOwner TEXT NULL, LeaseUntilUtc TEXT NULL);
+                LeaseOwner TEXT NULL, LeaseUntilUtc TEXT NULL, ListingsState TEXT NULL);
             CREATE TABLE theBuilderCacheTagsOutbox (Id TEXT PRIMARY KEY, EventId TEXT NOT NULL, Target TEXT NOT NULL, Keys TEXT NOT NULL,
                 State TEXT NOT NULL, Attempts INTEGER NOT NULL, CreatedUtc TEXT NOT NULL, NotBeforeUtc TEXT NOT NULL, SentUtc TEXT NULL,
                 LastError TEXT NULL, LeaseOwner TEXT NULL, LeaseUntilUtc TEXT NULL);
             CREATE TABLE theBuilderCacheTagsServer (Server TEXT PRIMARY KEY, FirstSeenUtc TEXT NOT NULL, LastSeenUtc TEXT NOT NULL);
-            CREATE TABLE theBuilderCacheTagsAck (Id INTEGER PRIMARY KEY AUTOINCREMENT, EventId TEXT NOT NULL, Server TEXT NOT NULL, AckedUtc TEXT NOT NULL);
+            CREATE TABLE theBuilderCacheTagsAck (Id INTEGER PRIMARY KEY AUTOINCREMENT, EventId TEXT NOT NULL, Server TEXT NOT NULL, AckedUtc TEXT NOT NULL, IndexedUtc TEXT NULL);
             CREATE UNIQUE INDEX IX_AckPair ON theBuilderCacheTagsAck (EventId, Server);
             """);
         _database.Insert(new EventRow { Id = Change, CreatedUtc = Now, Kind = "Published", Server = "backoffice", Change = "{}", Plan = "{}", Status = EventStatuses.Pending });
@@ -64,8 +64,8 @@ public sealed class DeliverySqlTests : IDisposable
     {
         LedgerSql.ClaimRelease(_database, Change, "server-1", Now, Now.AddSeconds(30));
 
-        Assert.False(LedgerSql.CompleteRelease(_database, Change, "server-2", EventStatuses.Released, Now, null, [Purge(Guid.NewGuid(), Now)]));
-        Assert.True(LedgerSql.CompleteRelease(_database, Change, "server-1", EventStatuses.Released, Now, null, [Purge(Guid.NewGuid(), Now)]));
+        Assert.False(LedgerSql.CompleteRelease(_database, Change, "server-2", EventStatuses.Released, Now, null, false, [Purge(Guid.NewGuid(), Now)]));
+        Assert.True(LedgerSql.CompleteRelease(_database, Change, "server-1", EventStatuses.Released, Now, null, false, [Purge(Guid.NewGuid(), Now)]));
         Assert.False(LedgerSql.ClaimRelease(_database, Change, "server-2", Now.AddMinutes(5), Now.AddMinutes(6)));
 
         Assert.Equal(EventStatuses.Released, Status());
@@ -150,5 +150,43 @@ public sealed class DeliverySqlTests : IDisposable
         _database.Insert(Purge(Guid.NewGuid(), Now));
 
         Assert.Equal([first, second], LedgerSql.Due(_database, Now, 2).Select(p => p.Id));
+    }
+
+    [Fact]
+    public void A_change_whose_listings_wait_has_them_queued_once_by_whichever_server_gets_there_first()
+    {
+        LedgerSql.ClaimRelease(_database, Change, "server-1", Now, Now.AddSeconds(30));
+        LedgerSql.CompleteRelease(_database, Change, "server-1", EventStatuses.Released, Now, null, true, [Purge(Guid.NewGuid(), Now)]);
+
+        Assert.Equal([Change], LedgerSql.ListingsWaiting(_database, 10).Select(row => row.Id));
+        Assert.True(LedgerSql.CompleteListings(_database, Change, [Purge(Guid.NewGuid(), Now.AddSeconds(2))]));
+        Assert.False(LedgerSql.CompleteListings(_database, Change, [Purge(Guid.NewGuid(), Now.AddSeconds(2))]));
+
+        Assert.Empty(LedgerSql.ListingsWaiting(_database, 10));
+        Assert.Equal(2, _database.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsOutbox"));
+    }
+
+    [Fact]
+    public void A_change_released_without_waiting_listings_is_never_waiting()
+    {
+        LedgerSql.ClaimRelease(_database, Change, "server-1", Now, Now.AddSeconds(30));
+        LedgerSql.CompleteRelease(_database, Change, "server-1", EventStatuses.Released, Now, null, false, []);
+
+        Assert.Empty(LedgerSql.ListingsWaiting(_database, 10));
+    }
+
+    [Fact]
+    public void A_server_marks_only_the_changes_it_acknowledged_as_indexed()
+    {
+        Guid other = Guid.NewGuid();
+        AckSql.Ack(_database, "server-1", [Change], Now);
+        AckSql.Ack(_database, "server-2", [Change, other], Now);
+
+        AckSql.Indexed(_database, "server-2", [Change, Guid.NewGuid()], Now.AddSeconds(2));
+
+        IReadOnlyDictionary<Guid, IReadOnlySet<string>> indexed = AckSql.Acks(_database, [Change, other], indexedOnly: true);
+        Assert.Equal(["server-2"], indexed[Change]);
+        Assert.False(indexed.ContainsKey(other));
+        Assert.Equal(["server-1", "server-2"], AckSql.Acks(_database, [Change])[Change].Order(StringComparer.Ordinal));
     }
 }

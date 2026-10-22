@@ -35,13 +35,14 @@ internal static class LedgerSql
             nowUtc) == 1;
 
     /// <summary>Queues the purges and marks the change released, if this server still holds the lease.</summary>
-    public static bool CompleteRelease(IDatabase database, Guid id, string owner, string status, DateTime nowUtc, string? missing, IEnumerable<OutboxRow> purges)
+    public static bool CompleteRelease(IDatabase database, Guid id, string owner, string status, DateTime nowUtc, string? missing, bool listingsWait, IEnumerable<OutboxRow> purges)
     {
         var released = database.Execute(
-            $"UPDATE {Constants.Tables.Events} SET Status = @0, ReleasedUtc = @1, Missing = @2, LeaseOwner = NULL, LeaseUntilUtc = NULL WHERE Id = @3 AND LeaseOwner = @4",
+            $"UPDATE {Constants.Tables.Events} SET Status = @0, ReleasedUtc = @1, Missing = @2, ListingsState = @3, LeaseOwner = NULL, LeaseUntilUtc = NULL WHERE Id = @4 AND LeaseOwner = @5",
             status,
             nowUtc,
             missing ?? (object)DBNull.Value,
+            listingsWait ? ListingStates.Waiting : DBNull.Value,
             id,
             owner) == 1;
         if (released)
@@ -53,6 +54,31 @@ internal static class LedgerSql
         }
 
         return released;
+    }
+
+    /// <summary>Released changes whose listing purge waits for the servers' indexes, oldest first.</summary>
+    public static List<EventRow> ListingsWaiting(IDatabase database, int take)
+        => database.SkipTake<EventRow>(0, take, new Sql(
+            $"SELECT * FROM {Constants.Tables.Events} WHERE ListingsState = @0 ORDER BY ReleasedUtc",
+            ListingStates.Waiting));
+
+    /// <summary>Queues a change's listing purges, if no other server has. Returns whether this call did.</summary>
+    public static bool CompleteListings(IDatabase database, Guid id, IEnumerable<OutboxRow> purges)
+    {
+        var completed = database.Execute(
+            $"UPDATE {Constants.Tables.Events} SET ListingsState = @0 WHERE Id = @1 AND ListingsState = @2",
+            ListingStates.Sent,
+            id,
+            ListingStates.Waiting) == 1;
+        if (completed)
+        {
+            foreach (OutboxRow purge in purges)
+            {
+                database.Insert(purge);
+            }
+        }
+
+        return completed;
     }
 
     public static List<OutboxRow> Due(IDatabase database, DateTime nowUtc, int take)
