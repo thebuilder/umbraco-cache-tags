@@ -1,0 +1,90 @@
+---
+title: Next.js
+description: Cache Delivery API responses with Next.js Cache Components, tagged with Umbraco's keys, and purge them from a signed webhook.
+seo:
+  image: /og/nextjs.png
+---
+
+The package's keys work as Next.js cache tags. Tag each cached Delivery API response with `cacheTag`, and call `revalidateTag` from the purge webhook. This needs Next.js 16 with [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) turned on.
+
+The repository's [sample site](https://github.com/thebuilder/umbraco-cache-tags/tree/main/samples/nextjs) is a complete setup, and its end-to-end tests run against it.
+
+## Fetching
+
+Fetch inside a `"use cache"` function, and tag the entry with the keys in the response header:
+
+```ts lib/umbraco.ts
+import { cacheLife, cacheTag } from "next/cache";
+
+export async function deliveryApi<T>(request: string, culture?: string): Promise<T | null> {
+  "use cache";
+
+  const url = `${process.env.UMBRACO_URL}/umbraco/delivery/api/v2/${request}`;
+  const response = await fetch(url, {
+    headers: culture ? { "Accept-Language": culture } : {},
+  });
+  if (!response.ok && response.status !== 404) {
+    // Throw, so Next.js does not cache the failure.
+    throw new Error(`Umbraco answered ${response.status} for ${request}.`);
+  }
+
+  cacheTag(...(response.headers.get("x-umbraco-cache-keys")?.split(", ") ?? []));
+
+  // Purges keep the entry fresh, so it can live for days. Keep a missing page briefly,
+  // so content created later shows up.
+  cacheLife(response.ok ? "days" : "seconds");
+  return response.ok ? ((await response.json()) as T) : null;
+}
+```
+
+- Pass everything that changes the response as an argument: the path with its query, and the culture. `"use cache"` keys the entry by its arguments.
+- Cache a response for at most `CacheTags:MappingRetention`, 7 days by default. After that, the package forgets which keys a response covers.
+- The package sends no `Vary` header. If you forward `Accept-Language`, `Accept-Segment` or `Start-Item`, make them arguments too, as `culture` is here.
+
+## The purge webhook
+
+The package posts each purge to the target's URL and signs it with the target's secret. This route handler checks the signature, the timestamp and the version, then expires the keys:
+
+```ts app/api/cache-tags/route.ts expandable
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { revalidateTag } from "next/cache";
+
+const secret = process.env.CACHE_TAGS_WEBHOOK_SECRET!;
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const timestamp = request.headers.get("x-cache-tags-timestamp") ?? "";
+  const signature = Buffer.from(request.headers.get("x-cache-tags-signature") ?? "");
+
+  // The package signs the method, path, timestamp and raw body with the shared secret.
+  const signed = `POST\n${new URL(request.url).pathname}\n${timestamp}\n${body}`;
+  const hmac = createHmac("sha256", secret).update(signed).digest("hex");
+  const expected = Buffer.from(`sha256=${hmac}`);
+  const signedByUmbraco =
+    signature.length === expected.length && timingSafeEqual(signature, expected);
+
+  // Refuse a purge signed more than 5 minutes ago, so a recorded one cannot be replayed.
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!signedByUmbraco || !(age <= 300)) {
+    return new Response("Not a purge from Umbraco", { status: 401 });
+  }
+
+  const purge = JSON.parse(body);
+  if (purge.version !== 1) {
+    return new Response(`Purge version ${purge.version} is not supported`, { status: 400 });
+  }
+
+  // One response or one item: the next request waits for fresh content.
+  for (const key of purge.expire) revalidateTag(key, { expire: 0 });
+  // Listings or everything: served stale once while they refresh.
+  for (const key of purge.stale) revalidateTag(key, "max");
+
+  return new Response(null, { status: 204 });
+}
+```
+
+Set `CACHE_TAGS_WEBHOOK_SECRET` to the target's secret. [Purge targets](/targets#the-webhook) has the request format.
+
+:::note[Before production]
+Consider also accepting a previous secret, so you can rotate the secret without missing purges. Refuse very large bodies, check the shape of the body, and ignore a purge id you have already handled. The [repository's sample route](https://github.com/thebuilder/umbraco-cache-tags/blob/main/samples/nextjs/app/api/cache-tags/route.ts) does all four.
+:::
