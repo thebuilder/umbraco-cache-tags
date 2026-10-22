@@ -228,8 +228,8 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
         <span slot="header-actions" class="muted">${describeKey(lookup.key)}</span>
         <p>
           ${count === 0
-            ? "No recorded response covers this key."
-            : `Cached in ${count} recorded response${count === 1 ? "" : "s"}${lookup.responses.length < count ? `; the ${lookup.responses.length} most recently served are shown` : ""}.`}
+            ? "No served response includes this key."
+            : `Included in ${count} served response${count === 1 ? "" : "s"}${lookup.responses.length < count ? `; the ${lookup.responses.length} most recently served are shown` : ""}.`}
           Searches and other catch-all listings carry their keys themselves and are not recorded.
         </p>
         ${lookup.responses.length > 0

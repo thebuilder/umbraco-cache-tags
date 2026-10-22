@@ -6,11 +6,11 @@ import { UMB_ENTITY_WORKSPACE_CONTEXT } from "@umbraco-cms/backoffice/workspace"
 import { api, type KeyLookup } from "./api.js";
 import { errorMessage, lookupHref, requestTemplate, sharedStyles } from "./shared.js";
 
-/** How many of the item's cached responses the box lists before linking to the rest. */
+/** How many of the responses including the item the box lists before linking to the rest. */
 const SHOWN = 5;
 
 /**
- * The Cache box on a document's or media item's Info tab: which cached responses include the item,
+ * The Cache box on a document's or media item's Info tab: which served responses include the item,
  * a link to all of them under Settings > Advanced > Cache tags, and purging the item by hand.
  */
 @customElement("thebuilder-cache-tags-info-app")
@@ -59,7 +59,15 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
     this._busy = true;
     try {
       await api.purge([this._key]);
-      this.#notification?.peek("positive", { data: { message: "This item is being purged at every target." } });
+      const count = this._lookup?.responseCount ?? 0;
+      this.#notification?.peek("positive", {
+        data: {
+          message:
+            count === 0
+              ? "Purge sent to every target."
+              : `Purge sent to every target. The ${count} response${count === 1 ? "" : "s"} below render fresh on their next request.`,
+        },
+      });
     } catch (error) {
       this.#notification?.peek("danger", { data: { message: errorMessage(error, "Could not purge.") } });
     } finally {
@@ -81,9 +89,9 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
           ? html`
               <p>
                 ${count === 0
-                  ? "No recorded response includes this item yet."
-                  : `Included in ${count} cached response${count === 1 ? "" : "s"}.`}
-                <span class="muted">Saving and publishing it purges them.</span>
+                  ? "No served response includes this item yet."
+                  : `Included in ${count} served response${count === 1 ? "" : "s"}.`}
+                <span class="muted">Publishing or purging it drops them from the caches until they are next requested.</span>
               </p>
               ${count > 0
                 ? html`<ul>
