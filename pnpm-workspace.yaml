@@ -1,5 +1,17 @@
 packages:
   - src/TheBuilder.CacheTags/Client
+  - apps/docs
 
 onlyBuiltDependencies:
   - esbuild
+allowBuilds:
+  # Download telemetry that Blume's API tooling pulls in. Its install script only reports the
+  # download, so it never runs.
+  '@scarf/scarf': false
+  # Node's WebGPU backend for vgpu. The hero particles run in the browser, so it isn't needed.
+  '@vgpu/adapter-node': false
+  esbuild: true
+  webgpu: false
+minimumReleaseAgeExclude:
+  # Our own packages are trusted, so new releases install right away.
+  - '@thebuilder/*'

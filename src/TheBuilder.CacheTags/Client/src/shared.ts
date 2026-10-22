@@ -4,8 +4,8 @@ import { css, html, nothing } from "@umbraco-cms/backoffice/external/lit";
 export const lookupHref = (key: string) =>
   `/umbraco/section/settings/workspace/thebuilder-cache-tags-root/view/lookup?key=${encodeURIComponent(key)}`;
 
-/** Where the documentation explains keys, changes and purges. */
-export const DOCS = "https://github.com/thebuilder/umbraco-cache-tags/blob/main/docs/design.md";
+/** Where the documentation explains how a change is timed and purged. */
+export const DOCS = "https://cache-tags.thebuilder.dk/timing";
 
 /** A time in the reader's locale and time zone, on a 24-hour clock. The API sends UTC, sometimes without a zone. */
 export const time = (utc: string | null | undefined) =>

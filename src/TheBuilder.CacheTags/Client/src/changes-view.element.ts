@@ -100,7 +100,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
           ${!this._loading && this._changes.length === 0 && !this._error ? html`<p class="muted">No changes recorded yet.</p>` : nothing}
           ${this._changes.map((change) => this.#renderChange(change))}
         </uui-box>
-        <p class="muted">How keys, changes and purges work: <a href=${DOCS} target="_blank" rel="noopener">the design notes</a>.</p>
+        <p class="muted">How a change becomes a purge: <a href=${DOCS} target="_blank" rel="noopener">the documentation</a>.</p>
       </div>
     `;
   }

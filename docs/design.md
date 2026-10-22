@@ -281,7 +281,9 @@ An admin-only Management API lookup:
 `GET /umbraco/management/api/v1/cache-tags/changes?take=20`, for administrators. Each change is also
 logged: `Cache tags change <id> (<kind>) plans <keys>`.
 
-Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's keys and fetch times.
+The backoffice shows the same under **Settings > Advanced > Cache tags**, with a search, and a Cache
+box on each document's and media item's Info tab. The Next.js sample shows each page's keys and
+fetch times.
 
 ## Milestones
 
@@ -295,4 +297,4 @@ Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's key
    (`type-`, `children-`, `search-`) must be purged once the Delivery API index has the change:
    purged earlier, the frontend refetches the old listing and keeps it until its safety revalidate.
    On a fresh boot the samples measured the index taking over half a minute.
-5. Backoffice, Cloudflare target, docs, NuGet preview.
+5. Backoffice, Cloudflare target, sites' own APIs, docs (`apps/docs`), NuGet preview (`RELEASE.md`).

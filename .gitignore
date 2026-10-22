@@ -24,3 +24,8 @@ spike/results/raw/
 # The backoffice client's build output; `dotnet pack` builds it.
 src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/*
 !src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/.gitkeep
+
+# The docs site: Blume's build output, and the Open Graph cards it draws on every build.
+apps/docs/.blume/
+apps/docs/public/og/
+apps/docs/public/opengraph-image.png

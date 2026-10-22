@@ -1,0 +1,166 @@
+---
+// @ts-nocheck - Blume's React island types flag valid Astro attributes.
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+import { loadUmbracoPackages } from "@thebuilder/umbraco-docs";
+import { EcosystemSection, InstallCommand, LandingHero, LandingRoot } from "@thebuilder/umbraco-docs/astro";
+import HeroParticles from "@thebuilder/umbraco-docs/components/HeroParticles";
+import CodeBlock from "blume/components/content/CodeBlock.astro";
+
+import "./_home/home.css";
+
+import { cacheTagsPackage } from "../umbraco-package";
+
+// The other packages come from the hub at umbraco.thebuilder.dk, so this list never needs editing here.
+const ecosystemPackages = await loadUmbracoPackages();
+
+const { config } = data;
+const installCommand = "dotnet add package TheBuilder.CacheTags --prerelease";
+const repoUrl = cacheTagsPackage.links.github;
+const nugetUrl = cacheTagsPackage.links.nuget;
+const marketplaceUrl = cacheTagsPackage.links.marketplace;
+// What the sample site sends and receives for one article.
+const tagged = `GET /umbraco/delivery/api/v2/content/item/articles/harbour-mornings/
+
+X-Umbraco-Cache-Keys: response-2de23a3a68340e675d917313029cab2e, umbraco`;
+const purge = `{
+  "version": 1,
+  "expire": [
+    "content-e0000000-0000-0000-0000-000000000003",
+    "response-2de23a3a68340e675d917313029cab2e",
+    "response-bedaf32c19e04d2a8b1e5c7a0f3d9e61"
+  ],
+  "stale": ["children-e0000000-0000-0000-0000-000000000002"]
+}`;
+const fetchHelper = `const response = await fetch(url);
+cacheTag(...response.headers.get("x-umbraco-cache-keys").split(", "));`;
+
+const features = [
+  {
+    title: "Purges exactly what changed",
+    body: "Publishing an article purges its page, the listings it appears in, and the pages that pick it. Every other cached response stays.",
+  },
+  {
+    title: "Never refetches the old version",
+    body: "A purge goes out once every Umbraco server serves the change, and listings once every server's index has it, so a frontend that refetches at once gets the new content.",
+  },
+  {
+    title: "Works with your cache",
+    body: "Tag entries with Next.js cacheTag, let Cloudflare purge by tag, or receive a signed webhook in anything else.",
+  },
+];
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  favicon={config.favicon}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  ogImage="/og/index.png"
+  page={{
+    title: "Cache Tags for Umbraco",
+    description: config.description,
+    route: "/",
+  }}
+>
+  <LandingRoot class="home">
+    <LandingHero
+      layout="split"
+      title="Cache every response,"
+      accent="purge only what changed."
+      description="Every Delivery API response tells your frontend which keys it covers. When an editor publishes, Umbraco purges exactly those keys, once every server has the change."
+      compatibility="Umbraco CMS 17.4 or later · .NET 10"
+    >
+      <HeroParticles slot="background" logo="/logo-mark.svg" />
+      <Fragment slot="actions">
+        <a class="button button--primary" href="/quickstart">Get started</a>
+        <a class="button button--secondary" href={repoUrl} rel="noopener">View on GitHub</a>
+      </Fragment>
+      <InstallCommand slot="install" command={installCommand} />
+      <div class="shell code-preview hero-code reveal" style="--i: 6">
+        <CodeBlock lang="http" title="Every response carries its keys" code={tagged} />
+        <CodeBlock lang="json" title="A publish purges exactly those" code={purge} />
+      </div>
+    </LandingHero>
+
+    <section class="shell trust reveal">
+      <p><strong>Your frontend caches for days, and is never wrong for long.</strong> Umbraco keeps track of which responses showed which content, and tells the frontend the moment any of them changes.</p>
+    </section>
+
+    <section class="shell section" aria-labelledby="features-title">
+      <div class="section-heading reveal">
+        <span class="rule" aria-hidden="true"></span>
+        <h2 id="features-title">Built for headless Umbraco</h2>
+        <p>For Next.js and other frontends that cache Delivery API responses, on one Umbraco server or many.</p>
+      </div>
+      <div class="feature-grid">
+        {features.map((feature, index) => (
+          <article class="feature-card reveal" style={`--i: ${index + 1}`}>
+            <span aria-hidden="true">0{index + 1}</span>
+            <h3>{feature.title}</h3>
+            <p>{feature.body}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="shell flow" aria-labelledby="flow-title">
+      <div class="flow__copy reveal">
+        <span class="rule" aria-hidden="true"></span>
+        <h2 id="flow-title">How a publish reaches your cache</h2>
+        <p>The package records each change, waits until every server serves it, and sends the keys to every purge target.</p>
+        <a class="text-link" href="/timing">How a purge is timed <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="status-list reveal" style="--i: 1">
+        <div><strong>Tag</strong><span>Every cacheable response carries its keys in a header. Your frontend tags its cache entry with them.</span></div>
+        <div><strong>Wait</strong><span>A change is purged once every server has applied it, and its listings once every server's index has it.</span></div>
+        <div><strong>Purge</strong><span>A signed webhook to your frontend, Cloudflare's purge API, or a target of your own.</span></div>
+      </div>
+    </section>
+
+    <section class="shell api" aria-labelledby="api-title">
+      <div class="api__copy reveal">
+        <span class="rule" aria-hidden="true"></span>
+        <h2 id="api-title">Two lines in your fetch</h2>
+        <p>Tag each cached response with its keys, and add a webhook route that expires them. The Next.js guide has both, ready to copy.</p>
+        <a class="button button--secondary" href="/nextjs">Read the Next.js guide</a>
+      </div>
+      <div class="code-preview reveal" style="--i: 1">
+        <CodeBlock lang="ts" title="lib/umbraco.ts" code={fetchHelper} />
+      </div>
+    </section>
+
+    <section class="shell closing reveal">
+      <h2>Purge your first page</h2>
+      <p>Install the package, point it at your frontend, and publish.</p>
+      <a class="button button--primary" href="/quickstart">Read the quickstart</a>
+    </section>
+
+    <EcosystemSection
+      packages={ecosystemPackages}
+      currentPackageId={cacheTagsPackage.id}
+    />
+  </LandingRoot>
+
+  <footer class="home-footer" slot="footer">
+    <div class="shell home-footer__inner">
+      <div>
+        <strong>Cache Tags</strong>
+        <span>MIT licensed · built by <a href="https://github.com/thebuilder" rel="noopener">thebuilder</a></span>
+      </div>
+      <nav aria-label="Footer">
+        <a href="/overview">Docs</a>
+        <a href={repoUrl} rel="noopener">GitHub</a>
+        <a href={nugetUrl} rel="noopener">NuGet</a>
+        <a href={marketplaceUrl} rel="noopener">Marketplace</a>
+      </nav>
+    </div>
+  </footer>
+</PageLayout>
