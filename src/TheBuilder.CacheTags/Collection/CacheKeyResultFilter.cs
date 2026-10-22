@@ -42,7 +42,7 @@ internal sealed class CacheKeyResultFilter(
         {
             if (DeliveryEndpoint.Of(action.ControllerTypeInfo) is { } endpoint)
             {
-                Tag(context, settings, value => collector.Collect(value, context.HttpContext, endpoint), endpoint.Listing ? ResponseIdentity.ListingParameters : ResponseIdentity.ItemParameters, recordable: true);
+                Tag(context, settings, value => collector.Collect(value, context.HttpContext, endpoint), endpoint.Parameters, recordable: true);
             }
             else if ((action.MethodInfo.GetCustomAttribute<CacheTaggedAttribute>() ?? action.ControllerTypeInfo.GetCustomAttribute<CacheTaggedAttribute>()) is { } tagged)
             {

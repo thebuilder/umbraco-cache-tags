@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using TheBuilder.CacheTags.Collection;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
@@ -13,5 +14,6 @@ internal static class Names
         Fake<ILanguageService>.Of((method, _) => method.Name == "GetAllAsync"
             ? Task.FromResult((cultures ?? []).Select(culture => Fake<ILanguage>.Of((m, _) => m.Name == "get_IsoCode" ? culture : null)))
             : null),
-        TimeProvider.System);
+        TimeProvider.System,
+        NullLogger<KnownNames>.Instance);
 }

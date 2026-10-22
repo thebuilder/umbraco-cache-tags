@@ -75,10 +75,32 @@ public sealed class ListingSelectorsTests
     [Fact]
     public void A_type_filter_on_more_types_than_a_listing_is_selected_by_is_a_catch_all()
     {
-        var types = string.Join(',', Enumerable.Range(1, 10).Select(i => $"type{i}"));
+        Assert.Equal(["type-a", "type-b"], ListingSelectors.For(null, ["contentType:a,b"], Resolve, IsType, media: false));
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(null, ["contentType:a,b,c"], Resolve, IsType, media: false));
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(null, ["contentType:a,b", "contentType:c"], Resolve, IsType, media: false));
+    }
 
-        Assert.Equal(10, ListingSelectors.For(null, ["contentType:" + types], Resolve, IsType, media: false).Count);
-        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(null, ["contentType:" + types + ",type11"], Resolve, IsType, media: false));
-        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(null, ["contentType:" + types, "contentType:type11"], Resolve, IsType, media: false));
+    [Theory]
+    [InlineData("children:/articles/", "contentType:article,news,page")]
+    [InlineData("ancestors:/articles/", "contentType:!article")]
+    [InlineData("children:/articles/", "contentType:")]
+    public void A_type_filter_that_does_not_select_makes_any_listing_a_catch_all_as_it_is_part_of_the_key(string fetch, string filter)
+    {
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(fetch, [filter], Resolve, IsType, media: false));
+    }
+
+    [Fact]
+    public void A_type_filter_naming_a_type_that_does_not_exist_makes_a_children_listing_a_catch_all()
+    {
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For("children:/articles/", ["contentType:a8f3e1c2"], Resolve, alias => alias == "article", media: false));
+    }
+
+    [Theory]
+    [InlineData("a8f3e1c2:/articles/")]
+    [InlineData("children")]
+    [InlineData("siblings:/articles/")]
+    public void A_fetch_without_a_known_axis_and_a_target_is_a_catch_all(string fetch)
+    {
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(fetch, ["contentType:article"], Resolve, IsType, media: false));
     }
 }

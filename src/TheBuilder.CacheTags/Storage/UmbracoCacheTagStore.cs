@@ -12,33 +12,54 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
     // unique index rejects one insert, and only that response is retried rather than the batch lost.
     public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default)
     {
-        var failed = new List<Exception>();
+        var failed = new List<string>();
+        var failures = new List<Exception>();
+        var inARow = 0;
         foreach (CachedResponse response in responses)
+        {
+            // Two responses in a row failed twice each: the database is down, so the rest are not tried.
+            Exception? failure = inARow >= 2 ? null : Record(response);
+            if (inARow >= 2 || failure is not null)
+            {
+                failed.Add(response.ResponseKey);
+                if (failure is not null)
+                {
+                    failures.Add(failure);
+                    inARow++;
+                }
+
+                continue;
+            }
+
+            inARow = 0;
+        }
+
+        // The responses are out with their keys already, so the writer must try the failed ones again.
+        return failed.Count == 0
+            ? Task.CompletedTask
+            : Task.FromException(new PartialRecordException(failed, failures));
+    }
+
+    // The rows a failed attempt inserted exist now, so the retry updates them: when another server
+    // inserts the same row at the same moment, the unique index rejects one insert, and the retry wins.
+    private Exception? Record(CachedResponse response)
+    {
+        for (var attempt = 1; ; attempt++)
         {
             try
             {
                 database.Write(db => CacheTagSql.Record(db, response));
+                return null;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The rows now exist, so the retry updates them. A response that fails again does not
-                // cost the rest of the batch, but fails the call once they are written: its key is out
-                // already, so the writer must try it again.
-                try
+                if (attempt == 2)
                 {
-                    database.Write(db => CacheTagSql.Record(db, response));
-                }
-                catch (Exception retryException) when (retryException is not OperationCanceledException)
-                {
-                    logger.LogWarning(retryException, "Recording cache tag response {ResponseKey} failed.", response.ResponseKey);
-                    failed.Add(retryException);
+                    logger.LogWarning(exception, "Recording cache tag response {ResponseKey} failed.", response.ResponseKey);
+                    return exception;
                 }
             }
         }
-
-        return failed.Count == 0
-            ? Task.CompletedTask
-            : Task.FromException(new AggregateException($"Recording {failed.Count} of {responses.Count} cache tag responses failed.", failed));
     }
 
     public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default)

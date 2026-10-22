@@ -15,8 +15,12 @@ internal static class ListingSelectors
     /// <summary>The key media listings share; media queries walk the media cache rather than an index.</summary>
     public const string MediaSearch = "media";
 
-    /// <summary>The most type aliases a listing is selected by; one filtered by more is a catch-all.</summary>
-    public const int MaxTypes = 10;
+    /// <summary>
+    ///     The most type aliases a listing is selected by; one filtered by more is a catch-all. Each
+    ///     subset of a site's types is a key of its own (times every fetch target, culture and start
+    ///     item), so this bounds how many listings anonymous input can record to the pairs of types.
+    /// </summary>
+    public const int MaxTypes = 2;
 
     /// <param name="fetch">The <c>fetch</c> parameter, such as <c>children:/articles/</c> or <c>descendants:&lt;id&gt;</c>.</param>
     /// <param name="filters">The <c>filter</c> parameters, such as <c>contentType:article</c>.</param>
@@ -33,10 +37,28 @@ internal static class ListingSelectors
         var typeFilter = media ? "mediaType:" : "contentType:";
         var filterList = filters.ToList();
         var (axis, target) = Split(fetch);
-        Guid? targetKey = target is null ? null : resolve(target);
 
-        // A fetch of an item that does not exist matches nothing until something is published there.
-        if (target is not null && targetKey is null)
+        // A fetch must name an axis and an item that exists. Anything else (an unknown axis, no target,
+        // an item that does not exist yet) is input that can vary without end, and matches nothing
+        // until something is published there.
+        Guid? targetKey = target is null ? null : resolve(target);
+        if (axis is not null && (axis is not ("children" or "descendants" or "ancestors") || targetKey is null))
+        {
+            keys.Add(catchAll);
+            return keys;
+        }
+
+        // A type filter selects only when every alias names a type, and there are at most MaxTypes:
+        // any other alias, or more of them, is input that can vary without end. It is checked before
+        // the axis, because the filter is part of the key whatever selects the listing.
+        var types = filterList
+            .Where(f => f.StartsWith(typeFilter, StringComparison.OrdinalIgnoreCase))
+            .Select(f => f[typeFilter.Length..])
+            .SelectMany(v => v.Split(','))
+            .Select(v => v.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (types.Count > MaxTypes || types.Any(t => t.Length == 0 || t.StartsWith('!') || isType(t) is false))
         {
             keys.Add(catchAll);
             return keys;
@@ -51,7 +73,7 @@ internal static class ListingSelectors
         }
 
         // The fetched item itself: an ancestors listing changes when its own route does.
-        if (targetKey is { } fetched && fetched != Guid.Empty && axis is "children" or "descendants" or "ancestors")
+        if (targetKey is { } fetched && fetched != Guid.Empty)
         {
             keys.Add(media ? CacheKeys.Media(fetched) : CacheKeys.Content(fetched));
         }
@@ -68,17 +90,7 @@ internal static class ListingSelectors
             return keys;
         }
 
-        var types = filterList
-            .Where(f => f.StartsWith(typeFilter, StringComparison.OrdinalIgnoreCase))
-            .Select(f => f[typeFilter.Length..])
-            .SelectMany(v => v.Split(','))
-            .Select(v => v.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        // Only aliases that name a type select a listing, and only a few of them: any other alias, or
-        // more of them, is input that can vary without end, and would make a mapping row each.
-        if (types.Count is > 0 and <= MaxTypes && types.All(t => t.Length > 0 && t.StartsWith('!') is false && isType(t)))
+        if (types.Count > 0)
         {
             foreach (var type in types)
             {

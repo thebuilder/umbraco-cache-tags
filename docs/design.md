@@ -47,13 +47,14 @@ The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex 
 identity is:
 
 - the path, lowercased;
-- the query parameters the endpoint selects content by: `id` for an item endpoint (`items?id=`),
-  `fetch` and `filter` for a query (listing) endpoint. An endpoint ignores the others, so they are
-  left out. Each value is lowercased and stripped of whitespace, an id (alone or after a `:`, as in
-  `children:<id>`) is written in `D` form, and a list after a `:` (`contentType:b,a`) is sorted with
-  repeats dropped. The values are then sorted, with empty and repeated ones dropped;
+- the query parameters the endpoint reads: `id` for the items endpoint (`items?id=`), `fetch` and
+  `filter` for a query (listing) endpoint, none for an item by route or id. An endpoint ignores the
+  others, so they are left out. Each value is lowercased and stripped of whitespace, an id (alone or
+  after a `:`, as in `children:<id>`) is written in `D` form, and a list after a `:`
+  (`contentType:b,a`) is sorted with repeats dropped. The values are then sorted, with empty and
+  repeated ones dropped;
 - the culture, as Umbraco reads it from `Accept-Language`;
-- the start item, as the id of the item `Start-Item` resolves to.
+- the start item, as the id of the item `Start-Item` resolves to (an unknown one is a 404).
 
 The segment is left out: Umbraco takes `Accept-Segment` as sent, and no purge is limited by segment,
 so segment variants share a key. The same request always gives the same key on every server. The
@@ -62,26 +63,29 @@ response is presented, and any other parameter is ignored, so requests that diff
 in the case, form or order of a value, share a key: the mapping only adds keys, so the shared key
 covers everything any of them showed, and a purge reaches each. Input such as
 `?fields=properties[<random>]`, `?skip=<n>`, `?id=<id>&id=<id>` or `item/<path>?filter=<random>`
-therefore makes no new key. A request whose start item is too long to record gets `no-store` and no
+therefore makes no new key. A request whose culture is too long to record gets `no-store` and no
 key. A culture that is no language of the site is not recorded (see below): Umbraco takes
 `Accept-Language` as sent too, and a purge limited to a language would not match it.
 
-The mapping is written in the background (`MappingWriter`), but a response carries its `response-`
-key only once its record is queued, so no key goes out that a purge cannot reach:
+The mapping is written in the background (`MappingWriter`), and a response carries its `response-`
+key only once its record is queued:
 
 - A record that cannot be queued (the queue of 10,000 writes is full, the server is stopping, or the
   package's tables do not exist yet on a first boot) makes the response carry its keys itself instead,
   as a catch-all response does below. It is not recorded.
-- A queued record is not given up while the server runs. When a batch fails (the default store
-  retries each response once, then fails the batch), its records are written one by one, and those
-  that fail again are retried after 2, 4, 8 ... seconds, at most a minute apart, so one record the
-  store keeps rejecting does not hold up the rest. Once 200 records are failing (the store is down),
-  the writer takes no new ones until they go through: the queue fills, and new responses carry their
-  keys themselves. Any exception but the server stopping counts as a failure, a store's own timeout
-  included.
+- A queued record is written within moments. A purge released in those moments does not reach the
+  response through its key, the same short window as between a render and Umbraco's cache refresh.
+- When a batch fails, the records the store did not record are written again one by one, until two
+  in a row fail (the store is then taken to be down), and those still failing are retried after 2,
+  4, 8 ... seconds, at most a minute apart. While any are failing, new responses carry their keys
+  themselves, and are still queued, so the mapping fills in and the writer sees when the store works
+  again. A record that keeps failing while others go through is one the store rejects: after 3 such
+  rounds it is given up and logged, and only `umbraco` reaches that response. Any exception but the
+  server stopping counts as a failure, a store's own timeout included.
 - A stopping server refuses new records and spends up to 5 seconds writing what is queued or
-  failing. A crash, or what is left after those seconds, loses those records (the last moment's
-  renders): until a frontend fetches those responses again, only `umbraco` reaches them.
+  failing, one by one where a batch fails. A crash, or what is left after those seconds, loses those
+  records (the last moment's renders): until a frontend fetches those responses again, only `umbraco`
+  reaches them.
 
 The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
@@ -90,14 +94,15 @@ cover them, and sent with both.
 
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
-selected; a listing with no parent or type to select it; a `fetch` of an item that does not exist,
-by path or by id; a type filter naming a type that does not exist (one longer than an alias can be
-included), or more than 10 types; `items?id=` naming an item that does not exist (it covers each id
-asked for, so publishing one later reaches it). Content and media types are read at most once a
-minute, so one created in the last minute counts as unknown until then. Each of these can vary with input without end: recorded, each would be another
-mapping row, and every content publish would purge every one of them, so a purge would grow with
-every variation ever cached. Such a response carries its keys itself instead, as in item keys mode
-below:
+selected; a listing with no parent or type to select it; a `fetch` without an axis (`children`,
+`descendants`, `ancestors`) and an item that exists, by path or by id; a type filter naming a type
+that does not exist (one longer than an alias can be included), or more than 2 types, whatever the
+`fetch`; `items?id=` naming an item that does not exist (it covers each id asked for, so publishing
+one later reaches it), or naming more than one item. Content and media types are read at most once
+a minute, so one created in the last minute counts as unknown until then. Each of these can vary
+with input without end: recorded, each would be another mapping row, and every content publish would
+purge every one of them, so a purge would grow with every variation ever cached. Such a response
+carries its keys itself instead, as in item keys mode below:
 
 ```http
 X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco
@@ -106,6 +111,13 @@ X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontent
 and the planned `search-` key purges every such response at once, however many are cached. Being
 unrecorded, these responses lose culture-limited purging (a purge reaches them in every culture, which
 only over-purges) and are not shown by the lookup API.
+
+What anonymous input can still record is bounded by the site itself: per culture and start item, one
+response per item route, one per `items?id=` item, and one per listing selected by an existing
+`fetch` target (or none) and at most two existing types (or none). A site with `I` items and `T`
+types has at most about `3 I (1 + T + T(T-1)/2)` listing keys per culture, which is large for a big
+site but cannot grow with requests that name nothing real (a target can be spelled a few ways, by id or
+path, which multiplies that by a few).
 
 A response in a culture that is no language of the site (Umbraco takes `Accept-Language` as sent, so
 `Accept-Language: <random>` is one) is not recorded either, and carries its keys itself the same way,
@@ -293,7 +305,10 @@ public sealed class DictionaryController(ICacheTagsResponse cacheTags, ...) : Co
 ```
 
 `QueryParameters` lists the parameters that select what a response covers; none by default, and only
-those are part of its key, so listing an unbounded parameter makes a key per value. `Recorded = false`
+those are part of its key, so listing an unbounded parameter makes a key per value. Their values are
+made canonical like the Delivery API's (lowercased, without whitespace, a list after a `:` sorted, an
+id in one form), so `?locale=da-DK` and `?locale=da-dk` share a key; where the action tells such
+values apart, the shared key still covers what each response showed. `Recorded = false`
 makes each response carry its keys itself instead, for an action whose input varies without end.
 
 **Changes.** `ICacheTagsChanges.Record(keys, waitFor, cultures, reason)` records a change that purges

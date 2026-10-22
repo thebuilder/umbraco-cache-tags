@@ -11,7 +11,7 @@ namespace TheBuilder.CacheTags.Keys;
 /// <param name="Query">The normalised query string (see <see cref="ResponseIdentity.NormaliseQuery" />).</param>
 /// <param name="Culture">The culture, lowercased, or empty.</param>
 /// <param name="Segment">The segment, or empty. Delivery API responses leave it out of their key (see CacheKeyResultFilter).</param>
-/// <param name="StartItem">The <c>Start-Item</c> header, lowercased, or empty.</param>
+/// <param name="StartItem">The start item, lowercased (for a Delivery API response, the id of the item <c>Start-Item</c> resolves to), or empty.</param>
 internal sealed record ResponseIdentity(string Path, string Query, string Culture, string Segment, string StartItem)
 {
     /// <summary>
@@ -25,10 +25,13 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
     public static readonly IReadOnlySet<string> DeliveryParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "id", "fetch", "filter" };
 
     /// <summary>
-    ///     The <see cref="DeliveryParameters" /> an item endpoint reads: <c>id</c> (<c>items?id=</c>). It
-    ///     ignores <c>fetch</c> and <c>filter</c>, so they must not make a new key per value.
+    ///     The <see cref="DeliveryParameters" /> the items endpoint (<c>items?id=</c>) reads: <c>id</c>.
+    ///     It ignores <c>fetch</c> and <c>filter</c>, so they must not make a new key per value.
     /// </summary>
-    public static readonly IReadOnlySet<string> ItemParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "id" };
+    public static readonly IReadOnlySet<string> ItemsParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "id" };
+
+    /// <summary>What an item endpoint by route or id reads: none of the <see cref="DeliveryParameters" />.</summary>
+    public static readonly IReadOnlySet<string> NoParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The <see cref="DeliveryParameters" /> a query (listing) endpoint reads: <c>fetch</c> and <c>filter</c>, not <c>id</c>.</summary>
     public static readonly IReadOnlySet<string> ListingParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "fetch", "filter" };
@@ -89,8 +92,9 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
     }
 
     /// <summary>
-    ///     Whether every field fits the mapping's columns. Segment and start item come from request
-    ///     headers as sent, so a request can make them any length; such a response is not tagged.
+    ///     Whether every field fits the mapping's columns. The culture comes from a request header as
+    ///     sent, so a request can make it any length; such a response is not tagged. (A site's own API
+    ///     can pass a segment and start item of any length too.)
     /// </summary>
     public bool Fits => Path.Length <= 1000 && Culture.Length <= 50 && Segment.Length <= 100 && StartItem.Length <= 200;
 
