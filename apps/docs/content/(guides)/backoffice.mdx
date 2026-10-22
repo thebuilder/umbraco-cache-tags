@@ -15,10 +15,10 @@ Administrators find the package under **Settings > Advanced > Cache tags**, and 
 
 Changes lists the latest changes, newest first. Open one to see:
 
-- the item and listing keys it planned;
-- how many recorded responses the plan reaches now;
-- which servers applied it, and which servers' indexes have it;
-- its purges to each target, with their attempts and any error.
+- The item and listing keys it planned
+- How many recorded responses the plan reaches now
+- Which servers applied it, and which servers' indexes have it
+- Its purges to each target, with their attempts and any error
 
 A change shows **Waiting for servers** until every server has applied it, then **Waiting for index** until every server's index has it, then **Purged** once its purges are queued or sent. The view refreshes itself until the change is purged.
 
@@ -32,9 +32,9 @@ Purges that failed their last attempt are listed at the top. **Retry** sends one
 
 Search by an item's name, or by part of a path, a query or a key. Then open a result:
 
-- a document or media item shows the responses that include it;
-- a `response-` key shows its request, culture, when it was rendered and last served, and every key it covers;
-- any other key shows the responses that cover it.
+- A document or media item shows the responses that include it.
+- A `response-` key shows its request, culture, when it was rendered and last served, and every key it covers.
+- Any other key shows the responses that cover it.
 
 Searches and other catch-all listings carry their keys in their own header, and the package does not record them, so Look up cannot find them.
 

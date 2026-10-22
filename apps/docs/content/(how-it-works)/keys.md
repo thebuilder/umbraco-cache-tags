@@ -33,9 +33,9 @@ The package records which items and listings each response key covers. When cont
 
 The response key is a hash of what selects the content:
 
-- the path;
-- the `id`, `fetch` and `filter` query parameters, sorted, empty ones dropped;
-- the culture, the segment and the start item.
+- The path
+- The `id`, `fetch` and `filter` query parameters, sorted, with empty ones dropped
+- The culture, the segment and the start item
 
 The other Delivery API parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how Umbraco presents a response, and the package ignores any other parameter. Requests that differ only in those share a key. The shared key covers everything any of them showed, so a purge reaches each, and input such as `?skip=<n>` cannot make new keys.
 

@@ -28,7 +28,7 @@ Every server, delivery servers included, runs the same loop against the shared d
 
 These changes reach every response, and purge `umbraco` as stale:
 
-- a domain, language or public access change;
-- a route change with more descendants than `MaxDescendants` (500).
+- A domain, language or public access change
+- A route change with more descendants than `MaxDescendants` (500)
 
 A content type or data type change purges the `schema-` key of every type it alters, which reaches every response that renders such an item.

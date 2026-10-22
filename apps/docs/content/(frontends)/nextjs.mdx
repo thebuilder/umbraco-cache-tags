@@ -43,7 +43,7 @@ export async function deliveryApi<T>(request: string, culture?: string): Promise
 
 ## The purge webhook
 
-The package posts each purge to the target's URL and signs it with the target's secret. This route handler checks the signature and the timestamp, then expires the keys:
+The package posts each purge to the target's URL and signs it with the target's secret. This route handler checks the signature, the timestamp and the version, then expires the keys:
 
 ```ts app/api/cache-tags/route.ts expandable
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -85,10 +85,6 @@ export async function POST(request: Request) {
 
 Set `CACHE_TAGS_WEBHOOK_SECRET` to the target's secret. [Purge targets](/targets#the-webhook) has the request format.
 
-:::note[What the sample adds]
-The [sample's route](https://github.com/thebuilder/umbraco-cache-tags/blob/main/samples/nextjs/app/api/cache-tags/route.ts) also accepts a second secret, `CACHE_TAGS_WEBHOOK_SECRET_PREVIOUS`, so you can rotate the secret without missing purges. It refuses bodies over 1 MB, checks the shape of the body, and ignores a purge id it has already handled.
+:::note[Before production]
+Consider also accepting a previous secret, so you can rotate the secret without missing purges. Refuse very large bodies, check the shape of the body, and ignore a purge id you have already handled. The [repository's sample route](https://github.com/thebuilder/umbraco-cache-tags/blob/main/samples/nextjs/app/api/cache-tags/route.ts) does all four.
 :::
-
-## Pages that stay dynamic
-
-A route that awaits `connection()` or reads request data renders on every request, but Next.js still caches its `"use cache"` fetches, and purges reach them by key. The sample renders its footer this way: the footer reads the site's dictionary API on each request rather than at build time, when Umbraco may not be running.
