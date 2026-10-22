@@ -49,7 +49,7 @@ Your frontend needs an endpoint that receives purges and expires the tagged entr
 
 ## 4. Point the package at it
 
-In the Umbraco site's `appsettings.json`:
+In Umbraco, go to **Settings > Advanced > Cache tags > Targets**, select **Add target**, and enter the webhook's URL and signing secret. **Send test purge** checks it before you save. Or, in the Umbraco site's `appsettings.json`:
 
 ```json appsettings.json
 {

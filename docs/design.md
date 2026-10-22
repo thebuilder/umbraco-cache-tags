@@ -125,6 +125,15 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, and are configured with
 `"Type": "<their type>"` and their own `Settings`.
 
+Targets are configured in `CacheTags:Targets` or added in the backoffice (Settings > Advanced > Cache
+tags > Targets, administrators only), stored in `theBuilderCacheTagsTarget` as JSON and read by every
+server at most 5 seconds late. A configured name wins over a backoffice one. Each backoffice value
+(signing secret, header, setting) is typed in or names an app setting read at send time; the package
+stores no secret of its own. A setting missing on a server fails that server's purges with an error
+that names the header or secret, never the setting, so they retry until it is deployed. Backoffice
+targets reach only public addresses unless `CacheTags:AllowPrivateNetworkTargets`; webhooks send their
+target's `Headers`, but never one the purge sets itself.
+
 ## Cloudflare
 
 The built-in `cloudflare` target purges a Cloudflare zone by cache tag, for a site where Cloudflare
@@ -266,6 +275,7 @@ or discarded purge again (`POST .../purges/{id}/retry`), and sets a pending or d
 | 2026-10-22 | `schema-<alias>` keys: a content, media or element type change (or a data type used by it) purges every response that renders an item of that type, not only listings filtered by it. |
 | 2026-10-22 | Listings are purged a second time once every server's Delivery API index has the change, checked by comparing a stamp of the item's state written into each index document with its state in the database, replacing fixed re-purge delays. A time stamp was tried first and accepted a draft's document built just before the publish. |
 | 2026-10-22 | Sites extend the package through `[CacheTagged]`, `ICacheTagsResponse` and `ICacheTagsChanges`, with `x-` keys, and a change waits for a named signal each server reports rather than for a cache refresher the package would have to know. A manual purge is the same kind of change. |
+| 2026-10-22 | Targets can be added in the backoffice, with request headers. Secrets follow TheBuilder.AppTranslations: typed (plain text, shown to administrators) or an app setting's name, never encrypted by the package. No outgoing OIDC: the webhook signature already proves the sender. |
 | 2026-10-22 | Catch-all listings (search, name filters, other queries) carry their own keys and are not recorded, so user input cannot grow the mapping or the purges. Every response carries `umbraco`, so a change to everything reaches it. |
 | 2026-10-22 | Unpublishing always purges every culture: Umbraco raises it only when the whole document goes. A sort's re-publish of the sorted items is not recorded as a publish. Items deleted from the recycle bin are not recorded again. Public access changes purge everything. |
 
