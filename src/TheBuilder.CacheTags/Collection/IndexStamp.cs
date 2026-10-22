@@ -5,21 +5,31 @@ using Umbraco.Cms.Core.Models;
 namespace TheBuilder.CacheTags.Collection;
 
 /// <summary>
-///     Stamps each document Umbraco builds for the Delivery API content index with when it was built,
-///     so a server can tell whether its index has caught up with a change (<c>IndexWatcher</c>).
-///     Umbraco builds a document from the database, so one built after a server applied a change has it.
+///     Stamps each document Umbraco builds for the Delivery API content index with the state of the
+///     item it was built from, so a server can tell whether its index has caught up with a change
+///     (<c>IndexWatcher</c>): when the stamp matches the item's state in the database now, the index
+///     has every change made to it so far.
 /// </summary>
-internal sealed class IndexStamp(TimeProvider time) : IContentIndexHandler
+internal sealed class IndexStamp : IContentIndexHandler
 {
-    public const string FieldName = "theBuilderCacheTagsBuiltUtc";
+    public const string FieldName = "theBuilderCacheTagsState";
 
     public IEnumerable<IndexFieldValue> GetFieldValues(IContent content, string? culture)
-        => [new IndexFieldValue { FieldName = FieldName, Values = [time.GetUtcNow().UtcTicks.ToString("D19", CultureInfo.InvariantCulture)] }];
+        => [new IndexFieldValue { FieldName = FieldName, Values = [For(content)] }];
 
     public IEnumerable<IndexField> GetFields()
         => [new IndexField { FieldName = FieldName, FieldType = FieldType.StringRaw, VariesByCulture = false }];
 
-    /// <summary>A stamp read back from a document, or <c>null</c> when it has none (built before the package was installed).</summary>
-    public static DateTime? Read(string? value)
-        => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var ticks) ? new DateTime(ticks, DateTimeKind.Utc) : null;
+    /// <summary>
+    ///     What the index records about an item, for listings: which version is published in which
+    ///     cultures, where it is, and its order. A save, publish, unpublish, move or sort changes it.
+    /// </summary>
+    public static string For(IContent content)
+        => string.Join(
+            '|',
+            content.VersionId.ToString(CultureInfo.InvariantCulture),
+            content.PublishedVersionId.ToString(CultureInfo.InvariantCulture),
+            string.Join(',', content.PublishedCultures.Order(StringComparer.OrdinalIgnoreCase)),
+            content.Path,
+            content.SortOrder.ToString(CultureInfo.InvariantCulture));
 }

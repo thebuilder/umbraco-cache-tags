@@ -28,7 +28,7 @@ public sealed class AckMatchTests
 
         var completed = AckProcessor.Match([earlier, later], [Publish(Noon.AddSeconds(1))], used).ToList();
 
-        Assert.Equal([(earlier.Id, Noon.AddSeconds(1))], completed.Select(item => (item.Change.Id, item.AppliedUtc)));
+        Assert.Equal([earlier.Id], completed.Select(change => change.Id));
         Assert.Single(used);
     }
 

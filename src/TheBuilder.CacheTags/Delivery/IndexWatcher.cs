@@ -6,7 +6,6 @@ using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Ledger;
-using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Configuration.Models;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
@@ -21,7 +20,7 @@ namespace TheBuilder.CacheTags.Delivery;
 /// </summary>
 internal sealed class IndexWatcher(
     IExamineManager examine,
-    IIdKeyMap idKeyMap,
+    IContentService contentService,
     IOptionsMonitor<DeliveryApiSettings> deliveryApi,
     IAckTransport transport,
     ServerIdentity identity,
@@ -34,20 +33,16 @@ internal sealed class IndexWatcher(
     /// <summary>The Delivery API content index (<c>Constants.UmbracoIndexes.DeliveryApiContentIndexName</c>).</summary>
     public const string IndexName = "DeliveryApiContentIndex";
 
-    // Umbraco's indexing and the package's ack are both started by the same refresh, so a document
-    // can be built a moment before the refresh is recorded here.
-    private static readonly TimeSpan Slack = TimeSpan.FromSeconds(1);
-
     private readonly ConcurrentDictionary<Guid, Watched> _watched = new();
 
     public bool HasWatched => _watched.IsEmpty is false;
 
-    /// <summary>Starts watching for a change this server just acknowledged, applied at <paramref name="appliedUtc" />.</summary>
-    public void Watch(LedgerEntry entry, DateTime appliedUtc)
+    /// <summary>Starts watching for a change this server just acknowledged.</summary>
+    public void Watch(LedgerEntry entry)
     {
         if (entry.ReadChange() is { } change && IndexCheck.WaitsFor(change.Kind, entry.Plan))
         {
-            _watched.TryAdd(entry.Id, new Watched(entry.Id, change.Kind, change.Items, entry.Plan, appliedUtc - Slack, time.GetUtcNow().UtcDateTime));
+            _watched.TryAdd(entry.Id, new Watched(entry.Id, change.Items, entry.Plan, time.GetUtcNow().UtcDateTime));
         }
     }
 
@@ -71,7 +66,7 @@ internal sealed class IndexWatcher(
                 _watched.TryRemove(watched.ChangeId, out _);
                 logger.LogWarning("Cache tags change {ChangeId} was not in this server's Delivery API index after {Timeout}.", watched.ChangeId, timeout);
             }
-            else if (index is null || watched.Items.All(item => HasIndexed(index, watched, item)))
+            else if (index is null || watched.Items.All(item => HasIndexed(index, item)))
             {
                 indexed.Add(watched);
             }
@@ -97,25 +92,31 @@ internal sealed class IndexWatcher(
         }
     }
 
-    private bool HasIndexed(IIndex index, Watched watched, ChangedItem item)
+    private bool HasIndexed(IIndex index, ChangedItem item)
     {
-        Attempt<int> id = idKeyMap.GetIdForKey(item.Key, UmbracoObjectTypes.Document);
-        if (id.Success is false)
+        // This server applied the change before watching for it, so the database has it.
+        IContent? content = contentService.GetById(item.Key);
+        if (content is null)
         {
-            // Deleted since: nothing of it can be left to index.
+            // Deleted: without its id there is nothing to look up, and Umbraco removes its documents.
             return true;
         }
 
+        // A trashed item, or one of a type the index skips, has no documents.
+        var state = content.Trashed || deliveryApi.CurrentValue.IsAllowedContentType(content.ContentType.Alias) is false
+            ? null
+            : IndexStamp.For(content);
+
         var documents = index.Searcher
             .CreateQuery()
-            .Field("id", id.Result.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Field("id", content.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .Execute(QueryOptions.SkipTake(0, 1000))
             .Select(result => new IndexedDocument(
                 result.Values.TryGetValue("culture", out var culture) ? culture : "none",
-                IndexStamp.Read(result.Values.TryGetValue(IndexStamp.FieldName, out var stamp) ? stamp : null)))
+                result.Values.TryGetValue(IndexStamp.FieldName, out var stamp) ? stamp : null))
             .ToList();
-        return IndexCheck.HasIndexed(watched.Kind, documents, watched.SinceUtc, deliveryApi.CurrentValue.IsAllowedContentType(item.TypeAlias));
+        return IndexCheck.HasIndexed(state, documents);
     }
 
-    private sealed record Watched(Guid ChangeId, ChangeKind Kind, IReadOnlyList<ChangedItem> Items, PurgePlan Plan, DateTime SinceUtc, DateTime AddedUtc);
+    private sealed record Watched(Guid ChangeId, IReadOnlyList<ChangedItem> Items, PurgePlan Plan, DateTime AddedUtc);
 }

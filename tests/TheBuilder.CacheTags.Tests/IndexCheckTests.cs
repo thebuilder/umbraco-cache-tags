@@ -5,43 +5,33 @@ namespace TheBuilder.CacheTags.Tests;
 
 public sealed class IndexCheckTests
 {
-    private static readonly DateTime Applied = new(2026, 10, 22, 12, 0, 0, DateTimeKind.Utc);
-
-    private static IndexedDocument Built(string culture, int secondsAfterApplied) => new(culture, Applied.AddSeconds(secondsAfterApplied));
+    private const string Now = "12|11|da-DK,en-US|-1,1060,1061|2";
+    private const string Before = "10|9|da-DK,en-US|-1,1060,1061|2";
 
     [Fact]
-    public void A_publish_is_indexed_once_every_culture_was_rebuilt_after_the_change_was_applied()
+    public void An_item_is_indexed_once_every_culture_was_built_from_its_state_now()
     {
-        Assert.False(IndexCheck.HasIndexed(ChangeKind.Published, [Built("en-us", 2), Built("da-dk", -30)], Applied, indexable: true));
-        Assert.True(IndexCheck.HasIndexed(ChangeKind.Published, [Built("en-us", 2), Built("da-dk", 3)], Applied, indexable: true));
+        Assert.False(IndexCheck.HasIndexed(Now, [new IndexedDocument("en-us", Now), new IndexedDocument("da-dk", Before)]));
+        Assert.True(IndexCheck.HasIndexed(Now, [new IndexedDocument("en-us", Now), new IndexedDocument("da-dk", Now)]));
     }
 
     [Fact]
     public void A_document_built_before_the_package_was_installed_has_not_caught_up()
     {
-        Assert.False(IndexCheck.HasIndexed(ChangeKind.Unpublished, [new IndexedDocument("none", null)], Applied, indexable: true));
+        Assert.False(IndexCheck.HasIndexed(Now, [new IndexedDocument("none", null)]));
     }
 
     [Fact]
     public void A_new_item_waits_until_the_index_has_it()
     {
-        Assert.False(IndexCheck.HasIndexed(ChangeKind.Published, [], Applied, indexable: true));
-    }
-
-    [Theory]
-    [InlineData(nameof(ChangeKind.Deleted))]
-    [InlineData(nameof(ChangeKind.Trashed))]
-    public void Deleting_or_trashing_is_indexed_once_no_document_is_left(string name)
-    {
-        ChangeKind kind = Enum.Parse<ChangeKind>(name);
-        Assert.False(IndexCheck.HasIndexed(kind, [Built("none", -30)], Applied, indexable: true));
-        Assert.True(IndexCheck.HasIndexed(kind, [], Applied, indexable: true));
+        Assert.False(IndexCheck.HasIndexed(Now, []));
     }
 
     [Fact]
-    public void An_item_of_a_type_the_index_skips_never_waits()
+    public void An_item_that_should_have_no_documents_is_indexed_once_none_is_left()
     {
-        Assert.True(IndexCheck.HasIndexed(ChangeKind.Published, [], Applied, indexable: false));
+        Assert.False(IndexCheck.HasIndexed(null, [new IndexedDocument("none", Before)]));
+        Assert.True(IndexCheck.HasIndexed(null, []));
     }
 
     [Theory]

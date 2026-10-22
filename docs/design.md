@@ -85,7 +85,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   `stale` holds `type-`, `children-`, `search-` and `umbraco`: listings or everything, served stale
   while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
-  A change sends several purges: one per `MaxKeysPerRequest` keys, and the listing re-purges.
+  A change sends several purges: one per `MaxKeysPerRequest` keys, and its listing purge.
 - A receiver that does not know `version` must not purge, and answers with an error.
 - HMAC-SHA256 with the secret's UTF-8 bytes over `<METHOD>\n<path>\n<timestamp>\n<raw body>`. A
   5-minute window; two secrets accepted for rotation; duplicate ids ignored.
@@ -112,12 +112,28 @@ Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, an
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
    not. It resolves the plan to response keys and queues one purge per target (split at
-   `MaxKeysPerRequest`), plus purges of the listing responses again after
-   `CacheTags:ListingRepurgeDelays` (5, 20 and 45 seconds), since listings come from an index updated
-   in the background, slowly right after a restart.
-4. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
+   `MaxKeysPerRequest`). Listing responses are in it too, deliberately: the items they show come
+   from the published cache, so they are fresh at once, even though their membership and order are
+   not yet.
+4. **Listings.** Listings come from each server's Delivery API index, which Umbraco updates in a
+   background task after the refresh (a second or two; over a minute right after a restart). An
+   index handler stamps every document with the state of the item it was built from (version,
+   published version and cultures, path, sort order). After acknowledging a content change whose
+   plan has listing keys, each server compares that stamp with each item's state in the database
+   until they match (or no document is left, for a trashed or deleted item), then evicts the
+   change's listing responses from its output cache and records the change as indexed. Once every
+   active server that acknowledged the change has, or after `CacheTags:IndexTimeout` (5 minutes), one
+   server resolves the listing keys again (a listing first requested in between has a new response
+   key) and queues the listing purge. Media listings walk the media cache, and type and site-wide
+   changes purge as a whole, so those do not wait.
+5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
    `CacheTags:MaxAttempts` (10).
+
+A server that has just started applies other servers' changes only once Umbraco's instruction job
+first runs, about a minute after start; a change made in that minute waits for it (or the ack
+timeout). A server that restarts after a change was released is a new identity that nothing waits
+for, and serves Umbraco's listings as its index rebuilds.
 
 Non-200 Delivery API responses (not found, redirects) get `no-store`: no item covers them, so no
 purge would reach them.
@@ -144,6 +160,7 @@ On SQLite, two transactions that each read and then write deadlock otherwise.
 | 2026-10-21 | `children-` and `search-` keys are purged stale-while-revalidate, like `type-`. |
 | 2026-10-22 | Purge targets are a seam (`IPurgeTarget`), configured by name with a `Type`; the webhook is the built-in type. The webhook body is versioned and says which keys to expire and which to mark stale, so receivers need no knowledge of key names. |
 | 2026-10-22 | `schema-<alias>` keys: a content, media or element type change (or a data type used by it) purges every response that renders an item of that type, not only listings filtered by it. |
+| 2026-10-22 | Listings are purged a second time once every server's Delivery API index has the change, checked by comparing a stamp of the item's state written into each index document with its state in the database, replacing fixed re-purge delays. A time stamp was tried first and accepted a draft's document built just before the publish. |
 | 2026-10-22 | Unpublishing always purges every culture: Umbraco raises it only when the whole document goes. A sort's re-publish of the sorted items is not recorded as a publish. Items deleted from the recycle bin are not recorded again. Public access changes purge everything. |
 
 ## Debugging
@@ -166,8 +183,10 @@ Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's key
 1. Spike (done, `spike/FINDINGS.md`).
 2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
    purge planner, the lookup API.
-3. Outbox, ack barrier, webhook target, signing (and the listing re-purge, pulled forward from 4).
-4. More event sources, distributed output cache eviction for the listing re-purge. Listing keys
+3. Outbox, ack barrier, webhook target, signing (done; the listing purge was pulled forward from 4
+   as fixed delays).
+4. Listings purged once every server's index has the change, with each server evicting its own
+   listing responses (done). More event sources (public access, done in 3). Listing keys
    (`type-`, `children-`, `search-`) must be purged once the Delivery API index has the change:
    purged earlier, the frontend refetches the old listing and keeps it until its safety revalidate.
    On a fresh boot the samples measured the index taking over half a minute.

@@ -303,9 +303,9 @@ global packages folder and does not look at the file again, so give each pack a 
 
 Each change is logged when it is planned and when it is released:
 `Cache tags change <id> (Published) plans content-..., type-...` and
-`Cache tags change <id> released: 10 keys in 2 purges.` The later purges re-purge listings
-(`CacheTags:ListingRepurgeDelays`, 5, 20 and 45 seconds), as the Delivery API index catches up with
-the change.
+`Cache tags change <id> released: 10 keys in 2 purges.` A change that reaches listings is purged a
+second time once every server's Delivery API index has it:
+`Cache tags change <id> indexed: 6 listing keys purged.`
 
 The admin-only lookup API answers what a key covers and what recent changes planned, sent and to whom:
 `GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
