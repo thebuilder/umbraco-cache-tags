@@ -30,9 +30,9 @@ case-sensitively, so a key that differed only in case would behave differently p
   broad keys are stale-while-revalidate.
 - `CacheTags:KeyPrefix` (default empty) prefixes every key, for a site that shares a CDN zone with
   another app using the same names.
-- These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`).
-  Those are internal to Umbraco; one internal function maps a key to Umbraco's tag when the package
-  evicts Umbraco's output cache. Do not "align" them.
+- These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`),
+  which are internal to Umbraco. The package adds its own keys to Umbraco's output cache entries
+  (`OutputCacheTags`) and evicts by those, so the two never need to match.
 
 ## The response header
 
@@ -113,9 +113,9 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 }
 ```
 
-- `expire` holds `response-`, `content-` and `media-` keys: one response or item, purged at once.
-  `stale` holds `type-`, `children-`, `search-` and `umbraco`: listings or everything, served stale
-  while they refresh. The package decides, so a receiver needs no knowledge of key names.
+- `expire` holds `response-`, `content-`, `media-` and `x-` keys: one response, item or custom
+  output, purged at once. `stale` holds `type-`, `children-`, `search-`, `schema-` and `umbraco`:
+  listings, types or everything, served stale while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
   A change sends several purges: one per `MaxKeysPerRequest` keys, and its listing purge.
 - A receiver that does not know `version` must not purge, and answers with an error.
@@ -268,8 +268,8 @@ usually its cache refresher's notification handler. Without it, the purge goes a
 server reads straight from the database.
 
 ```csharp
-public Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken token)
-    => changes.Record(languages.Select(l => $"x-dictionary-{l.IsoCode.ToLowerInvariant()}"), "dictionary");
+public async Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken token)
+    => changes.Record((await languages.GetAllAsync()).Select(l => $"x-dictionary-{l.IsoCode.ToLowerInvariant()}"), "dictionary");
 
 public void Handle(DictionaryCacheRefresherNotification notification) => changes.Applied("dictionary");
 ```

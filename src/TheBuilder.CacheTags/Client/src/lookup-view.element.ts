@@ -20,7 +20,8 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
   @state() private _search?: SearchResult;
 
   #searchTimer?: ReturnType<typeof setTimeout>;
-  #searchText = "";
+  /** Bumped by every lookup, search and reset, so an answer that arrives late is dropped. */
+  #generation = 0;
   #fromUrl = () => this.#show(new URLSearchParams(window.location.search));
 
   connectedCallback(): void {
@@ -66,7 +67,8 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
 
   #reset(): void {
     clearTimeout(this.#searchTimer);
-    this.#searchText = "";
+    this.#generation++;
+    this._loading = false;
     this._key = "";
     this._search = undefined;
     this._lookup = undefined;
@@ -80,6 +82,7 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
 
   #typed(text: string): void {
     this._key = text;
+    this._lookup = undefined;
     clearTimeout(this.#searchTimer);
     const query = text.trim();
     if (query.length < 2) {
@@ -94,23 +97,26 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
   }
 
   async #searchFor(query: string): Promise<void> {
-    this.#searchText = query;
+    const generation = ++this.#generation;
     try {
       const result = await api.search(query);
       // A slower, older search must not replace a newer one's results.
-      if (this.#searchText === query) {
+      if (generation === this.#generation) {
         this._search = result;
         this._error = undefined;
       }
     } catch (error) {
-      this._error = errorMessage(error, "Could not search.");
+      if (generation === this.#generation) {
+        this._error = errorMessage(error, "Could not search.");
+      }
     }
   }
 
   async #lookUp(key: string, push = true): Promise<void> {
     clearTimeout(this.#searchTimer);
-    this.#searchText = "";
+    const generation = ++this.#generation;
     this._search = undefined;
+    this._lookup = undefined;
     this._key = key.trim();
     if (!this._key) {
       return;
@@ -121,11 +127,19 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
     this._loading = true;
     this._error = undefined;
     try {
-      this._lookup = await api.lookup(this._key);
+      const lookup = await api.lookup(this._key);
+      // Another lookup, a search, Back or Clear may have come since; only the latest counts.
+      if (generation === this.#generation) {
+        this._lookup = lookup;
+      }
     } catch (error) {
-      this._error = errorMessage(error, "Could not look the key up.");
+      if (generation === this.#generation) {
+        this._error = errorMessage(error, "Could not look the key up.");
+      }
     } finally {
-      this._loading = false;
+      if (generation === this.#generation) {
+        this._loading = false;
+      }
     }
   }
 
@@ -222,8 +236,12 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
               </uui-table-head>
               ${search.responses.map(
                 (response) => html`
-                  <uui-table-row class="clickable" @click=${() => this.#lookUp(response.key)}>
-                    <uui-table-cell>${requestTemplate(response.path, response.query)}</uui-table-cell>
+                  <uui-table-row>
+                    <uui-table-cell>
+                      <button type="button" class="open" @click=${() => this.#lookUp(response.key)}>
+                        ${requestTemplate(response.path, response.query)}
+                      </button>
+                    </uui-table-cell>
                     <uui-table-cell>${response.culture || "invariant"}</uui-table-cell>
                     <uui-table-cell>${time(response.seenUtc)}</uui-table-cell>
                   </uui-table-row>
@@ -283,7 +301,7 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
         <p>
           ${count === 0
             ? "No served response includes this key."
-            : `Included in ${count} served response${count === 1 ? "" : "s"}${lookup.responses.length < count ? `; the ${lookup.responses.length} most recently served are shown` : ""}.`}
+            : `Included in ${count} served response${count === 1 ? "" : "s"}${lookup.responses.length < count ? `. The first ${lookup.responses.length} are shown` : ""}.`}
           Searches and other catch-all listings carry their keys themselves and are not recorded.
         </p>
         ${lookup.responses.length > 0
@@ -335,8 +353,19 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
         margin-top: var(--uui-size-space-1);
         color: var(--uui-color-text-alt);
       }
-      .clickable {
+      .open {
+        display: block;
+        width: 100%;
+        border: 0;
+        background: none;
+        padding: 0;
+        color: inherit;
+        font: inherit;
+        text-align: left;
         cursor: pointer;
+      }
+      .open:hover .path {
+        text-decoration: underline;
       }
     `,
   ];

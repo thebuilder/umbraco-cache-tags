@@ -34,6 +34,7 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
       const prefix = context.getEntityType() === "media" ? "media-" : "content-";
       this.observe(context.unique, (unique) => {
         this._key = unique ? `${prefix}${unique}` : undefined;
+        this._busy = false;
         this.#load();
       });
     });
@@ -42,24 +43,32 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
   async #load(): Promise<void> {
     this._lookup = undefined;
     this._error = undefined;
-    if (!this._key) {
+    const key = this._key;
+    if (!key) {
       return;
     }
     try {
-      this._lookup = await api.lookup(this._key);
+      const lookup = await api.lookup(key);
+      // The editor may have moved to another item while this one loaded.
+      if (this._key === key) {
+        this._lookup = lookup;
+      }
     } catch (error) {
-      this._error = errorMessage(error, "Could not read the cache.");
+      if (this._key === key) {
+        this._error = errorMessage(error, "Could not read the cache.");
+      }
     }
   }
 
   async #purge(): Promise<void> {
-    if (!this._key) {
+    const key = this._key;
+    if (!key) {
       return;
     }
+    const count = this._lookup?.responseCount ?? 0;
     this._busy = true;
     try {
-      await api.purge([this._key]);
-      const count = this._lookup?.responseCount ?? 0;
+      await api.purge([key]);
       this.#notification?.peek("positive", {
         data: {
           message:
@@ -71,7 +80,9 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
     } catch (error) {
       this.#notification?.peek("danger", { data: { message: errorMessage(error, "Could not purge.") } });
     } finally {
-      this._busy = false;
+      if (this._key === key) {
+        this._busy = false;
+      }
     }
   }
 

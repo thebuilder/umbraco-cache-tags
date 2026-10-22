@@ -41,7 +41,7 @@ The other Delivery API parameters (`expand`, `fields`, `sort`, `skip`, `take`) o
 
 ## Catch-all listings
 
-The package does not record a listing selected by a search, a name filter, or any filter other than a content type. Such listings vary with input without end. Recording them would store a row for each variation, and every publish would purge every one. Each such response carries its keys in its own header instead:
+The package does not record a listing selected by a search, a name filter, or any filter other than a content type, or a listing with no parent or content type to select it, such as all descendants of a path. Such listings vary with input without end. Recording them would store a row for each variation, and every publish would purge every one. Each such response carries its keys in its own header instead:
 
 ```http
 X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco

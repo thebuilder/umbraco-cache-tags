@@ -71,7 +71,7 @@ export class CacheTagsPurgeViewElement extends UmbElementMixin(LitElement) {
               this._keys = (event.target as HTMLTextAreaElement).value;
             }}></uui-textarea>
           <div class="row">
-            <uui-button look="primary" label=${keys.length > 1 ? `Purge ${keys.length} keys` : "Purge"} ?disabled=${this._busy || keys.length === 0} @click=${() => this.#purge(keys)}></uui-button>
+            <uui-button look="primary" label=${keys.length > 1 ? `Purge ${keys.length} keys` : "Purge"} ?disabled=${this._busy || keys.length === 0} @click=${() => (keys.includes("umbraco") ? this.#purgeEverything() : this.#purge(keys))}></uui-button>
           </div>
         </uui-box>
         <uui-box headline="Purge everything">

@@ -33,7 +33,7 @@ Each value, whether the signing secret, a header or a Cloudflare token, is eithe
 The package stores a typed value in the database in plain text, and shows it to administrators. Put secrets in an environment variable, such as `CacheTags__Vercel__Secret`, or in your host's secret store, and name that setting instead.
 :::
 
-- **A missing setting fails the purge, not the save.** If a setting that a target names is not set on a server, the target shows a problem. Its purges from that server fail with an error that names the header or secret, never the setting, and the package retries them until the setting is deployed.
+- **A missing setting fails the purge, not the save.** If a setting that a target names is not set on a server, the target shows a problem. Its purges from that server fail with an error that names the header or secret, never the setting. The package retries them with backoff, up to `MaxAttempts` (10 tries over about 17 minutes), and then lists them under **Failed purges**, where **Retry** sends them again once the setting is deployed.
 - **Send test purge** sends the target a purge of `x-cache-tags-test`, a key nothing carries, and says whether the target accepted it. It works before you save.
 - **The name never changes**, because the package queues purges under it. Deleting a target sets its unsent purges aside.
 - **A name in `appsettings.json` wins.** The package ignores a backoffice target with the same name, and logs a warning.
@@ -45,7 +45,7 @@ A backoffice target can only connect to public internet addresses, so an adminis
 
 The limit doesn't apply to targets in `appsettings.json`, or to target types you register, which make their own requests.
 
-To check the address it connects to, a backoffice target connects directly, not through `HTTPS_PROXY` or the system proxy. If your site reaches the internet only through a proxy, configure its targets in `appsettings.json`, which use the proxy as usual.
+To check the address it connects to, a backoffice target connects directly, not through `HTTPS_PROXY` or the system proxy, unless `AllowPrivateNetworkTargets` is on. If your site reaches the internet only through a proxy, configure its targets in `appsettings.json`, which use the proxy as usual.
 
 ## Request headers
 
@@ -88,7 +88,7 @@ When the package signed the purge, in Unix seconds. Refuse a purge more than 5 m
 </ParamField>
 
 <ParamField body="version" type="integer">
-Always `1` for now. A receiver that does not know the version must answer with an error, so the package retries the purge after you update the receiver.
+Always `1` for now. A receiver that does not know the version must answer with an error, so the purge fails and shows under **Failed purges** instead of being lost.
 </ParamField>
 
 <ParamField body="id" type="string">
@@ -104,7 +104,7 @@ Keys that name one response or one item: `response-`, `content-`, `media-` and `
 </ParamField>
 
 <ParamField body="stale" type="string[]">
-Listing keys and `umbraco`. Serve them stale while they refresh if the receiver can, or purge them too.
+Listing keys (`type-`, `children-`, `search-`), `schema-` keys and `umbraco`. Serve them stale while they refresh if the receiver can, or purge them too.
 </ParamField>
 
 Any 2xx answer counts as delivered. Anything else, or no answer within 10 seconds, counts as a failure, and the package tries again after 2, 4, 8 and more seconds.

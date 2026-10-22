@@ -62,7 +62,7 @@ internal sealed record ChangeLookup(
     IReadOnlyList<string> IndexedBy,
     Change Change,
     PurgePlan Plan,
-    IReadOnlyList<string> Responses,
+    int ResponseCount,
     IReadOnlyList<Purge> Purges);
 
 internal sealed class CacheTagsLookup(
@@ -140,7 +140,7 @@ internal sealed class CacheTagsLookup(
                 acks.IndexedBy(change.Id).Order(StringComparer.Ordinal).ToList(),
                 change.Change,
                 change.Plan,
-                resolved.Responses,
+                resolved.Responses.Count,
                 ledger.PurgesOf(change.Id)));
         }
 

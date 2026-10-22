@@ -112,7 +112,8 @@ export interface ChangeLookup {
   indexedBy: string[];
   change: { reason: string | null; items: { key: string; typeAlias: string }[]; keys: string[] | null; waitFor: string | null };
   plan: { keys: string[]; everything: boolean; cultures: string[] | null };
-  responses: string[];
+  /** How many recorded responses the plan reaches now. */
+  responseCount: number;
   purges: Purge[];
 }
 
