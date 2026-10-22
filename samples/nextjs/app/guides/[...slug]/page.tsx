@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { CacheInfo } from "@/app/cache-info";
 import { type Guide, GuidePage } from "@/app/guide-page";
-import { Pending } from "@/app/pending";
 import { type ApiContent, type ApiLink, type ApiPaged, contentByRoute, deliveryApi, href } from "@/lib/umbraco";
 
 type Category = { title: string; intro: string; featured: ApiLink[] | null };
@@ -12,15 +10,7 @@ type Category = { title: string; intro: string; featured: ApiLink[] | null };
  * A category or guide page under /guides, at any depth, with breadcrumbs (its ancestors) and the
  * pages under it (its children). Both are listings: renaming Guides changes every breadcrumb here.
  */
-export default function GuideRoutePage({ params }: PageProps<"/guides/[...slug]">) {
-  return (
-    <Suspense fallback={<Pending />}>
-      <GuideRouteContent params={params} />
-    </Suspense>
-  );
-}
-
-async function GuideRouteContent({ params }: Pick<PageProps<"/guides/[...slug]">, "params">) {
+export default async function GuideRoutePage({ params }: PageProps<"/guides/[...slug]">) {
   const { slug } = await params;
   const path = `/guides/${slug.join("/")}/`;
   const [page, ancestors, children] = await Promise.all([

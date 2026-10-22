@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { CacheInfo } from "@/app/cache-info";
 import { Picture } from "@/app/media";
-import { Pending } from "@/app/pending";
 import { type ApiLink, type ApiMedia, contentByRoute, cultures, href } from "@/lib/umbraco";
 
 type Event = { title: string; description: string; date: string; image: ApiMedia[] | null; venue: ApiLink | null };
@@ -12,15 +10,7 @@ type Event = { title: string; description: string; date: string; image: ApiMedia
  * One event in one culture. Title and description vary by culture; date, image and venue are shared,
  * so changing one of those changes both cultures, whichever culture is published.
  */
-export default function EventPage({ params }: PageProps<"/[locale]/events/[slug]">) {
-  return (
-    <Suspense fallback={<Pending />}>
-      <EventContent params={params} />
-    </Suspense>
-  );
-}
-
-async function EventContent({ params }: Pick<PageProps<"/[locale]/events/[slug]">, "params">) {
+export default async function EventPage({ params }: PageProps<"/[locale]/events/[slug]">) {
   const { locale, slug } = await params;
   const culture = cultures[locale];
   if (!culture) {

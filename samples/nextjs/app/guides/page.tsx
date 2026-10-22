@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { CacheInfo } from "@/app/cache-info";
 import { Picture } from "@/app/media";
-import { Pending } from "@/app/pending";
 import { type ApiContent, type ApiLink, type ApiMedia, type ApiPaged, contentByRoute, deliveryApi, href } from "@/lib/umbraco";
 
 type Section = { title: string; intro: string; image: ApiMedia[] | null; featured: ApiLink[] | null };
@@ -15,15 +13,7 @@ type Category = { title: string; intro: string };
  * content type), and the three most recently updated items (found only by sorting). Renaming a
  * category changes the routes of every page under it; editing any guide can change the last list.
  */
-export default function GuidesPage() {
-  return (
-    <Suspense fallback={<Pending />}>
-      <GuidesContent />
-    </Suspense>
-  );
-}
-
-async function GuidesContent() {
+export default async function GuidesPage() {
   await connection();
   const [section, categories, guides, recent] = await Promise.all([
     contentByRoute<Section>("/guides/"),
