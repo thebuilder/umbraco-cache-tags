@@ -17,6 +17,13 @@ namespace TheBuilder.CacheTags.Storage;
 public interface ICacheTagStore
 {
     /// <summary>Adds or refreshes rendered responses and the keys they cover.</summary>
+    /// <remarks>
+    ///     Must throw when any response could not be recorded, even if the others were: those responses
+    ///     are out with their keys already, so the package writes each of them again (one by one, then
+    ///     after 2, 4, 8 ... seconds) until it succeeds. A store that swallows a failure loses that
+    ///     response's mapping, and no purge reaches it. Because of these retries a response can be
+    ///     recorded more than once, so recording must be an idempotent, additive upsert.
+    /// </remarks>
     Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default);
 
     /// <summary>Marks responses as served (for example from an output cache) at <paramref name="seenUtc" />.</summary>

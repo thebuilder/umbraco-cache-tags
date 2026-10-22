@@ -30,15 +30,12 @@ public sealed class ResultStatusTests : IAsyncLifetime
     private static readonly CacheTagsOptions Settings = new();
 
     private readonly RecordingStore _store = new();
+    private readonly TestDatabase _database = new();
     private readonly MappingWriter _writer;
 
     public ResultStatusTests()
     {
-        var database = new PackageDatabase(
-            Stub<IScopeProvider>.Of(),
-            Stub<IRuntimeState>.Of((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
-            Stub<IKeyValueService>.Of((method, _) => method.Name == nameof(IKeyValueService.GetValue) ? new CacheTagsMigrationPlan().FinalState : null));
-        _writer = new MappingWriter(_store, database, Options(), TimeProvider.System, NullLogger<MappingWriter>.Instance);
+        _writer = new MappingWriter(_store, _database.Package, new TestOptions(Settings), TimeProvider.System, NullLogger<MappingWriter>.Instance);
     }
 
     public Task InitializeAsync() => _writer.StartAsync(CancellationToken.None);
@@ -47,6 +44,7 @@ public sealed class ResultStatusTests : IAsyncLifetime
     {
         await _writer.StopAsync(CancellationToken.None);
         _writer.Dispose();
+        _database.Dispose();
     }
 
     [Fact]
@@ -102,13 +100,13 @@ public sealed class ResultStatusTests : IAsyncLifetime
     private async Task<HttpResponse> RunAsync(Type controller, string path, IActionResult result)
     {
         var filter = new CacheKeyResultFilter(
-            Options(),
-            Stub<IRequestPreviewService>.Of(),
-            Stub<IRequestCultureService>.Of(),
-            Stub<IRequestSegmentService>.Of(),
-            Stub<IRequestStartItemProvider>.Of(),
-            Stub<IVariationContextAccessor>.Of(),
-            new ResponseCollector(null!, null!, null!, null!, null!, null!),
+            new TestOptions(Settings),
+            Fake.Of<IRequestPreviewService>(),
+            Fake.Of<IRequestCultureService>(),
+            Fake.Of<IRequestStartItemProvider>(),
+            Fake.Of<IVariationContextAccessor>(),
+            new ResponseCollector(null!, null!, null!, null!, null!, null!, null!),
+            Names.Of([]),
             new CacheTagsResponse(),
             _writer,
             TimeProvider.System);
@@ -144,9 +142,6 @@ public sealed class ResultStatusTests : IAsyncLifetime
             binder: null,
             [result],
             culture: null)!;
-
-    private static IOptionsMonitor<CacheTagsOptions> Options()
-        => Stub<IOptionsMonitor<CacheTagsOptions>>.Of((method, _) => method.Name is "get_CurrentValue" or "Get" ? Settings : null);
 
     [CacheTagged]
     private sealed class TaggedController

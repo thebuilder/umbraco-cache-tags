@@ -38,7 +38,7 @@ internal sealed class TestDatabase : IDisposable
         Sql = new Database(_connection, DatabaseType.SQLite);
         Sql.Execute(Schema);
 
-        IUmbracoDatabase umbracoDatabase = Fake.Of<IUmbracoDatabase>((method, args) => Forward(method, args));
+        IUmbracoDatabase umbracoDatabase = Fake.Forwarding<IUmbracoDatabase>(Sql);
         IScope scope = Fake.Of<IScope>((method, _) => method.Name == "get_Database" ? umbracoDatabase : null);
         Package = new PackageDatabase(
             Fake.Of<IScopeProvider>((method, _) => method.Name == nameof(IScopeProvider.CreateScope) ? scope : null),
@@ -55,19 +55,6 @@ internal sealed class TestDatabase : IDisposable
     {
         Sql.Dispose();
         _connection.Dispose();
-    }
-
-    private object? Forward(MethodInfo method, object?[] args)
-    {
-        try
-        {
-            return method.Invoke(Sql, args);
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException is not null)
-        {
-            ExceptionDispatchInfo.Throw(exception.InnerException);
-            throw;
-        }
     }
 }
 
@@ -92,6 +79,22 @@ public class Fake : DispatchProxy
         return proxy;
     }
 
+    /// <summary>A <typeparamref name="T" /> that calls each member on <paramref name="target" />.</summary>
+    public static T Forwarding<T>(object target)
+        where T : class
+        => Of<T>((method, args) =>
+        {
+            try
+            {
+                return method.Invoke(target, args);
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Throw(exception.InnerException);
+                throw;
+            }
+        });
+
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         MethodInfo method = targetMethod!;
@@ -105,12 +108,97 @@ public class Fake : DispatchProxy
             : null;
 }
 
-/// <summary>A clock that stands still until a test moves it.</summary>
-internal sealed class ManualTime(DateTime startUtc) : TimeProvider
+/// <summary>
+///     A clock that stands still until a test moves it, and then fires the timers (delays, timeouts)
+///     that have fallen due.
+/// </summary>
+internal sealed class ManualTime(DateTime? startUtc = null) : TimeProvider
 {
-    public DateTime UtcNow { get; set; } = startUtc;
+    private readonly Lock _lock = new();
+    private readonly List<ManualTimer> _timers = [];
+    private DateTime _utcNow = startUtc ?? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    public DateTime UtcNow
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _utcNow;
+            }
+        }
+
+        set
+        {
+            List<ManualTimer> due;
+            lock (_lock)
+            {
+                _utcNow = value;
+                due = _timers.Where(timer => timer.DueUtc <= _utcNow).ToList();
+                _timers.RemoveAll(due.Contains);
+            }
+
+            foreach (ManualTimer timer in due)
+            {
+                timer.Fire();
+            }
+        }
+    }
+
+    public void Advance(TimeSpan by) => UtcNow += by;
 
     public override DateTimeOffset GetUtcNow() => new(UtcNow, TimeSpan.Zero);
+
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+    {
+        var timer = new ManualTimer(this, callback, state);
+        timer.Change(dueTime, period);
+        return timer;
+    }
+
+    // One-shot: the package's delays and timeouts never repeat.
+    private sealed class ManualTimer(ManualTime time, TimerCallback callback, object? state) : ITimer
+    {
+        public DateTime DueUtc { get; private set; }
+
+        public bool Change(TimeSpan dueTime, TimeSpan period)
+        {
+            lock (time._lock)
+            {
+                time._timers.Remove(this);
+                if (dueTime == Timeout.InfiniteTimeSpan)
+                {
+                    return true;
+                }
+
+                DueUtc = time._utcNow + dueTime;
+                time._timers.Add(this);
+            }
+
+            if (dueTime == TimeSpan.Zero)
+            {
+                time.Advance(TimeSpan.Zero);
+            }
+
+            return true;
+        }
+
+        public void Fire() => callback(state);
+
+        public void Dispose()
+        {
+            lock (time._lock)
+            {
+                time._timers.Remove(this);
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
 }
 
 /// <summary>The real clock, with every timer and delay a thousand times shorter.</summary>

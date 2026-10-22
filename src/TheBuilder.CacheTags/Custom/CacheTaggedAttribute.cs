@@ -14,7 +14,10 @@ public sealed class CacheTaggedAttribute : Attribute
     ///     The query parameters that select what a response covers, such as <c>locale</c>. Only these
     ///     are part of its <c>response-</c> key; requests that differ in any other parameter share it.
     ///     None by default: list only parameters with a bounded set of values, or every value sent
-    ///     becomes a key of its own.
+    ///     becomes a key of its own. Values are compared lowercased and without whitespace, with a
+    ///     list after a <c>:</c> sorted and an id in one form, so <c>?locale=da-DK</c> and
+    ///     <c>?locale=da-dk</c> share a key. That is safe even where the action tells them apart: the
+    ///     shared key covers what each response showed, so a purge reaches both.
     /// </summary>
     public string[] QueryParameters { get; set; } = [];
 

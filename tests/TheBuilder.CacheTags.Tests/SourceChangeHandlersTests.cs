@@ -47,14 +47,14 @@ public sealed class SourceChangeHandlersTests : IDisposable
                 Change TEXT NOT NULL, Plan TEXT NOT NULL, Signal TEXT NULL, Status TEXT NULL, ReleasedUtc TEXT NULL, Missing TEXT NULL);
             """);
 
-        IUmbracoDatabase umbracoDatabase = Stub<IUmbracoDatabase>.Forwarding(_sql);
-        IScope scope = Stub<IScope>.Of((method, _) => method.Name == "get_Database" ? umbracoDatabase : null);
+        IUmbracoDatabase umbracoDatabase = Fake.Forwarding<IUmbracoDatabase>(_sql);
+        IScope scope = Fake.Of<IScope>((method, _) => method.Name == "get_Database" ? umbracoDatabase : null);
         var database = new PackageDatabase(
-            Stub<IScopeProvider>.Of((method, _) => method.Name == nameof(IScopeProvider.CreateScope) ? scope : null),
-            Stub<IRuntimeState>.Of((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
-            Stub<IKeyValueService>.Of((method, _) => method.Name == nameof(IKeyValueService.GetValue) ? new CacheTagsMigrationPlan().FinalState : null));
+            Fake.Of<IScopeProvider>((method, _) => method.Name == nameof(IScopeProvider.CreateScope) ? scope : null),
+            Fake.Of<IRuntimeState>((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
+            Fake.Of<IKeyValueService>((method, _) => method.Name == nameof(IKeyValueService.GetValue) ? new CacheTagsMigrationPlan().FinalState : null));
         _ledger = new LedgerStore(database);
-        IOptionsMonitor<CacheTagsOptions> options = Stub<IOptionsMonitor<CacheTagsOptions>>.Of((method, _) => method.Name is "get_CurrentValue" or "Get" ? new CacheTagsOptions() : null);
+        IOptionsMonitor<CacheTagsOptions> options = Fake.Of<IOptionsMonitor<CacheTagsOptions>>((method, _) => method.Name is "get_CurrentValue" or "Get" ? new CacheTagsOptions() : null);
         var recorder = new ChangeRecorder(
             new PurgePlanner(new PurgePlannerTests.Tree()),
             database,
@@ -67,13 +67,13 @@ public sealed class SourceChangeHandlersTests : IDisposable
         _handlers = new SourceChangeHandlers(
             recorder,
             new PendingOperations(),
-            Stub<IIdKeyMap>.Of((method, args) => method.Name == nameof(IIdKeyMap.GetKeyForId) && args is [1059, _] ? Attempt<Guid>.Succeed(Site) : null),
-            Stub<IDocumentUrlService>.Of(),
-            Stub<IDefaultCultureAccessor>.Of(),
+            Fake.Of<IIdKeyMap>((method, args) => method.Name == nameof(IIdKeyMap.GetKeyForId) && args is [1059, _] ? Attempt<Guid>.Succeed(Site) : null),
+            Fake.Of<IDocumentUrlService>(),
+            Fake.Of<IDefaultCultureAccessor>(),
             Strings,
             new UrlSegmentProviderCollection(() => []),
-            Stub<IContentTypeService>.Of((method, args) => method.Name == "Get" && args is [Guid key] ? Persisted<IContentType>(key) : null),
-            Stub<IMediaTypeService>.Of((method, args) => method.Name == "Get" && args is [Guid key] ? Persisted<IMediaType>(key) : null),
+            Fake.Of<IContentTypeService>((method, args) => method.Name == "Get" && args is [Guid key] ? Persisted<IContentType>(key) : null),
+            Fake.Of<IMediaTypeService>((method, args) => method.Name == "Get" && args is [Guid key] ? Persisted<IMediaType>(key) : null),
             TimeProvider.System,
             NullLogger<SourceChangeHandlers>.Instance);
     }
@@ -157,5 +157,5 @@ public sealed class SourceChangeHandlersTests : IDisposable
 
     private T? Persisted<T>(Guid key)
         where T : class, IContentTypeComposition
-        => _persisted.TryGetValue(key, out var alias) ? Stub<T>.Of((method, _) => method.Name == "get_Alias" ? alias : null) : null;
+        => _persisted.TryGetValue(key, out var alias) ? Fake.Of<T>((method, _) => method.Name == "get_Alias" ? alias : null) : null;
 }
