@@ -45,8 +45,8 @@ const keys = {
   about: "e0000000-0000-0000-0000-000000000006",
   harbourImage: "e1000000-0000-0000-0000-000000000001",
   articleType: "e3000000-0000-0000-0000-000000000003",
-  // Not seeded: the article case 2 creates, and deletes again.
-  newArticle: "e5000000-0000-0000-0000-000000000001",
+  // Not seeded: the article case 2 creates, and deletes again. e9 keys are kept for this script.
+  newArticle: "e9000000-0000-0000-0000-000000000001",
 };
 
 // What this run appends to the text it changes. Restoring strips any such suffix, so a run that was
