@@ -102,7 +102,7 @@ jobs:
         run: pnpm build
 
   # The sample frontend, so a change to the webhook route or the fetch helper that does not
-  # type-check or build fails here. `pnpm e2e` needs a running Umbraco, so it stays local.
+  # type-check or build fails here. The e2e job below runs it against Umbraco.
   nextjs:
     name: Next.js sample
     runs-on: ubuntu-latest
@@ -135,6 +135,100 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # The whole loop on one server: the sample Umbraco with the package, the Next.js sample, and
+  # `pnpm e2e` publishing changes through the Management API and waiting for the pages to refresh.
+  # On the sample's own Umbraco release (SampleUmbracoVersion), with a fresh SQLite database.
+  e2e:
+    name: End to end
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      UMBRACO_URL: http://localhost:5320
+      FRONTEND_URL: http://localhost:3000
+      # Right after a first start the Delivery API index is slow to pick up a publish.
+      E2E_TIMEOUT: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-default-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-default-
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: samples/nextjs/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: samples/nextjs/pnpm-lock.yaml
+
+      - name: Install the Next.js sample
+        working-directory: samples/nextjs
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the Umbraco sample
+        run: dotnet build samples/TheBuilder.CacheTags.Example -c Release
+
+      # It installs itself into a new SQLite database and seeds the content on the first start.
+      # Development, for the settings the sample runs with locally (its application URL).
+      - name: Start Umbraco
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://localhost:5320
+        run: |
+          nohup dotnet run --project samples/TheBuilder.CacheTags.Example -c Release --no-build --no-launch-profile > "$RUNNER_TEMP/umbraco.log" 2>&1 &
+
+      # The Next.js listing pages cache an empty listing for an hour, so nothing fetches them
+      # before Umbraco's Delivery API index has the seeded articles (about a minute on a first start).
+      - name: Wait for the Delivery API index
+        run: |
+          for attempt in $(seq 1 60); do
+            total="$(curl -sf "$UMBRACO_URL/umbraco/delivery/api/v2/content?fetch=children:/articles/" | jq -r '.total' || true)"
+            if [[ "$total" =~ ^[0-9]+$ ]] && (( total > 0 )); then
+              echo "The index has $total articles."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Umbraco's Delivery API index had no articles after 5 minutes." >&2
+          exit 1
+
+      - name: Build and start the Next.js sample
+        working-directory: samples/nextjs
+        run: |
+          pnpm build
+          nohup pnpm start > "$RUNNER_TEMP/nextjs.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl -sf -o /dev/null "$FRONTEND_URL/" && exit 0
+            sleep 2
+          done
+          echo "The Next.js sample did not answer." >&2
+          exit 1
+
+      - name: End to end
+        working-directory: samples/nextjs
+        run: pnpm e2e
+
+      - name: Logs
+        if: failure()
+        run: |
+          echo "::group::Umbraco"
+          cat "$RUNNER_TEMP/umbraco.log" || true
+          echo "::endgroup::"
+          echo "::group::Next.js"
+          cat "$RUNNER_TEMP/nextjs.log" || true
+          echo "::endgroup::"
 
   package:
     name: Solution and package

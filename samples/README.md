@@ -260,6 +260,16 @@ to refresh:
    its cache is reported, not judged.
 4. The Harbour image is renamed. The article and `/articles` must show the new name (it is the
    image's alt text).
+5. The footer's dictionary item changes. `/articles` and `/en-us/about` must show it (see
+   [The site's own API](#the-sites-own-api-the-dictionary)).
+6. Evenings at dusk is unpublished. Its page must be not found, and `/articles` and Harbour mornings
+   (which picks it as related) must stop showing it. A page whose shell is prerendered has already
+   answered 200 when it finds the item gone, so "not found" also means Next.js streamed its 404.
+7. The articles are sorted in reverse. `/articles` (sorted by sort order) must list them in the new
+   order. Like case 2, it waits for the Delivery API index.
+
+CI runs the same suite on every pull request (the `e2e` job in `.github/workflows/verify.yml`), on a
+fresh database, after waiting for the index.
 
 Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
 page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its
