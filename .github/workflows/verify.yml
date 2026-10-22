@@ -243,8 +243,8 @@ jobs:
       - name: Umbraco's threads
         if: failure()
         run: |
-          dotnet tool install --global dotnet-stack
-          dotnet-stack report --process-id "$(cat "$RUNNER_TEMP/umbraco.pid")" || true
+          dotnet tool install --global dotnet-stack || true
+          ~/.dotnet/tools/dotnet-stack report --process-id "$(cat "$RUNNER_TEMP/umbraco.pid")" || true
 
       - name: Logs
         if: failure()

@@ -23,13 +23,20 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
     ///     (the Delivery API is off), nothing can wait for it.
     /// </summary>
     public bool Has(Change change)
-        => examine.TryGetIndex(IndexName, out IIndex index) is false
-            // Runs on the delivery worker while editors may be saving (see PackageDatabase.ReadUmbraco).
-            || database.ReadUmbraco(() => change.Items.All(item => Has(index, item)));
-
-    private bool Has(IIndex index, ChangedItem item)
     {
-        IContent? content = contentService.GetById(item.Key);
+        if (examine.TryGetIndex(IndexName, out IIndex index) is false)
+        {
+            return true;
+        }
+
+        // Runs on the delivery worker while editors may be saving (see PackageDatabase.ReadUmbraco).
+        // Only the database reads hold the lock; the index is searched after.
+        IReadOnlyList<IContent?> items = database.ReadUmbraco(() => change.Items.Select(item => contentService.GetById(item.Key)).ToList());
+        return items.All(content => Has(index, content));
+    }
+
+    private bool Has(IIndex index, IContent? content)
+    {
         if (content is null)
         {
             // Deleted: without its id there is nothing to look up, and Umbraco removes its documents.
