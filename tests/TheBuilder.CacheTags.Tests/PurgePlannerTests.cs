@@ -12,17 +12,18 @@ public sealed class PurgePlannerTests
     private static readonly Guid Folder = new("20000000-0000-0000-0000-0000000000ff");
 
     // C has a guide under it, and a parking page under that.
-    internal sealed class Tree : IDescendants
+    internal sealed class Tree(bool typesFail = false) : IDescendants
     {
         private static readonly Dictionary<Guid, string> Types = new() { [Child] = "guidePage", [Grandchild] = "parkingPage" };
 
         public IEnumerable<Guid> Of(Guid key) => key == C ? [Child, Grandchild] : [];
 
-        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys) => keys.Select(key => Types[key]);
+        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys)
+            => typesFail ? throw new InvalidOperationException("The database is busy.") : keys.Select(key => Types[key]);
     }
 
-    private static PurgePlan Plan(ChangeKind kind, ChangedItem item, int budget = 500, IReadOnlyList<string>? cultures = null)
-        => new PurgePlanner(new Tree()).Plan(new Change(Guid.Empty, DateTime.UnixEpoch, kind, [item], [], cultures), budget);
+    private static PurgePlan Plan(ChangeKind kind, ChangedItem item, int budget = 500, IReadOnlyList<string>? cultures = null, Tree? tree = null)
+        => new PurgePlanner(tree ?? new Tree()).Plan(new Change(Guid.Empty, DateTime.UnixEpoch, kind, [item], [], cultures), budget);
 
     [Fact]
     public void A_publish_reaches_the_item_its_parents_listings_its_type_and_the_index()
@@ -48,6 +49,9 @@ public sealed class PurgePlannerTests
 
         Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
         Assert.Contains("content-10000000-0000-0000-0000-000000000014", plan.Keys);
+
+        // They stay in the same listings, and their content keys reach the ones that show them.
+        Assert.DoesNotContain("type-guidepage", plan.Keys);
     }
 
     [Theory]
@@ -62,12 +66,12 @@ public sealed class PurgePlannerTests
     }
 
     [Fact]
-    public void A_route_change_reaches_the_listings_the_descendants_join_or_leave_with_it()
+    public void An_unpublish_reaches_the_listings_the_descendants_leave_with_it()
     {
         // Unpublishing C takes its guide and parking page out of every listing of their types, also
         // out of pages of them that do not show them. (Publishing C again, Umbraco publishes them
         // again too, which plans their types as any publish does.)
-        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site));
+        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site, RouteChanged: true, Unpublished: true));
 
         Assert.Equal(
             [
@@ -81,6 +85,33 @@ public sealed class PurgePlannerTests
                 "type-parkingpage",
             ],
             plan.Keys);
+    }
+
+    [Fact]
+    public void Unpublishing_one_culture_reaches_the_listings_the_descendants_leave_in_it()
+    {
+        // Raised as a publish of the other cultures.
+        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "category", Site, RouteChanged: true, Unpublished: true), cultures: ["da-DK"]);
+
+        Assert.Contains("type-guidepage", plan.Keys);
+        Assert.Contains("type-parkingpage", plan.Keys);
+    }
+
+    [Fact]
+    public void A_move_leaves_the_descendants_types_to_umbracos_own_list_of_moved_items()
+    {
+        PurgePlan plan = Plan(ChangeKind.Moved, new ChangedItem(C, "category", Site, OldParentKey: Image));
+
+        Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
+        Assert.DoesNotContain("type-guidepage", plan.Keys);
+    }
+
+    [Fact]
+    public void An_unpublish_whose_descendants_types_cannot_be_read_purges_everything()
+    {
+        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site, RouteChanged: true, Unpublished: true), tree: new Tree(typesFail: true));
+
+        Assert.True(plan.Everything);
     }
 
     [Fact]

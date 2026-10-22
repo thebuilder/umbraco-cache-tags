@@ -140,12 +140,25 @@ internal sealed class CacheKeyResultFilter(
     ///     such as the Delivery API's 301 for a moved item, a challenge, a forbid, or one this does not
     ///     know) counts as not a 200: the response still says 200 here.
     /// </summary>
-    internal static (int Status, object? Value) Outcome(IActionResult result, HttpResponse response) => result switch
+    private static (int Status, object? Value) Outcome(IActionResult result, HttpResponse response) => result switch
     {
-        ObjectResult objectResult => (objectResult.StatusCode ?? 200, objectResult.Value),
-        JsonResult json => (json.StatusCode ?? 200, json.Value),
-        IStatusCodeActionResult statusCode => (statusCode.StatusCode ?? 200, null),
+        ObjectResult objectResult => (objectResult.StatusCode ?? response.StatusCode, objectResult.Value),
+        JsonResult json => (json.StatusCode ?? response.StatusCode, json.Value),
+        IStatusCodeActionResult statusCode => (statusCode.StatusCode ?? response.StatusCode, null),
         FileResult or EmptyResult => (response.StatusCode, null),
+        _ when Wrapped(result) is { } inner => Outcome(inner, response),
         _ => (0, null),
     };
+
+    /// <summary>An <see cref="IResult" /> (<c>TypedResults</c>, <c>Results&lt;...&gt;</c>), unwrapped down to the one that answers.</summary>
+    private static (int Status, object? Value) Outcome(IResult result, HttpResponse response) => result switch
+    {
+        INestedHttpResult nested => Outcome(nested.Result, response),
+        IStatusCodeHttpResult statusCode => (statusCode.StatusCode ?? response.StatusCode, (result as IValueHttpResult)?.Value),
+        _ => (0, null),
+    };
+
+    // MVC wraps an IResult an action returns in its internal HttpActionResult.
+    private static IResult? Wrapped(IActionResult result)
+        => result.GetType().GetProperties().FirstOrDefault(property => property.Name == "Result" && typeof(IResult).IsAssignableFrom(property.PropertyType))?.GetValue(result) as IResult;
 }

@@ -55,7 +55,7 @@ export default async function GuidesPage() {
         ))}
       </ul>
       <h2>Every guide, A to Z</h2>
-      <ul>
+      <ul data-listing="a-to-z">
         {guides.data?.items.map((guide) => (
           <li key={guide.id}>
             <Link href={href(guide)}>{guide.name}</Link> <small>{guide.route.path}</small>

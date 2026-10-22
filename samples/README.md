@@ -167,7 +167,7 @@ Settings are in `samples/nextjs/.env` (local values only). Put your own in `.env
 | `/articles/<slug>` | `content/item/articles/<slug>/` |
 | `/en-us/about`, `/da-dk/om-os` | `content/item/<slug>/` with `Accept-Language` |
 | `/guides` | `content/item/guides/`, `content?fetch=children:/guides/`, `content?fetch=descendants:/guides/&filter=contentType:guidePage`, `content?fetch=descendants:/guides/&sort=updateDate:desc&take=3` |
-| `/guides/<path>` (category or guide, any depth) | `content/item/guides/<path>/`, `content?fetch=ancestors:/guides/<path>/`, `content?fetch=children:/guides/<path>/` |
+| `/guides/<path>` (category or guide, any depth) | `content/item/guides/<path>/`, `content?fetch=ancestors:/guides/<path>/`, `content?fetch=children:/guides/<path>/`, `content?fetch=descendants:/guides/<path>/&filter=contentType:guidePage&sort=sortOrder:asc` |
 | `/hidden-courtyard` | `content/item/hidden-courtyard/` |
 | `/blocks` | `content/item/blocks/` |
 | `/photo-essay` | `content/item/photo-essay/`, `media?fetch=children:/photos/city/` |
@@ -262,15 +262,19 @@ to refresh:
    image's alt text).
 5. The footer's dictionary item changes. `/articles` and `/en-us/about` must show it, through the
    site's own `[CacheTagged]` API.
-6. Getting around's guides are sorted. `/guides` must refetch its guide listing (by type) and its
-   recently updated listing (whose order the index decides, keyed by the catch-all `search-` key),
-   and On foot's own page must keep its cache.
+6. Getting around's guides are sorted. `/guides/getting-around` must list them in the new order in
+   its guide listing (by type, in sort order), `/guides` must refetch its recently updated listing
+   (whose order the index decides, keyed by the catch-all `search-` key), and On foot's own
+   response must keep its cache.
 7. The article document type's alias is renamed. Harbour mornings must refetch its response, which
    is recorded under the old alias.
-8. Getting around is unpublished, then published again. `/guides` must stop listing On foot under
-   it, then list it again.
+8. Getting around is unpublished, then published again. The A to Z guide listing on `/guides` must
+   stop listing On foot, then list it again.
 9. On foot is renamed. Its old route must answer Umbraco's 301 with `Cache-Control: no-store` and no
    `X-Umbraco-Cache-Keys`.
+10. The guide document type's alias is renamed. The A to Z guide listing on `/guides`, filtered by the
+    old alias, must end up empty. Umbraco indexes the guides under the new alias up to a minute
+    later, and the listing is purged again once it has; the undo waits for the index too.
 
 Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
 page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its
