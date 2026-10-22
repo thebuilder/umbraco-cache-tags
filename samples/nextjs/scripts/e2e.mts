@@ -129,7 +129,8 @@ async function unpublish(id: string) {
 /** Publishes the document again if a run that was stopped halfway left it unpublished. */
 async function ensurePublished(id: string) {
   const { variants } = await management<{ variants: { state: string }[] }>("GET", `document/${id}`);
-  if (variants.some((variant) => variant.state !== "Published")) {
+  // Draft is the only unpublished state; PublishedPendingChanges is published, with edits not yet out.
+  if (variants.some((variant) => variant.state === "Draft")) {
     await publish(id);
   }
 }
