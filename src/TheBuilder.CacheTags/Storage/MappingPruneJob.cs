@@ -16,6 +16,7 @@ internal sealed class MappingPruneJob(
     ICacheTagStore store,
     IAckTransport transport,
     LedgerStore ledger,
+    PackageDatabase database,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<MappingPruneJob> logger) : IRecurringBackgroundJob
@@ -30,6 +31,11 @@ internal sealed class MappingPruneJob(
 
     public async Task RunJobAsync()
     {
+        if (database.IsInstalled() is false)
+        {
+            return;
+        }
+
         DateTime now = time.GetUtcNow().UtcDateTime;
         DateTime mappingCutoff = now - options.CurrentValue.MappingRetention;
         var removed = await store.PruneAsync(mappingCutoff);

@@ -16,7 +16,7 @@ internal sealed class ServerIdentity(TimeProvider time)
 }
 
 /// <summary>Sends this server's heartbeat every 30 seconds, and leaves on a clean shutdown.</summary>
-internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity, IOptionsMonitor<Configuration.CacheTagsOptions> options, TimeProvider time, ILogger<Heartbeat> logger) : BackgroundService
+internal sealed class Heartbeat(IAckTransport transport, Storage.PackageDatabase database, ServerIdentity identity, IOptionsMonitor<Configuration.CacheTagsOptions> options, TimeProvider time, ILogger<Heartbeat> logger) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
@@ -25,7 +25,7 @@ internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity
         using var timer = new PeriodicTimer(Interval, time);
         do
         {
-            if (options.CurrentValue.Enabled is false)
+            if (options.CurrentValue.Enabled is false || database.IsInstalled() is false)
             {
                 continue;
             }
@@ -36,8 +36,7 @@ internal sealed class Heartbeat(IAckTransport transport, ServerIdentity identity
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Usually the package's tables are not installed yet; the next beat tries again.
-                logger.LogDebug(exception, "Cache tags heartbeat failed.");
+                logger.LogWarning(exception, "Cache tags heartbeat failed; the next one tries again.");
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

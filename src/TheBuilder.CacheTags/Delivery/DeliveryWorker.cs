@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Storage;
 
 namespace TheBuilder.CacheTags.Delivery;
 
@@ -13,6 +14,7 @@ namespace TheBuilder.CacheTags.Delivery;
 ///     releases each change and sends each purge.
 /// </summary>
 internal sealed class DeliveryWorker(
+    PackageDatabase database,
     ChangeRecorder recorder,
     AckProcessor acks,
     Releaser releaser,
@@ -29,7 +31,7 @@ internal sealed class DeliveryWorker(
         while (stoppingToken.IsCancellationRequested is false)
         {
             CacheTagsOptions settings = options.CurrentValue;
-            var busy = settings.Enabled && await RunOnceAsync(stoppingToken);
+            var busy = settings.Enabled && database.IsInstalled() && await RunOnceAsync(stoppingToken);
 
             // While there is work, look again soon; otherwise sleep until a change or refresh wakes us.
             await signal.WaitAsync(busy ? settings.PollInterval : IdleInterval, stoppingToken);
@@ -49,8 +51,7 @@ internal sealed class DeliveryWorker(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Before the package's tables exist (first boot) every pass fails; try again soon.
-            logger.LogDebug(exception, "Cache tags delivery pass failed.");
+            logger.LogWarning(exception, "Cache tags delivery pass failed; it is tried again shortly.");
             return true;
         }
     }

@@ -14,6 +14,7 @@ namespace TheBuilder.CacheTags.Ledger;
 /// </summary>
 internal sealed class ChangeRecorder(
     PurgePlanner planner,
+    Storage.PackageDatabase database,
     LedgerStore ledger,
     ServerIdentity identity,
     DeliverySignal signal,
@@ -35,14 +36,22 @@ internal sealed class ChangeRecorder(
 
         PurgePlan plan = planner.Plan(change, settings.MaxDescendants);
 
-        try
+        if (database.IsInstalled() is false)
         {
-            ledger.Add(change, plan, identity.Name);
-        }
-        catch (Exception exception)
-        {
+            // A change made during the first boot, before the package's migrations have run.
             _unrecorded.Enqueue((change, plan));
-            logger.LogWarning(exception, "Cache tags change {ChangeId} could not be recorded; it is tried again shortly.", change.Id);
+        }
+        else
+        {
+            try
+            {
+                ledger.Add(change, plan, identity.Name);
+            }
+            catch (Exception exception)
+            {
+                _unrecorded.Enqueue((change, plan));
+                logger.LogWarning(exception, "Cache tags change {ChangeId} could not be recorded; it is tried again shortly.", change.Id);
+            }
         }
 
         signal.Wake();
@@ -60,7 +69,7 @@ internal sealed class ChangeRecorder(
     /// <summary>Records the changes that failed before, in order, until one fails again.</summary>
     public void RecordUnrecorded()
     {
-        while (_unrecorded.TryPeek(out var unrecorded))
+        while (database.IsInstalled() && _unrecorded.TryPeek(out var unrecorded))
         {
             ledger.Add(unrecorded.Change, unrecorded.Plan, identity.Name);
             _unrecorded.TryDequeue(out _);

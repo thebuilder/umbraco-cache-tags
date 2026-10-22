@@ -314,3 +314,37 @@ API user works; see `scripts/e2e.mts` for getting a token).
 
 `pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
 `stale`.
+
+## Check it on two servers
+
+`two-servers/run.sh` runs the Umbraco sample as two servers on one SQL Server database, the way a
+load-balanced site runs: A on http://localhost:5320 and B on http://localhost:5321. It needs Docker
+(SQL Server 2022 Developer edition, in `two-servers/compose.yaml`, sa password `LocalOnly-Sql-42!`,
+local only) and the .NET 10 SDK.
+
+```bash
+samples/two-servers/run.sh
+```
+
+It starts SQL Server on port 14330, publishes the sample twice into `two-servers/out/` (each server
+needs its own content root for its Examine index and MainDom), starts A, which installs and seeds the
+database, then B. Wait for A's article listing to fill (about a minute), then, with the Next.js site
+running against A (the default `UMBRACO_URL`), make every change on B:
+
+```bash
+cd samples/nextjs && UMBRACO_URL=http://localhost:5321 pnpm e2e
+```
+
+A purge must now wait for A: B records each change and acknowledges it from its own cache refresh at
+once, A applies the change when it next reads Umbraco's cache instructions (every few seconds), and
+only then is the purge released. The cases take 3 to 8 seconds instead of 1. Without the wait, the
+frontend would refetch from A before A had the change and cache the old content again.
+
+The ledger shows it per change (`theBuilderCacheTagsEvent`, `theBuilderCacheTagsAck`):
+
+```bash
+docker compose -f samples/two-servers/compose.yaml exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'LocalOnly-Sql-42!' -d CacheTags -Q "SELECT e.Kind, e.CreatedUtc, a.Server, a.AckedUtc, e.ReleasedUtc FROM theBuilderCacheTagsEvent e JOIN theBuilderCacheTagsAck a ON a.EventId = e.Id ORDER BY e.CreatedUtc DESC, a.AckedUtc"
+```
+
+`samples/two-servers/run.sh stop` stops both servers and removes the SQL Server container, so the
+next run starts from an empty database.

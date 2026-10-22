@@ -1,4 +1,7 @@
 using NPoco;
+using TheBuilder.CacheTags.Migrations;
+using Umbraco.Cms.Core;
+using Umbraco.Cms.Core.Services;
 using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace TheBuilder.CacheTags.Storage;
@@ -9,10 +12,28 @@ namespace TheBuilder.CacheTags.Storage;
 ///     deadlock (both hold a read lock and wait to write), and Umbraco avoids that by locking before
 ///     it reads. On SQL Server it is a row lock that orders the package's own writes.
 /// </summary>
-internal sealed class PackageDatabase(IScopeProvider scopeProvider)
+internal sealed class PackageDatabase(IScopeProvider scopeProvider, IRuntimeState runtimeState, IKeyValueService keyValues)
 {
     /// <summary>The package's row in <c>umbracoLock</c>, added by its migration. Umbraco's own ids are -331 and up.</summary>
     public const int LockId = -91730;
+
+    private static readonly string FinalState = new CacheTagsMigrationPlan().FinalState;
+
+    private volatile bool _installed;
+
+    /// <summary>
+    ///     Whether Umbraco is running and the package's migrations have all run, so its tables exist.
+    ///     Background work waits for this: on a first boot it starts before the migrations do.
+    /// </summary>
+    public bool IsInstalled()
+    {
+        if (_installed is false && runtimeState.Level == RuntimeLevel.Run)
+        {
+            _installed = keyValues.GetValue(Umbraco.Cms.Core.Constants.Conventions.Migrations.KeyValuePrefix + Constants.PackageName) == FinalState;
+        }
+
+        return _installed;
+    }
 
     public T Read<T>(Func<IDatabase, T> read)
     {

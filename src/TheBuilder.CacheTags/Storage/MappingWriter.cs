@@ -27,13 +27,15 @@ internal sealed class MappingWriter : BackgroundService
 
     private readonly MemoryCache _recent = new(new MemoryCacheOptions { SizeLimit = 100_000 });
     private readonly ICacheTagStore _store;
+    private readonly PackageDatabase _database;
     private readonly IOptionsMonitor<CacheTagsOptions> _options;
     private readonly TimeProvider _time;
     private readonly ILogger<MappingWriter> _logger;
 
-    public MappingWriter(ICacheTagStore store, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
+    public MappingWriter(ICacheTagStore store, PackageDatabase database, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
     {
         _store = store;
+        _database = database;
         _options = options;
         _time = time;
         _logger = logger;
@@ -117,8 +119,10 @@ internal sealed class MappingWriter : BackgroundService
 
     private async Task WriteAsync(IReadOnlyList<MappingWrite> batch, CancellationToken cancellationToken)
     {
-        if (_options.CurrentValue.Enabled is false)
+        // Responses served before the package is installed (first boot) are recorded on a later render.
+        if (_options.CurrentValue.Enabled is false || _database.IsInstalled() is false)
         {
+            _recent.Compact(1.0);
             return;
         }
 
