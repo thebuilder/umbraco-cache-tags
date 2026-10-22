@@ -23,6 +23,8 @@ Every server, delivery servers included, runs the same loop against the shared d
 
 - A server that has just started applies other servers' changes once Umbraco's instruction job first runs, about a minute after start. A change made in that minute waits for it, or for the ack timeout.
 - A server that restarts after a change is released counts as a new server, so that change does not wait for it. It serves its listings from the index as the index rebuilds.
+- A server that the ack timeout sent a change without still evicts the change from its own output cache once it has applied it.
+- Keep the servers' clocks in sync, as NTP does. A refresh seen within 2 seconds of a change counts for that change alone, so a server whose clock is further behind is not acknowledged in time: its changes wait for the ack timeout, and it evicts them once they are sent.
 
 ## What purges everything
 

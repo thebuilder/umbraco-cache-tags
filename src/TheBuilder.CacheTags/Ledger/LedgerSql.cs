@@ -22,6 +22,20 @@ internal static class LedgerSql
             $"SELECT * FROM {Constants.Tables.Events} WHERE Status = @0 ORDER BY CreatedUtc",
             stage.ToString()));
 
+    /// <summary>
+    ///     The changes released since a time without a server's acknowledgement, newest first.
+    ///     <paramref name="missingToken" /> is the server's name as JSON, as <c>Missing</c> lists it.
+    /// </summary>
+    public static List<EventRow> ReleasedWithout(IDatabase database, string missingToken, DateTime sinceUtc, int take)
+        => database.SkipTake<EventRow>(0, take, new Sql(
+            $"SELECT * FROM {Constants.Tables.Events} WHERE ReleasedUtc >= @0 AND Status <> @1 AND Missing LIKE @2 ESCAPE '\\' ORDER BY ReleasedUtc DESC",
+            sinceUtc,
+            nameof(ChangeStage.Pending),
+            "%" + EscapeLike(missingToken) + "%"));
+
+    private static string EscapeLike(string value)
+        => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_").Replace("[", @"\[");
+
     public static List<EventRow> Latest(IDatabase database, int take)
         => database.SkipTake<EventRow>(0, take, new Sql($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC"));
 
@@ -70,9 +84,13 @@ internal static class LedgerSql
     public static int PendingCount(IDatabase database)
         => database.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Constants.Tables.Outbox} WHERE State = @0", OutboxStates.Pending);
 
+    /// <summary>
+    ///     Leases a purge that is still due to this server. A server working from an older list of due
+    ///     purges must not claim one another server has just failed and put off.
+    /// </summary>
     public static bool ClaimSend(IDatabase database, Guid id, string owner, DateTime nowUtc, DateTime leaseUntilUtc)
         => database.Execute(
-            $"UPDATE {Constants.Tables.Outbox} SET LeaseOwner = @0, LeaseUntilUtc = @1 WHERE Id = @2 AND State = @3 AND (LeaseUntilUtc IS NULL OR LeaseUntilUtc < @4)",
+            $"UPDATE {Constants.Tables.Outbox} SET LeaseOwner = @0, LeaseUntilUtc = @1 WHERE Id = @2 AND State = @3 AND NotBeforeUtc <= @4 AND (LeaseUntilUtc IS NULL OR LeaseUntilUtc < @4)",
             owner,
             leaseUntilUtc,
             id,
@@ -87,16 +105,30 @@ internal static class LedgerSql
             id,
             owner);
 
-    /// <summary>Records a failed attempt; the purge is tried again after a backoff, or given up after the last attempt.</summary>
-    public static void Failed(IDatabase database, Guid id, string owner, int attempts, int maxAttempts, string error, DateTime nowUtc)
-        => database.Execute(
+    /// <summary>
+    ///     Records a failed attempt, counted from the row rather than from what the sender read: the
+    ///     purge is tried again after a backoff, or given up after the last attempt. Returns the attempt
+    ///     this was, or <c>null</c> when this server no longer holds the lease.
+    /// </summary>
+    public static int? Failed(IDatabase database, Guid id, string owner, int maxAttempts, string error, DateTime nowUtc)
+    {
+        var attempts = database.ExecuteScalar<int?>(
+            $"SELECT Attempts FROM {Constants.Tables.Outbox} WHERE Id = @0 AND LeaseOwner = @1", id, owner) + 1;
+        if (attempts is not { } attempt)
+        {
+            return null;
+        }
+
+        database.Execute(
             $"UPDATE {Constants.Tables.Outbox} SET State = @0, Attempts = @1, LastError = @2, NotBeforeUtc = @3, LeaseOwner = NULL, LeaseUntilUtc = NULL WHERE Id = @4 AND LeaseOwner = @5",
-            attempts >= maxAttempts ? OutboxStates.Dead : OutboxStates.Pending,
-            attempts,
+            attempt >= maxAttempts ? OutboxStates.Dead : OutboxStates.Pending,
+            attempt,
             error.Length > 2000 ? error[..2000] : error,
-            nowUtc + Backoff.After(attempts),
+            nowUtc + Backoff.After(attempt),
             id,
             owner);
+        return attempt;
+    }
 
     /// <summary>The purges in a state, newest first.</summary>
     public static List<OutboxRow> InState(IDatabase database, string state, int take)
