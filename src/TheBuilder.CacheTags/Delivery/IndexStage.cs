@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Targets;
 
 namespace TheBuilder.CacheTags.Delivery;
 
@@ -19,6 +20,7 @@ internal sealed class IndexStage(
     PurgeResolver resolver,
     OutputCacheEviction eviction,
     ServerIdentity identity,
+    PurgeTargets targets,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<IndexStage> logger)
@@ -56,7 +58,7 @@ internal sealed class IndexStage(
 
             // Resolved now, not at release: a listing first requested in between has a new response key.
             IReadOnlyList<string> keys = (await resolver.ResolveAsync(change.Plan, cancellationToken)).ListingKeys(settings.KeyPrefix);
-            if (ledger.ReleaseListings(change.Id, now, NewPurge.ToTargets(settings.Targets, keys, now)) is false)
+            if (ledger.ReleaseListings(change.Id, now, NewPurge.ToTargets(targets.Current().Values, keys, now)) is false)
             {
                 continue;
             }

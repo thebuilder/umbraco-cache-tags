@@ -2,6 +2,7 @@ using System.Text.Json;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Storage;
+using TheBuilder.CacheTags.Targets;
 
 namespace TheBuilder.CacheTags.Ledger;
 
@@ -43,12 +44,12 @@ internal sealed record Purge(
 internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateTime NotBeforeUtc)
 {
     /// <summary>The purges of these keys to every enabled target, split at each target's <c>MaxKeysPerRequest</c>.</summary>
-    public static IReadOnlyList<NewPurge> ToTargets(IReadOnlyDictionary<string, CacheTagsTargetOptions> targets, IReadOnlyList<string> keys, DateTime nowUtc)
+    public static IReadOnlyList<NewPurge> ToTargets(IEnumerable<ResolvedTarget> targets, IReadOnlyList<string> keys, DateTime nowUtc)
         => keys.Count == 0
             ? []
             : targets
-                .Where(target => target.Value.Enabled)
-                .SelectMany(target => keys.Chunk(target.Value.MaxKeysPerRequest).Select(chunk => new NewPurge(target.Key, chunk, nowUtc)))
+                .Where(target => target.Options.Enabled)
+                .SelectMany(target => keys.Chunk(target.Options.MaxKeysPerRequest).Select(chunk => new NewPurge(target.Name, chunk, nowUtc)))
                 .ToList();
 }
 

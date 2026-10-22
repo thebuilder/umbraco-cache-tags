@@ -3,13 +3,15 @@ using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Targets;
 
 namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>Sends the purges that are due as signed webhooks, under leases, retrying failures with backoff.</summary>
 internal sealed class PurgeSender(
     LedgerStore ledger,
-    IEnumerable<IPurgeTarget> targets,
+    IEnumerable<IPurgeTarget> senders,
+    PurgeTargets targets,
     ServerIdentity identity,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
@@ -44,12 +46,18 @@ internal sealed class PurgeSender(
     /// <summary>Sends one purge through its target's type. Returns null on success, or what went wrong.</summary>
     private async Task<string?> SendAsync(Purge purge, CacheTagsOptions settings, CancellationToken cancellationToken)
     {
-        if (settings.Targets.TryGetValue(purge.Target, out CacheTagsTargetOptions? target) is false || target.Enabled is false)
+        if (targets.Current().TryGetValue(purge.Target, out ResolvedTarget? resolved) is false || resolved.Options.Enabled is false)
         {
             return $"No enabled target named {purge.Target} is configured.";
         }
 
-        IPurgeTarget? sender = targets.FirstOrDefault(t => string.Equals(t.Type, target.Type, StringComparison.OrdinalIgnoreCase));
+        if (resolved.Problem is not null)
+        {
+            return resolved.Problem;
+        }
+
+        CacheTagsTargetOptions target = resolved.Options;
+        IPurgeTarget? sender = senders.FirstOrDefault(t => string.Equals(t.Type, target.Type, StringComparison.OrdinalIgnoreCase));
         if (sender is null)
         {
             return $"No purge target of type {target.Type} is registered.";

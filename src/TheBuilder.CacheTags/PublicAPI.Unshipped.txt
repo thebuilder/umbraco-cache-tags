@@ -14,6 +14,8 @@ TheBuilder.CacheTags.Configuration.CacheKeyMode.ResponseKey = 0 -> TheBuilder.Ca
 TheBuilder.CacheTags.Configuration.CacheTagsOptions
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.AckTimeout.get -> System.TimeSpan
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.AckTimeout.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.AllowPrivateNetworkTargets.get -> bool
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.AllowPrivateNetworkTargets.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.CacheTagsOptions() -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.set -> void
@@ -45,6 +47,8 @@ TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.CacheTagsTargetOptions() -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.get -> System.Collections.Generic.Dictionary<string!, string!>!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.MaxKeysPerRequest.get -> int
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.MaxKeysPerRequest.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.get -> string!
@@ -116,8 +120,16 @@ TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Discard(System.Guid
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purge(string![]! keys) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purges(string! state = "Dead", int take = 50) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Retry(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Add(System.Text.Json.JsonElement body) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.CacheTagsTargetsController(TheBuilder.CacheTags.ManagementApi.ICacheTagsTargets! targets) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Delete(string! name) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.List() -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Test(System.Text.Json.JsonElement body, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Update(string! name, System.Text.Json.JsonElement body) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup
 TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox
+TheBuilder.CacheTags.ManagementApi.ICacheTagsTargets
 TheBuilder.CacheTags.Storage.CacheSearchResult
 TheBuilder.CacheTags.Storage.CacheSearchResult.CacheSearchResult() -> void
 TheBuilder.CacheTags.Storage.CacheSearchResult.Keys.get -> System.Collections.Generic.IReadOnlyList<string!>!

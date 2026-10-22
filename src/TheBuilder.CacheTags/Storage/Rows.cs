@@ -104,3 +104,15 @@ internal static class OutboxStates
     public const string Discarded = "Discarded";
     public const string Dead = "Dead";
 }
+
+[TableName(Constants.Tables.Targets), PrimaryKey(nameof(Name), AutoIncrement = false), ExplicitColumns]
+internal sealed class TargetRow
+{
+    [Column(nameof(Name)), PrimaryKeyColumn(AutoIncrement = false), Length(100)] public string Name { get; set; } = string.Empty;
+
+    /// <summary>The target, as JSON (<c>TargetDefinition</c>), so its headers and settings need no columns of their own.</summary>
+    [Column(nameof(Definition)), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Definition { get; set; } = string.Empty;
+
+    [Column(nameof(CreatedUtc))] public DateTime CreatedUtc { get; set; }
+    [Column(nameof(UpdatedUtc))] public DateTime UpdatedUtc { get; set; }
+}

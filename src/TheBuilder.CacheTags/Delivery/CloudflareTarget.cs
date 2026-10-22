@@ -36,7 +36,7 @@ internal sealed class CloudflareTarget(IHttpClientFactory httpClientFactory) : I
 
     public async Task<string?> SendAsync(PurgeRequest request, CacheTagsTargetOptions target, CancellationToken cancellationToken)
     {
-        HttpClient client = httpClientFactory.CreateClient(WebhookTarget.HttpClientName);
+        HttpClient client = httpClientFactory.CreateClient(WebhookTarget.ClientFor(target));
         foreach (HttpRequestMessage message in Requests(request, Setting(target, ZoneIdSetting)!, Setting(target, ApiTokenSetting)!))
         {
             using (message)

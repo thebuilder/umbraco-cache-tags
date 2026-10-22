@@ -73,6 +73,14 @@ public sealed class CacheTagsOptions
     /// </summary>
     public TimeSpan IndexTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    ///     Whether targets added in the backoffice may connect to private and reserved network
+    ///     addresses (localhost, 10.0.0.0/8, link-local and so on). Defaults to <c>false</c>, so an
+    ///     administrator cannot point a target at a service inside the server's own network. Targets
+    ///     in configuration are not limited.
+    /// </summary>
+    public bool AllowPrivateNetworkTargets { get; set; }
+
     /// <summary>How long released changes and sent purges are kept for the lookup API. Defaults to 7 days.</summary>
     public TimeSpan LedgerRetention { get; set; } = TimeSpan.FromDays(7);
 }
@@ -99,8 +107,20 @@ public sealed class CacheTagsTargetOptions
     /// <summary>The most keys one request carries; more are split over several requests. Defaults to 500.</summary>
     public int MaxKeysPerRequest { get; set; } = 500;
 
+    /// <summary>
+    ///     For a webhook: request headers sent with every purge, such as a gateway's API key or
+    ///     <c>x-vercel-protection-bypass</c>. Other types read them only if they choose to.
+    /// </summary>
+    public Dictionary<string, string> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Settings for other target types, which their <see cref="Delivery.IPurgeTarget" /> reads.</summary>
     public Dictionary<string, string> Settings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     Whether this target may only connect to public network addresses: set for targets added in
+    ///     the backoffice, unless <see cref="CacheTagsOptions.AllowPrivateNetworkTargets" />.
+    /// </summary>
+    internal bool PublicNetworkOnly { get; init; }
 }
 
 /// <summary>
