@@ -13,7 +13,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 /** One Delivery API response in a page's Cache box. */
 type Fetched = { request: string; fetchedAt: string; tags: string };
-type Page = { path: string; html: string; fetches: Fetched[]; footerFetchedAt: string | null };
+type Page = { path: string; status: number; html: string; fetches: Fetched[]; footerFetchedAt: string | null };
 type Check = { path: string; label: string; test: (current: Page) => boolean };
 type Result = { check: Check; ok: boolean; seconds?: number; current: Page };
 type Report = { checks: (results: Result[]) => void; note: (text: string) => void };
@@ -42,6 +42,8 @@ const timeoutMs = Number(process.env.E2E_TIMEOUT ?? 30) * 1000;
 const keys = {
   articles: "e0000000-0000-0000-0000-000000000002",
   harbour: "e0000000-0000-0000-0000-000000000003",
+  forest: "e0000000-0000-0000-0000-000000000004",
+  dusk: "e0000000-0000-0000-0000-000000000005",
   about: "e0000000-0000-0000-0000-000000000006",
   harbourImage: "e1000000-0000-0000-0000-000000000001",
   articleType: "e3000000-0000-0000-0000-000000000003",
@@ -125,13 +127,35 @@ async function publish(id: string, cultures: (string | null)[] = [null]) {
   await management("PUT", `document/${id}/publish`, { publishSchedules: cultures.map((culture) => ({ culture })) });
 }
 
-/** Puts a parent's children in the given order. */
-async function sort(parent: string, children: string[]) {
+async function unpublish(id: string) {
+  await management("PUT", `document/${id}/unpublish`, { cultures: null });
+}
+
+/** Publishes the document again if a run that was stopped halfway left it unpublished. */
+async function ensurePublished(id: string) {
+  const { variants } = await management<{ variants: { state: string }[] }>("GET", `document/${id}`);
+  // Draft is the only unpublished state; PublishedPendingChanges is published, with edits not yet out.
+  if (variants.some((variant) => variant.state === "Draft")) {
+    await publish(id);
+  }
+}
+
+/** Sorts the given children of a document first, in this order, and any others after them. Does nothing when they are already. */
+async function sortChildren(parent: string, first: string[]) {
+  const { items } = await management<{ items: { id: string }[] }>("GET", `tree/document/children?parentId=${parent}&skip=0&take=100`);
+  const current = items.map((item) => item.id);
+  if (first.every((id, index) => current[index] === id)) {
+    return;
+  }
+  const order = [...first, ...current.filter((id) => !first.includes(id))];
   await management("PUT", "document/sort", {
     parent: { id: parent },
-    sorting: children.map((id, sortOrder) => ({ id, sortOrder })),
+    sorting: order.map((id, sortOrder) => ({ id, sortOrder })),
   });
 }
+
+/** The articles in the order the sample seeds them. */
+const seededArticles = [keys.harbour, keys.forest, keys.dusk];
 
 /** Waits until the Delivery API index has something matching a filter again, for the next case. */
 async function indexed(filter: string, ms = 120_000) {
@@ -171,6 +195,11 @@ const original = (text: string) => text.replace(markerPattern, "");
 async function page(path: string): Promise<Page> {
   const response = await fetch(`${frontendUrl}${path}`, { cache: "no-store" });
   const html = await response.text();
+  // Not found is a page too: an unpublished item's page must be. A page whose shell is prerendered
+  // has sent 200 before it calls notFound(), so it streams Next.js's 404 instead, marked like this.
+  if (response.status === 404 || (response.ok && html.includes("NEXT_HTTP_ERROR_FALLBACK;404"))) {
+    return { path, status: 404, html, fetches: [], footerFetchedAt: null };
+  }
   if (!response.ok) {
     throw new Error(`${path} answered ${response.status}.`);
   }
@@ -185,7 +214,7 @@ async function page(path: string): Promise<Page> {
   }
   // The footer's dictionary response (app/layout.tsx), cached apart from the page's own.
   const footerFetchedAt = html.match(/<footer data-fetched-at="([^"]+)"/)?.[1] ?? null;
-  return { path, html, fetches, footerFetchedAt };
+  return { path, status: response.status, html, fetches, footerFetchedAt };
 }
 
 function text(html: string) {
@@ -252,7 +281,7 @@ const contains = (path: string, name: string, item: string, shown: boolean): Che
 
 /** A check made directly against Umbraco's Delivery API, rather than a page of this site. */
 function direct(label: string, ok: boolean, detail: string): Result {
-  const current: Page = { path: "", html: "", fetches: [], footerFetchedAt: null };
+  const current: Page = { path: "", status: 200, html: "", fetches: [], footerFetchedAt: null };
   return { check: { path: "", label: ok ? label : `${label}: ${detail}`, test: () => ok }, ok, current };
 }
 
@@ -261,6 +290,30 @@ const shows = (path: string, expected: string, what: string): Check => ({
   path,
   label: `${path} shows ${what}`,
   test: (current) => current.html.includes(expected),
+});
+
+/** The page no longer shows `gone`, which it showed before the change. */
+const hides = (path: string, gone: string, what: string): Check => ({
+  path,
+  label: `${path} no longer shows ${what}`,
+  test: (current) => current.status === 200 && !current.html.includes(gone),
+});
+
+/** The page is not found (see `page`). */
+const notFound = (path: string): Check => ({
+  path,
+  label: `${path} is not found`,
+  test: (current) => current.status === 404,
+});
+
+/** The page shows each of `texts`, in this order. */
+const showsInOrder = (path: string, texts: string[], what: string): Check => ({
+  path,
+  label: `${path} lists ${what}`,
+  test: (current) => {
+    const at = texts.map((text) => current.html.indexOf(text));
+    return at.every((index, i) => index >= 0 && (i === 0 || index > at[i - 1]));
+  },
 });
 
 /** The response that renders the change was fetched again since `before`. */
@@ -321,6 +374,17 @@ async function waitFor(checks: Check[], ms = timeoutMs): Promise<Result[]> {
       return [...results.values()];
     }
     await sleep(1000);
+  }
+}
+
+/**
+ * Waits for the state a case starts from, which the previous case's undo may still be bringing back
+ * (a listing waits for the Delivery API index), and throws if it does not come.
+ */
+async function ready(checks: Check[]) {
+  const missing = (await waitFor(checks, timeoutMs * 2)).filter((result) => !result.ok);
+  if (missing.length > 0) {
+    throw new Error(`Not in the starting state: ${missing.map((result) => result.check.label).join("; ")}.`);
   }
 }
 
@@ -478,13 +542,57 @@ const cases: Case[] = [
     },
   },
   {
+    name: "Unpublishing an article takes it off the listing and the pages that pick it, and its page is not found",
+    async run(report) {
+      await ready([
+        shows("/articles", "Evenings at dusk", "it"),
+        shows("/articles/harbour-mornings", "Evenings at dusk", "it among its related articles"),
+        shows("/articles/evenings-at-dusk", "Evenings at dusk", "its title"),
+      ]);
+      await settle(["/articles", "/articles/harbour-mornings", "/articles/evenings-at-dusk"]);
+
+      await unpublish(keys.dusk);
+
+      // The listing's membership comes from the Delivery API index, so it waits for it.
+      report.checks(
+        await waitFor(
+          [
+            notFound("/articles/evenings-at-dusk"),
+            hides("/articles/harbour-mornings", "Evenings at dusk", "it among its related articles"),
+            hides("/articles", "Evenings at dusk", "it"),
+          ],
+          timeoutMs * 2,
+        ),
+      );
+    },
+    async undo() {
+      await ensurePublished(keys.dusk);
+    },
+  },
+  {
+    name: "Sorting the articles reorders the listing",
+    async run(report) {
+      const seeded = ["Harbour mornings", "Forest walks", "Evenings at dusk"];
+      await ready([showsInOrder("/articles", seeded, "the articles in their seeded order")]);
+      await settle(["/articles"]);
+
+      await sortChildren(keys.articles, [...seededArticles].reverse());
+
+      // The order comes from the Delivery API index, so it waits for it.
+      report.checks(await waitFor([showsInOrder("/articles", [...seeded].reverse(), "them in the new order")], timeoutMs * 2));
+    },
+    async undo() {
+      await sortChildren(keys.articles, seededArticles);
+    },
+  },
+  {
     name: "Sorting a category's guides reorders the listings they are ordered in, and not the items",
     async run(report) {
       const category = "/guides/getting-around";
       const [, guides, onFoot] = await settle([category, "/guides", "/guides/getting-around/on-foot"]);
       report.checks(await holdsNow([lists(category, "editors-order", "By bike", "On foot")]));
 
-      await sort(keys.gettingAround, [keys.onFoot, keys.byFerry, keys.byBike]);
+      await sortChildren(keys.gettingAround, [keys.onFoot, keys.byFerry, keys.byBike]);
 
       // Every guide under the category by type, in sort order; and the recently updated guides,
       // whose order the index decides and which only the catch-all search- key reaches.
@@ -497,7 +605,7 @@ const cases: Case[] = [
       report.checks(await holdsNow([keptResponse(onFoot, "content/item/guides/getting-around/on-foot/", "a sort changes no item")]));
     },
     async undo() {
-      await sort(keys.gettingAround, [keys.byBike, keys.byFerry, keys.onFoot]);
+      await sortChildren(keys.gettingAround, [keys.byBike, keys.byFerry, keys.onFoot]);
     },
   },
   {
@@ -520,7 +628,7 @@ const cases: Case[] = [
       await settle(["/guides"]);
       report.checks(await holdsNow([contains("/guides", "a-to-z", "On foot", true)]));
 
-      await management("PUT", `document/${keys.gettingAround}/unpublish`, { cultures: null });
+      await unpublish(keys.gettingAround);
       report.checks(await waitFor([contains("/guides", "a-to-z", "On foot", false)], timeoutMs * 2));
 
       // Umbraco publishes the guides again in a notification of their own, whose change can wait for
@@ -618,6 +726,10 @@ async function main() {
 
   // Put back anything a stopped run left behind.
   await deleteNewArticle();
+  await ensurePublished(keys.dusk);
+  await sortChildren(keys.articles, seededArticles);
+  await ensurePublished(keys.gettingAround);
+  await sortChildren(keys.gettingAround, [keys.byBike, keys.byFerry, keys.onFoot]);
   await setTypeAlias(keys.articleType, "article");
   await setTypeAlias(keys.guideType, "guidePage");
   await indexed("contentType:guidePage");

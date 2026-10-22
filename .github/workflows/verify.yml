@@ -102,7 +102,7 @@ jobs:
         run: pnpm build
 
   # The sample frontend, so a change to the webhook route or the fetch helper that does not
-  # type-check or build fails here. `pnpm e2e` needs a running Umbraco, so it stays local.
+  # type-check or build fails here. The e2e job below runs it against Umbraco.
   nextjs:
     name: Next.js sample
     runs-on: ubuntu-latest
@@ -135,6 +135,140 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # The whole loop on one server: the sample Umbraco with the package, the Next.js sample, and
+  # `pnpm e2e` publishing changes through the Management API and waiting for the pages to refresh.
+  # On the sample's own Umbraco release (SampleUmbracoVersion), with a fresh SQLite database.
+  # Not for a release: it runs the package's project, not the packed file a release publishes, and a
+  # flaky run should not hold a release back.
+  e2e:
+    name: End to end
+    if: inputs.package-version == ''
+    runs-on: ubuntu-latest
+    # A healthy run takes 3 to 4 minutes. The slow steps have limits of their own (the waits below,
+    # and timeout-minutes on the steps after them), so a stalled step fails, rather than the whole job
+    # being cancelled, and the thread dump and logs still run inside these 10 minutes.
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      UMBRACO_URL: http://localhost:5320
+      FRONTEND_URL: http://localhost:3000
+      # Right after a first start the Delivery API index is slow to pick up a publish.
+      E2E_TIMEOUT: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-default-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-default-
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: samples/nextjs/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: samples/nextjs/pnpm-lock.yaml
+
+      - name: Install the Next.js sample
+        working-directory: samples/nextjs
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the Umbraco sample
+        run: dotnet build samples/TheBuilder.CacheTags.Example -c Release
+
+      # It installs itself into a new SQLite database and seeds the content on the first start.
+      # Development, for the settings the sample runs with locally (its application URL).
+      # The built app itself rather than `dotnet run`, so the process id is Umbraco's.
+      - name: Start Umbraco
+        working-directory: samples/TheBuilder.CacheTags.Example
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://localhost:5320
+          # One server, so the cache instruction sync has nothing to apply: this server applies its own
+          # refreshes at once, which is what the suite checks. On SQLite, Umbraco's sync (it reads the
+          # instructions, then writes umbracoLastSynced in the same transaction) can deadlock with a
+          # request writing its instructions, which stalls the suite for minutes. Syncing hourly keeps it
+          # out of the run.
+          Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations: "01:00:00"
+        run: |
+          nohup dotnet bin/Release/net10.0/TheBuilder.CacheTags.Example.dll > "$RUNNER_TEMP/umbraco.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/umbraco.pid"
+
+      # The Next.js listing pages cache an empty listing for an hour, so nothing fetches them before
+      # the seeding has finished (Winter market is the last item it publishes) and Umbraco's Delivery
+      # API index has the three seeded articles (about 70 seconds on a first start). Fails as soon as
+      # Umbraco stops or reports a failed boot, and after 150 seconds in any case.
+      - name: Wait for the seeded site and the Delivery API index
+        timeout-minutes: 3
+        run: |
+          deadline=$((SECONDS + 150))
+          while (( SECONDS < deadline )); do
+            if ! kill -0 "$(cat "$RUNNER_TEMP/umbraco.pid")" 2>/dev/null; then
+              echo "Umbraco stopped." >&2
+              exit 1
+            fi
+            if grep -qE "post-migration initialization failed|BootFailedException|stalled on a hung database connection" "$RUNNER_TEMP/umbraco.log"; then
+              echo "Umbraco's boot failed or its database stalled; see the logs." >&2
+              exit 1
+            fi
+            winter="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'Accept-Language: en-US' \
+              "$UMBRACO_URL/umbraco/delivery/api/v2/content/item/e0000000-0000-0000-0000-000000000026" || true)"
+            articles="$(curl -sf --max-time 5 "$UMBRACO_URL/umbraco/delivery/api/v2/content?fetch=children:/articles/" | jq -r '.total' || true)"
+            if [[ "$winter" == 200 && "$articles" == 3 ]]; then
+              echo "Seeded, and the index has the 3 articles after ${SECONDS}s."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Umbraco was not seeded and indexed within 150 seconds." >&2
+          exit 1
+
+      - name: Build and start the Next.js sample
+        timeout-minutes: 2
+        working-directory: samples/nextjs
+        run: |
+          pnpm build
+          nohup pnpm start > "$RUNNER_TEMP/nextjs.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl -sf -o /dev/null "$FRONTEND_URL/" && exit 0
+            sleep 2
+          done
+          echo "The Next.js sample did not answer." >&2
+          exit 1
+
+      # About 75 seconds when healthy.
+      - name: End to end
+        timeout-minutes: 3
+        working-directory: samples/nextjs
+        run: pnpm e2e
+
+      # Where every thread in Umbraco is, for a boot that stalls on the database.
+      - name: Umbraco's threads
+        if: failure()
+        timeout-minutes: 1
+        run: |
+          dotnet tool install --global dotnet-stack || true
+          ~/.dotnet/tools/dotnet-stack report --process-id "$(cat "$RUNNER_TEMP/umbraco.pid")" || true
+
+      - name: Logs
+        if: failure()
+        run: |
+          echo "::group::Umbraco"
+          cat "$RUNNER_TEMP/umbraco.log" || true
+          echo "::endgroup::"
+          echo "::group::Next.js"
+          cat "$RUNNER_TEMP/nextjs.log" || true
+          echo "::endgroup::"
 
   package:
     name: Solution and package

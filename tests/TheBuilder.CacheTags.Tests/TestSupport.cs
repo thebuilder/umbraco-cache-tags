@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.ExceptionServices;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using NPoco;
 using TheBuilder.CacheTags.Configuration;
@@ -13,30 +12,15 @@ using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace TheBuilder.CacheTags.Tests;
 
-/// <summary>The package's ledger and ack tables in an in-memory SQLite database, behind a real <see cref="PackageDatabase" />.</summary>
+/// <summary>The package's tables, made by its migrations in SQLite (<see cref="MigratedDatabase" />), behind a real <see cref="PackageDatabase" />.</summary>
 internal sealed class TestDatabase : IDisposable
 {
-    // The schema the package's migrations create, written out for SQLite.
-    public const string Schema = """
-        CREATE TABLE theBuilderCacheTagsEvent (Id TEXT PRIMARY KEY, CreatedUtc TEXT NOT NULL, Kind TEXT NOT NULL, Server TEXT NOT NULL,
-            Change TEXT NOT NULL, Plan TEXT NOT NULL, Signal TEXT NULL, Status TEXT NULL, ReleasedUtc TEXT NULL, Missing TEXT NULL);
-        CREATE TABLE theBuilderCacheTagsOutbox (Id TEXT PRIMARY KEY, EventId TEXT NOT NULL, Target TEXT NOT NULL, Keys TEXT NOT NULL,
-            State TEXT NOT NULL, Attempts INTEGER NOT NULL, CreatedUtc TEXT NOT NULL, NotBeforeUtc TEXT NOT NULL, SentUtc TEXT NULL,
-            LastError TEXT NULL, LeaseOwner TEXT NULL, LeaseUntilUtc TEXT NULL);
-        CREATE TABLE theBuilderCacheTagsServer (Server TEXT PRIMARY KEY, FirstSeenUtc TEXT NOT NULL, LastSeenUtc TEXT NOT NULL);
-        CREATE TABLE theBuilderCacheTagsAck (Id INTEGER PRIMARY KEY AUTOINCREMENT, EventId TEXT NOT NULL, Server TEXT NOT NULL, AckedUtc TEXT NOT NULL, IndexedUtc TEXT NULL);
-        CREATE UNIQUE INDEX IX_AckPair ON theBuilderCacheTagsAck (EventId, Server);
-        """;
-
-    private readonly SqliteConnection _connection;
+    private readonly MigratedDatabase _migrated = MigratedDatabase.Create();
 
     /// <param name="installed">Whether Umbraco is running with the package's migrations done.</param>
     public TestDatabase(bool installed = true)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        Sql = new Database(_connection, DatabaseType.SQLite);
-        Sql.Execute(Schema);
+        Sql = _migrated.Database;
 
         IUmbracoDatabase umbracoDatabase = Fake.Forwarding<IUmbracoDatabase>(Sql);
         IScope scope = Fake.Of<IScope>((method, _) => method.Name == "get_Database" ? umbracoDatabase : null);
@@ -51,11 +35,7 @@ internal sealed class TestDatabase : IDisposable
 
     public PackageDatabase Package { get; }
 
-    public void Dispose()
-    {
-        Sql.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _migrated.Dispose();
 }
 
 /// <summary>An interface implemented by one function, for the Umbraco services a test needs a member or two of.</summary>

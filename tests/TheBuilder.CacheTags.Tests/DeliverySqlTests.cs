@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using NPoco;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
@@ -12,24 +11,16 @@ public sealed class DeliverySqlTests : IDisposable
     private static readonly DateTime Now = new(2026, 10, 22, 9, 0, 0, DateTimeKind.Utc);
     private static readonly Guid Change = new("01a1606c-318c-77da-8780-ba1b54b6add8");
 
-    private readonly SqliteConnection _connection;
+    private readonly MigratedDatabase _migrated = MigratedDatabase.Create();
     private readonly Database _database;
 
     public DeliverySqlTests()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _database = new Database(_connection, DatabaseType.SQLite);
-
-        _database.Execute(TestDatabase.Schema);
+        _database = _migrated.Database;
         _database.Insert(new EventRow { Id = Change, CreatedUtc = Now, Kind = "Published", Server = "backoffice", Change = "{}", Plan = "{}", Status = nameof(ChangeStage.Pending) });
     }
 
-    public void Dispose()
-    {
-        _database.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _migrated.Dispose();
 
     private static OutboxRow Purge(Guid id, DateTime notBefore) => new()
     {

@@ -260,20 +260,28 @@ to refresh:
 4. The Harbour image is renamed. The article and `/articles` must show the new name (it is the
    image's alt text).
 5. The footer's dictionary item changes. `/articles` and `/en-us/about` must show it, through the
-   site's own `[CacheTagged]` API.
-6. Getting around's guides are sorted. `/guides/getting-around` must list them in the new order in
+   site's own `[CacheTagged]` API (see [The site's own API](#the-sites-own-api-the-dictionary)).
+6. Evenings at dusk is unpublished. Its page must be not found, and `/articles` and Harbour mornings
+   (which picks it as related) must stop showing it. A page whose shell is prerendered has already
+   answered 200 when it finds the item gone, so "not found" also means Next.js streamed its 404.
+7. The articles are sorted in reverse. `/articles` (sorted by sort order) must list them in the new
+   order. Like case 2, it waits for the Delivery API index.
+8. Getting around's guides are sorted. `/guides/getting-around` must list them in the new order in
    its guide listing (by type, in sort order), `/guides` must refetch its recently updated listing
    (whose order the index decides, keyed by the catch-all `search-` key), and On foot's own
    response must keep its cache.
-7. The article document type's alias is renamed. Harbour mornings must refetch its response, which
+9. The article document type's alias is renamed. Harbour mornings must refetch its response, which
    is recorded under the old alias.
-8. Getting around is unpublished, then published again. The A to Z guide listing on `/guides` must
-   stop listing On foot, then list it again.
-9. On foot is renamed. Its old route must answer Umbraco's 301 with `Cache-Control: no-store` and no
-   `X-Umbraco-Cache-Keys`.
-10. The guide document type's alias is renamed. The A to Z guide listing on `/guides`, filtered by the
+10. Getting around is unpublished, then published again. The A to Z guide listing on `/guides` must
+    stop listing On foot, then list it again.
+11. On foot is renamed. Its old route must answer Umbraco's 301 with `Cache-Control: no-store` and no
+    `X-Umbraco-Cache-Keys`.
+12. The guide document type's alias is renamed. The A to Z guide listing on `/guides`, filtered by the
     old alias, must end up empty. Umbraco indexes the guides under the new alias up to a minute
     later, and the listing is purged again once it has; the undo waits for the index too.
+
+CI runs the same suite on every pull request (the `e2e` job in `.github/workflows/verify.yml`), on a
+fresh database, after waiting for the index.
 
 Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
 page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its
@@ -281,12 +289,18 @@ change when it ends, and a run first cleans up after one that was stopped halfwa
 again and again against the same database. Before a change, each case waits until the pages it checks
 are cached and steady, so a page that refetches only because its cache entry was empty cannot pass.
 
-**Known issue:** on SQLite, the sample can lock up after a few runs: requests and Umbraco's own
-background jobs wait on a database lock that nothing releases, and it needs a restart. It happens
-right after `pnpm e2e` creates and publishes its new article, and it reproduces with the package
-switched off (`CacheTags__Enabled=false`) and on `main` without the package, so it is Umbraco on
-SQLite under this load. Restart Umbraco between longer series of runs, or run the sample on SQL
-Server.
+**Known issue:** on SQLite, the sample could lock up: requests and Umbraco's own background jobs
+waited on a database lock until one of them timed out, sometimes failing the first start's seeding.
+One cause was the package: after a publish, its delivery worker read the changed items through
+`IContentService` while a save was still writing. Umbraco connects to SQLite with a shared cache,
+where a read transaction keeps each table it has read locked until it ends, so the read and the save
+each waited for a table the other held. The worker now takes the package's write lock before it
+reads (`PackageDatabase.ReadUmbraco`). Umbraco has one of its own: its cache instruction sync reads the
+instructions and then writes `umbracoLastSynced` in the same transaction, and a request writing its own
+instructions at the same moment waits for the one and holds what the other needs (seen in a CI thread
+dump, with no package code involved). On one server the sync has nothing to apply, so CI sets
+`Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations=01:00:00`; do the same for
+long local series of runs, restart Umbraco if it stalls, or run the sample on SQL Server.
 
 `E2E_TIMEOUT` sets how many seconds a case waits (default 30). `UMBRACO_URL`, `FRONTEND_URL`,
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the

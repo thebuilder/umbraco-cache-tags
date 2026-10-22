@@ -1,11 +1,9 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NPoco;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
-using TheBuilder.CacheTags.Migrations;
 using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Configuration.Models;
@@ -16,8 +14,6 @@ using Umbraco.Cms.Core.PublishedCache;
 using Umbraco.Cms.Core.Services;
 using Umbraco.Cms.Core.Services.Changes;
 using Umbraco.Cms.Core.Strings;
-using Umbraco.Cms.Infrastructure.Persistence;
-using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace TheBuilder.CacheTags.Tests;
 
@@ -29,7 +25,7 @@ public sealed class SourceChangeHandlersTests : IDisposable
     private static readonly Guid C = new("10000000-0000-0000-0000-00000000000c");
     private static readonly IShortStringHelper Strings = new DefaultShortStringHelper(new DefaultShortStringHelperConfig().WithDefault(new RequestHandlerSettings()));
 
-    private readonly SqliteConnection _connection;
+    private readonly TestDatabase _database = new();
     private readonly Database _sql;
     private readonly LedgerStore _ledger;
     private readonly SourceChangeHandlers _handlers;
@@ -39,20 +35,8 @@ public sealed class SourceChangeHandlersTests : IDisposable
 
     public SourceChangeHandlersTests()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _sql = new Database(_connection, DatabaseType.SQLite);
-        _sql.Execute("""
-            CREATE TABLE theBuilderCacheTagsEvent (Id TEXT PRIMARY KEY, CreatedUtc TEXT NOT NULL, Kind TEXT NOT NULL, Server TEXT NOT NULL,
-                Change TEXT NOT NULL, Plan TEXT NOT NULL, Signal TEXT NULL, Status TEXT NULL, ReleasedUtc TEXT NULL, Missing TEXT NULL);
-            """);
-
-        IUmbracoDatabase umbracoDatabase = Fake.Forwarding<IUmbracoDatabase>(_sql);
-        IScope scope = Fake.Of<IScope>((method, _) => method.Name == "get_Database" ? umbracoDatabase : null);
-        var database = new PackageDatabase(
-            Fake.Of<IScopeProvider>((method, _) => method.Name == nameof(IScopeProvider.CreateScope) ? scope : null),
-            Fake.Of<IRuntimeState>((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
-            Fake.Of<IKeyValueService>((method, _) => method.Name == nameof(IKeyValueService.GetValue) ? new CacheTagsMigrationPlan().FinalState : null));
+        _sql = _database.Sql;
+        PackageDatabase database = _database.Package;
         _ledger = new LedgerStore(database);
         IOptionsMonitor<CacheTagsOptions> options = Fake.Of<IOptionsMonitor<CacheTagsOptions>>((method, _) => method.Name is "get_CurrentValue" or "Get" ? new CacheTagsOptions() : null);
         var recorder = new ChangeRecorder(
@@ -78,11 +62,7 @@ public sealed class SourceChangeHandlersTests : IDisposable
             NullLogger<SourceChangeHandlers>.Instance);
     }
 
-    public void Dispose()
-    {
-        _sql.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _database.Dispose();
 
     [Fact]
     public void Unpublishing_an_item_reaches_the_listings_its_descendants_leave_with_it()

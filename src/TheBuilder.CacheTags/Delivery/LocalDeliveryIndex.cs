@@ -3,6 +3,7 @@ using Examine;
 using Examine.Search;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core.Configuration.Models;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
@@ -11,7 +12,7 @@ using Umbraco.Extensions;
 namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>This server's Delivery API content index, as listings query it.</summary>
-internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentService contentService, IOptionsMonitor<DeliveryApiSettings> deliveryApi)
+internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentService contentService, PackageDatabase database, IOptionsMonitor<DeliveryApiSettings> deliveryApi)
 {
     /// <summary>The Delivery API content index (<c>Constants.UmbracoIndexes.DeliveryApiContentIndexName</c>).</summary>
     public const string IndexName = "DeliveryApiContentIndex";
@@ -26,15 +27,23 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
     ///     can wait for it.
     /// </summary>
     public bool Has(Change change)
-        => examine.TryGetIndex(IndexName, out IIndex index) is false
-            || (change.Items.All(item => Has(index, item)) && (change.RenamedAliases ?? []).All(alias => Gone(index, alias)));
+    {
+        if (examine.TryGetIndex(IndexName, out IIndex index) is false)
+        {
+            return true;
+        }
+
+        // Runs on the delivery worker while editors may be saving (see PackageDatabase.ReadUmbraco).
+        // Only the database reads hold the lock; the index is searched after.
+        IReadOnlyList<IContent?> items = database.ReadUmbraco(() => change.Items.Select(item => contentService.GetById(item.Key)).ToList());
+        return items.All(content => Has(index, content)) && (change.RenamedAliases ?? []).All(alias => Gone(index, alias));
+    }
 
     private static bool Gone(IIndex index, string alias)
         => index.Searcher.CreateQuery().Field(ContentTypeField, alias).Execute(QueryOptions.SkipTake(0, 1)).TotalItemCount == 0;
 
-    private bool Has(IIndex index, ChangedItem item)
+    private bool Has(IIndex index, IContent? content)
     {
-        IContent? content = contentService.GetById(item.Key);
         if (content is null)
         {
             // Deleted: without its id there is nothing to look up, and Umbraco removes its documents.

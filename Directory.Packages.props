@@ -26,6 +26,8 @@
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <!-- The tests only: the mapping store's SQL runs against an in-memory SQLite database. -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <!-- The tests only: the result filter runs in a real ASP.NET pipeline. -->
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
     <!-- The sample and the tests only, which run SQLite. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
     <PackageVersion Include="Umbraco.Cms" Version="$(SampleUmbracoVersion)" />
@@ -33,6 +35,8 @@
     <PackageVersion Include="Umbraco.Cms.Api.Delivery" Version="$(UmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Api.Management" Version="$(UmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Web.Common" Version="$(UmbracoVersion)" />
+    <!-- The tests only: the package's migrations run through Umbraco's SQLite syntax provider. -->
+    <PackageVersion Include="Umbraco.Cms.Persistence.Sqlite" Version="$(UmbracoVersion)" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
