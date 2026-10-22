@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 
+// Pages wait on the server for their (cached) Delivery API responses rather than streaming a
+// loading state first: the sample shows each page complete, as a visitor would see it.
+export const instant = false;
+
 export const metadata: Metadata = {
   title: "Cache Tags example",
   description: "A Next.js frontend for the TheBuilder.CacheTags Umbraco sample.",

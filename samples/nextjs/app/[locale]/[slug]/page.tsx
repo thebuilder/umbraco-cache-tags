@@ -1,22 +1,12 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { CacheInfo } from "@/app/cache-info";
-import { Pending } from "@/app/pending";
 import { type ApiRichText, contentByRoute, cultures } from "@/lib/umbraco";
 
 type About = { title: string; body: ApiRichText | null };
 
 /** A culture-variant page: `/en-us/about` and `/da-dk/om-os` are the same Umbraco item. */
-export default function VariantPage({ params }: PageProps<"/[locale]/[slug]">) {
-  return (
-    <Suspense fallback={<Pending />}>
-      <VariantContent params={params} />
-    </Suspense>
-  );
-}
-
-async function VariantContent({ params }: Pick<PageProps<"/[locale]/[slug]">, "params">) {
+export default async function VariantPage({ params }: PageProps<"/[locale]/[slug]">) {
   const { locale, slug } = await params;
   const culture = cultures[locale];
   if (!culture) {

@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { CacheInfo } from "@/app/cache-info";
-import { Pending } from "@/app/pending";
 import { type ApiBlockList, type ApiImage, type ApiLink, contentByRoute, href, mediaUrl } from "@/lib/umbraco";
 
 type Home = {
@@ -14,15 +12,7 @@ type Home = {
   teasers: ApiBlockList<{ heading: string; text: string; link: ApiLink | null }> | null;
 };
 
-export default function HomePage() {
-  return (
-    <Suspense fallback={<Pending />}>
-      <HomeContent />
-    </Suspense>
-  );
-}
-
-async function HomeContent() {
+export default async function HomePage() {
   // Rendered per request, from cached Delivery API responses, so the build does not need Umbraco.
   await connection();
   const home = await contentByRoute<Home>("/");

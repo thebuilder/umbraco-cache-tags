@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { CacheInfo } from "@/app/cache-info";
-import { Pending } from "@/app/pending";
 import { type ApiImage, type ApiLink, type ApiRichText, contentByRoute, href, mediaUrl } from "@/lib/umbraco";
 
 type Article = {
@@ -13,15 +11,7 @@ type Article = {
   related: ApiLink[] | null;
 };
 
-export default function ArticlePage({ params }: PageProps<"/articles/[slug]">) {
-  return (
-    <Suspense fallback={<Pending />}>
-      <ArticleContent params={params} />
-    </Suspense>
-  );
-}
-
-async function ArticleContent({ params }: Pick<PageProps<"/articles/[slug]">, "params">) {
+export default async function ArticlePage({ params }: PageProps<"/articles/[slug]">) {
   const { slug } = await params;
   const article = await contentByRoute<Article>(`/articles/${slug}/`);
   if (!article.data) {

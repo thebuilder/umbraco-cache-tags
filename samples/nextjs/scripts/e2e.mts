@@ -126,7 +126,7 @@ async function page(path: string): Promise<Page> {
   }
 
   const fetches: Fetched[] = [];
-  const item = /<li><code>(.*?)<\/code>.*?<time dateTime="([^"]+)" data-testid="fetched-at">.*?, tags:(?:<!-- -->)?\s*(?:<em>none<\/em>|<code>(.*?)<\/code>)<\/li>/g;
+  const item = /<li><code>(.*?)<\/code>.*?<time dateTime="([^"]+)"[^>]*>.*?, tags:(?:<!-- -->)?\s*(?:<em>none<\/em>|<code>(.*?)<\/code>)<\/li>/g;
   for (const [, request, fetchedAt, tags] of html.matchAll(item)) {
     fetches.push({ request: text(request), fetchedAt, tags: tags ? text(tags) : "none" });
   }
