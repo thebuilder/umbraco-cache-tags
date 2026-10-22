@@ -295,9 +295,12 @@ One cause was the package: after a publish, its delivery worker read the changed
 `IContentService` while a save was still writing. Umbraco connects to SQLite with a shared cache,
 where a read transaction keeps each table it has read locked until it ends, so the read and the save
 each waited for a table the other held. The worker now takes the package's write lock before it
-reads (`PackageDatabase.ReadUmbraco`). An earlier report had the lock-up with the package switched
-off too, so Umbraco on SQLite under this load may have another cause: if it happens, restart Umbraco
-between longer series of runs, or run the sample on SQL Server.
+reads (`PackageDatabase.ReadUmbraco`). Umbraco has one of its own: its cache instruction sync reads the
+instructions and then writes `umbracoLastSynced` in the same transaction, and a request writing its own
+instructions at the same moment waits for the one and holds what the other needs (seen in a CI thread
+dump, with no package code involved). On one server the sync has nothing to apply, so CI sets
+`Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations=01:00:00`; do the same for
+long local series of runs, restart Umbraco if it stalls, or run the sample on SQL Server.
 
 `E2E_TIMEOUT` sets how many seconds a case waits (default 30). `UMBRACO_URL`, `FRONTEND_URL`,
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the

@@ -191,6 +191,12 @@ jobs:
         env:
           ASPNETCORE_ENVIRONMENT: Development
           ASPNETCORE_URLS: http://localhost:5320
+          # One server, so the cache instruction sync has nothing to apply: this server applies its own
+          # refreshes at once, which is what the suite checks. On SQLite, Umbraco's sync (it reads the
+          # instructions, then writes umbracoLastSynced in the same transaction) can deadlock with a
+          # request writing its instructions, which stalls the suite for minutes. Syncing hourly keeps it
+          # out of the run.
+          Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations: "01:00:00"
         run: |
           nohup dotnet bin/Release/net10.0/TheBuilder.CacheTags.Example.dll > "$RUNNER_TEMP/umbraco.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/umbraco.pid"
