@@ -22,8 +22,7 @@ spike/results/raw/
 /artifacts/
 .DS_Store
 # The backoffice client's build output; `dotnet pack` builds it.
-src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/*
-!src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/.gitkeep
+src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/
 
 # The docs site: Blume's build output, and the Open Graph cards it draws on every build.
 apps/docs/.blume/
