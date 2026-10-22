@@ -108,11 +108,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddHostedService<DeliveryWorker>();
         builder.Services.AddSingleton<IPurgeTarget, WebhookTarget>();
         builder.Services.AddSingleton<IPurgeTarget, CloudflareTarget>();
-        builder.Services.AddHttpClient(WebhookTarget.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
-            // A redirect would carry the signed purge to another host; a target must answer itself.
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-        builder.Services.AddHttpClient(WebhookTarget.PublicHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
-            .ConfigurePrimaryHttpMessageHandler(TargetNetwork.PublicOnlyHandler);
+        AddPurgeClients(builder.Services);
 
         // Targets added in the backoffice, merged with those in configuration.
         builder.Services.AddSingleton<TargetStore>();
@@ -134,5 +130,15 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddAuthorization(options => options.AddPolicy(
             AdministratorRequirement.Policy,
             policy => policy.AddRequirements(new AdministratorRequirement())));
+    }
+
+    /// <summary>The clients purges are sent through: one for configured targets, and one that only reaches public addresses.</summary>
+    internal static void AddPurgeClients(IServiceCollection services)
+    {
+        services.AddHttpClient(WebhookTarget.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            // A redirect would carry the signed purge to another host; a target must answer itself.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddHttpClient(WebhookTarget.PublicHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(TargetNetwork.PublicOnlyHandler);
     }
 }
