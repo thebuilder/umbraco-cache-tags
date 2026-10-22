@@ -7,12 +7,13 @@ export const lookupHref = (key: string) =>
 /** Where the documentation explains how a change is timed and purged. */
 export const DOCS = "https://cache-tags.thebuilder.dk/timing";
 
-/** A time in the reader's locale and time zone, on a 24-hour clock. The API sends UTC, sometimes without a zone. */
+/** A time from the API, which sends UTC, sometimes without a zone. */
+export const parseUtc = (utc: string) => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(utc) ? utc : `${utc}Z`);
+
+/** A time in the reader's locale and time zone, on a 24-hour clock. */
 export const time = (utc: string | null | undefined) =>
   utc
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium", hourCycle: "h23" }).format(
-        new Date(/[zZ]|[+-]\d\d:\d\d$/.test(utc) ? utc : `${utc}Z`)
-      )
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium", hourCycle: "h23" }).format(parseUtc(utc))
     : "";
 
 export const errorMessage = (error: unknown, fallback: string) =>
@@ -43,14 +44,14 @@ const describeRequest = (path: string, query: string) => {
 /** A recorded request: its path on one line, and its parameters as chips that wrap underneath. */
 export const requestTemplate = (path: string, query: string) => {
   const request = describeRequest(path, query);
-  return html`<div class="request">
-    <div class="mono path">${request.path}</div>
+  return html`<span class="request">
+    <span class="mono path">${request.path}</span>
     ${request.parameters.length > 0
-      ? html`<div class="params">
+      ? html`<span class="params">
           ${request.parameters.map((parameter) => html`<span class="param"><b>${parameter.name}</b>${parameter.value}</span>`)}
-        </div>`
+        </span>`
       : nothing}
-  </div>`;
+  </span>`;
 };
 
 /** What a key names, from its prefix. */
@@ -117,7 +118,11 @@ export const sharedStyles = css`
   .key:hover {
     text-decoration: underline;
   }
+  .request {
+    display: block;
+  }
   .request .path {
+    display: block;
     font-weight: 600;
     overflow-wrap: anywhere;
   }

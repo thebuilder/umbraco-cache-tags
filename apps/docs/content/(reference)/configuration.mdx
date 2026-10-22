@@ -30,6 +30,7 @@ CacheTags__Targets__nextjs__Secret=<at least 32 characters>
 | --- | --- | --- |
 | `Enabled` | `true` | Whether the package tags responses and plans and sends purges. |
 | `Targets` | none | Where the package sends purges, by name. See [Purge targets](/targets). With none, the package still plans and records changes. |
+| `Secrets` | none | Secrets that targets added in the backoffice read by name, such as `CacheTags:Secrets:VercelSecret`. A target can read nothing else from configuration. See [Purge targets](/targets#in-the-backoffice). |
 | `AllowPrivateNetworkTargets` | `false` | Lets targets added in the backoffice connect to private and reserved addresses, such as `localhost`. See [Purge targets](/targets#in-the-backoffice). |
 | `HeaderName` | `X-Umbraco-Cache-Keys` | The response header that carries the keys. `Cache-Tag` for Cloudflare in front of Umbraco. |
 | `KeyPrefix` | none | A prefix for every key, such as `shop-`, for a site that shares a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |

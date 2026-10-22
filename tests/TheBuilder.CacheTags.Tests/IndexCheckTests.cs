@@ -43,6 +43,14 @@ public sealed class IndexCheckTests
     [InlineData(nameof(ChangeKind.Everything), false)]
     public void Only_content_item_changes_wait_for_the_index(string kind, bool waits)
     {
-        Assert.Equal(waits, IndexCheck.Waits(Enum.Parse<ChangeKind>(kind)));
+        Assert.Equal(waits, IndexCheck.Waits(new Change(Guid.Empty, DateTime.UnixEpoch, Enum.Parse<ChangeKind>(kind), [], [], null)));
+    }
+
+    [Fact]
+    public void A_content_type_rename_waits_for_the_index_to_drop_the_old_alias()
+    {
+        var renamed = new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.TypesChanged, [], ["article", "post"], null, RenamedAliases: ["article"]);
+
+        Assert.True(IndexCheck.WaitsFor(renamed, new PurgePlan(["schema-article", "schema-post", "type-article", "type-post"], Everything: false, Cultures: null)));
     }
 }

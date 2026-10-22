@@ -85,6 +85,8 @@ public sealed class AckProcessorTests : IDisposable
     private sealed class NoDescendants : IDescendants
     {
         public IEnumerable<Guid> Of(Guid key) => [];
+
+        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys) => [];
     }
 
     private static IContentType TypeWith(int id, string alias, Guid dataType)
