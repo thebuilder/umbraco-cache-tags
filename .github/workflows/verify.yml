@@ -114,8 +114,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The sample is not in the root workspace: it is a site of its own, with its own lockfile and
-      # pnpm version, so the version comes from its packageManager field.
+      # The sample is not in the root workspace: it is a site of its own, with its own lockfile. Its
+      # pnpm version must match the root package.json's, because setup-node reads the pnpm store
+      # path at the repository root, and a different version keeps its packages somewhere else.
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: samples/nextjs/package.json
