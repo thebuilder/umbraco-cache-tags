@@ -47,8 +47,9 @@ internal static partial class TargetValidator
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9]*$")]
     private static partial Regex SettingName();
 
-    // A secret's name under CacheTags:Secrets. No colon, so it cannot reach outside that section.
-    [GeneratedRegex("^[A-Za-z0-9_.-]+$")]
+    // A secret's name under CacheTags:Secrets. No colon, so it cannot reach outside that section, and
+    // nothing a shell cannot export, so it can be set as CacheTags__Secrets__<name>.
+    [GeneratedRegex("^[A-Za-z0-9_]+$")]
     private static partial Regex SecretName();
 
     /// <summary>What is wrong with a backoffice target, or null. <paramref name="types" /> are the registered target types.</summary>
@@ -204,7 +205,7 @@ internal static partial class TargetValidator
         }
 
         return setting!.Length > MaxSettingNameLength || SecretName().IsMatch(setting) is false
-            ? $"{what} names a secret with characters a secret's name cannot have. Use letters, digits, dots, hyphens and underscores."
+            ? $"{what} names a secret with characters a secret's name cannot have. Use letters, digits and underscores."
             : null;
     }
 

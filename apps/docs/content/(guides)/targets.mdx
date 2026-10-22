@@ -47,7 +47,7 @@ CacheTags__Secrets__VercelBypass=<bypass secret>
 ```
 </CodeGroup>
 
-A target that names `VercelBypass` reads `CacheTags:Secrets:VercelBypass`, and nothing outside that section. A secret's name uses letters, digits, dots, hyphens and underscores. So an administrator can send a target only the values you put under `CacheTags:Secrets`, never the database connection string or other settings.
+A target that names `VercelBypass` reads `CacheTags:Secrets:VercelBypass`, and nothing outside that section. A secret's name uses letters, digits and underscores, so it can always be set as an environment variable. So an administrator can send a target only the values you put under `CacheTags:Secrets`, never the database connection string or other settings.
 
 :::caution[Keep secrets out of the database]
 The package stores a typed value in the database in plain text, and shows it to administrators. Put secrets under `CacheTags:Secrets`, ideally as environment variables or in your host's secret store, and name them instead.

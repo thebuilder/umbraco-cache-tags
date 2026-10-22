@@ -2,8 +2,8 @@ import { UmbElementMixin } from "@umbraco-cms/backoffice/element-api";
 import { css, customElement, html, LitElement, nothing, repeat, state } from "@umbraco-cms/backoffice/external/lit";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import { UmbTextStyles } from "@umbraco-cms/backoffice/style";
-import { api, type ChangeLookup, type Purge } from "./api.js";
-import { DOCS, errorMessage, sharedStyles, time } from "./shared.js";
+import { api, ApiError, type ChangeLookup, type Purge } from "./api.js";
+import { DOCS, errorMessage, parseUtc, sharedStyles, time } from "./shared.js";
 
 const STAGES: Record<ChangeLookup["status"], { label: string; color: string; hint: string }> = {
   Pending: { label: "Waiting for servers", color: "warning", hint: "Waiting for every server to apply it." },
@@ -19,9 +19,6 @@ const stageOf = (change: ChangeLookup) =>
     ? { label: "Queued", color: "default", hint: "Released on the next pass; it does not wait for servers." }
     : STAGES[change.status];
 
-// The API sends UTC, sometimes without a zone.
-const utc = (value: string) => (/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`);
-
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** Recent changes, what each planned and where its purges are, and the purges that failed. */
@@ -35,6 +32,8 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
 
   #notification?: typeof UMB_NOTIFICATION_CONTEXT.TYPE;
   #refreshTimer?: ReturnType<typeof setTimeout>;
+  /** How long to wait after a failed refresh; it doubles with each failure in a row. */
+  #errorDelay = REFRESH_DELAY;
   /** The changes the user has opened, by id, so a refresh keeps them open. */
   #open = new Set<string>();
   #whenVisible = () => {
@@ -66,10 +65,15 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     clearTimeout(this.#refreshTimer);
     this._loading = true;
     this._error = undefined;
+    let denied = false;
     try {
       [this._changes, this._failed] = await Promise.all([api.changes(30), api.purges("Dead")]);
+      this.#errorDelay = REFRESH_DELAY;
     } catch (error) {
       this._error = errorMessage(error, "Could not load the changes.");
+      // Not allowed: trying again changes nothing. Anything else may pass, so wait longer each time.
+      denied = error instanceof ApiError && (error.status === 401 || error.status === 403);
+      this.#errorDelay = Math.min(this.#errorDelay * 2, 60_000);
     } finally {
       this._loading = false;
     }
@@ -80,10 +84,10 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     const inProgress = this._changes.some(
       (change) =>
         change.status !== "Released" ||
-        change.purges.some((purge) => purge.state === "Pending" && Date.parse(utc(purge.notBeforeUtc)) <= soon)
+        change.purges.some((purge) => purge.state === "Pending" && parseUtc(purge.notBeforeUtc).getTime() <= soon)
     );
-    if ((inProgress || this._error) && this.isConnected) {
-      this.#refreshTimer = setTimeout(() => this.#refreshWhenVisible(), this._error ? REFRESH_DELAY * 5 : REFRESH_DELAY);
+    if ((inProgress || this._error) && !denied && this.isConnected) {
+      this.#refreshTimer = setTimeout(() => this.#refreshWhenVisible(), this._error ? this.#errorDelay : REFRESH_DELAY);
     }
   }
 

@@ -125,10 +125,12 @@ public sealed class TargetTests : IDisposable
     }
 
     [Fact]
-    public void A_secret_name_has_only_letters_digits_dots_hyphens_and_underscores()
+    public void A_secret_name_has_only_letters_digits_and_underscores_so_it_can_be_an_environment_variable()
     {
-        Assert.Null(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "Gateway_Key.prod-1")), Types));
+        Assert.Null(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "Gateway_Key_prod1")), Types));
         Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "sk_live 123")), Types));
+        Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "vercel-bypass")), Types));
+        Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "Vercel.Bypass")), Types));
     }
 
     [Theory]

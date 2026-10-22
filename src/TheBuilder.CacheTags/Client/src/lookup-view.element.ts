@@ -44,6 +44,7 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
     if (key) {
       this.#lookUp(key, false);
     } else if (query) {
+      clearTimeout(this.#searchTimer);
       this._key = query;
       this._lookup = undefined;
       this.#searchFor(query);
@@ -83,6 +84,9 @@ export class CacheTagsLookupViewElement extends UmbElementMixin(LitElement) {
   #typed(text: string): void {
     this._key = text;
     this._lookup = undefined;
+    this._loading = false;
+    // A lookup or search still loading is for what was there before.
+    this.#generation++;
     clearTimeout(this.#searchTimer);
     const query = text.trim();
     if (query.length < 2) {
