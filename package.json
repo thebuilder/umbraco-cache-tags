@@ -6,6 +6,7 @@
     "build": "pnpm --dir src/TheBuilder.CacheTags/Client build",
     "typecheck": "pnpm --dir src/TheBuilder.CacheTags/Client typecheck",
     "docs:dev": "pnpm --filter @thebuilder/cache-tags-docs dev",
-    "docs:build": "pnpm --filter @thebuilder/cache-tags-docs build"
+    "docs:build": "pnpm --filter @thebuilder/cache-tags-docs build",
+    "docs:screenshots": "pnpm --filter @thebuilder/cache-tags-docs screenshots"
   }
 }
