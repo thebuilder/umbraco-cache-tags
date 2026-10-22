@@ -41,6 +41,8 @@ internal sealed class SourceChangeHandlers(
         INotificationHandler<MediaMovedNotification>,
         INotificationHandler<MediaMovedToRecycleBinNotification>,
         INotificationHandler<MediaDeletedNotification>,
+        INotificationHandler<ContentTypeSavingNotification>,
+        INotificationHandler<MediaTypeSavingNotification>,
         INotificationHandler<ContentTypeChangedNotification>,
         INotificationHandler<MediaTypeChangedNotification>,
         INotificationHandler<DataTypeSavedNotification>,
@@ -132,11 +134,19 @@ internal sealed class SourceChangeHandlers(
     public void Handle(MediaDeletedNotification notification)
         => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Where(media => media.Trashed is false).Select(media => Item(media)).ToList()));
 
+    // Before a type is saved: its alias as it was, which the changed notification no longer has.
+    // Responses rendered with the old alias are keyed by it.
+    public void Handle(ContentTypeSavingNotification notification)
+        => Guard(() => RememberAliases(notification.SavedEntities, key => contentTypeService.Get(key)));
+
+    public void Handle(MediaTypeSavingNotification notification)
+        => Guard(() => RememberAliases(notification.SavedEntities, key => mediaTypeService.Get(key)));
+
     public void Handle(ContentTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "content types changed"));
+        => Guard(() => RecordTypes(notification.Changes.SelectMany(change => Aliases(change.Item)), "content types changed"));
 
     public void Handle(MediaTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "media types changed"));
+        => Guard(() => RecordTypes(notification.Changes.SelectMany(change => Aliases(change.Item)), "media types changed"));
 
     // A data type's configuration changes how every property using it renders.
     public void Handle(DataTypeSavedNotification notification)
@@ -195,6 +205,21 @@ internal sealed class SourceChangeHandlers(
             recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.TypesChanged, [], distinct, null, reason));
         }
     }
+
+    private void RememberAliases(IEnumerable<IContentTypeComposition> types, Func<Guid, IContentTypeComposition?> persisted)
+    {
+        foreach (IContentTypeComposition type in types.Where(type => type.HasIdentity && type.IsPropertyDirty(nameof(IContentTypeComposition.Alias))))
+        {
+            if (persisted(type.Key)?.Alias is { } alias && alias.Equals(type.Alias, StringComparison.OrdinalIgnoreCase) is false)
+            {
+                pending.RememberAlias(type.Key, alias);
+            }
+        }
+    }
+
+    // A type's alias, and the one it had before it was renamed.
+    private IEnumerable<string> Aliases(IContentTypeComposition type)
+        => pending.TakeAlias(type.Key) is { } previous ? [type.Alias, previous] : [type.Alias];
 
     private void RecordEverything(string reason)
         => recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.Everything, [], [], null, reason));

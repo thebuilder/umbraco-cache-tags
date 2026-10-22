@@ -6,7 +6,8 @@ namespace TheBuilder.CacheTags.Ledger;
 /// <summary>
 ///     Turns a change into the keys to purge. The planned keys reach every response that showed the
 ///     changed items (item keys) and every listing they could have joined or left (selector keys).
-///     Route changes reach the descendants too, whose routes follow.
+///     Route changes reach the descendants too, whose routes follow, and the listings of their types,
+///     which they leave or join with the item.
 /// </summary>
 internal sealed class PurgePlanner(IDescendants descendants)
 {
@@ -41,8 +42,11 @@ internal sealed class PurgePlanner(IDescendants descendants)
         {
             if (change.Kind == ChangeKind.Sorted)
             {
-                // Only the order of the parent's children changed; the items themselves did not.
+                // The items did not change, only their order: in the parent's children, and in every
+                // listing ordered by sort order that shows them (a type listing, or any other query).
                 keys.Add(CacheKeys.Children(item.ParentKey));
+                keys.Add(CacheKeys.Type(item.TypeAlias));
+                keys.Add(CacheKeys.Search(ListingSelectors.ContentIndex));
                 continue;
             }
 
@@ -68,6 +72,11 @@ internal sealed class PurgePlanner(IDescendants descendants)
         }
 
         keys.UnionWith(routeDescendants.Select(CacheKeys.Content));
+
+        // An unpublish (of the item, or of one of its cultures), move or trash takes the descendants
+        // out of listings of their types, or into others, including pages that do not show them. A
+        // rename leaves them where they are, which only over-purges.
+        keys.UnionWith(descendants.TypesOf(routeDescendants).Select(CacheKeys.Type));
         return new PurgePlan(keys, Everything: false, change.Cultures);
     }
 }
@@ -76,13 +85,29 @@ internal sealed class PurgePlanner(IDescendants descendants)
 internal interface IDescendants
 {
     IEnumerable<Guid> Of(Guid key);
+
+    /// <summary>The content type aliases of the given documents.</summary>
+    IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys);
 }
 
-internal sealed class NavigationDescendants(Umbraco.Cms.Core.Services.Navigation.IDocumentNavigationQueryService navigation) : IDescendants
+internal sealed class NavigationDescendants(
+    Umbraco.Cms.Core.Services.Navigation.IDocumentNavigationQueryService navigation,
+    Umbraco.Cms.Core.Services.IEntityService entities) : IDescendants
 {
+    // Below SQL Server's 2100 parameters per query.
+    private const int TypesBatch = 1000;
+
     // A trashed document's descendants moved to the recycle bin with it.
     public IEnumerable<Guid> Of(Guid key)
         => navigation.TryGetDescendantsKeys(key, out IEnumerable<Guid> keys) ? keys
             : navigation.TryGetDescendantsKeysInBin(key, out IEnumerable<Guid> binned) ? binned
             : [];
+
+    // The navigation structure knows no aliases; the entity service reads them without loading content.
+    public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys)
+        => keys.Chunk(TypesBatch)
+            .SelectMany(batch => entities.GetAll(Umbraco.Cms.Core.Models.UmbracoObjectTypes.Document, batch))
+            .OfType<Umbraco.Cms.Core.Models.Entities.IContentEntitySlim>()
+            .Select(entity => entity.ContentTypeAlias)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 }

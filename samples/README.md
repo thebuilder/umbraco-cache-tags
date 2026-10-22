@@ -260,6 +260,17 @@ to refresh:
    its cache is reported, not judged.
 4. The Harbour image is renamed. The article and `/articles` must show the new name (it is the
    image's alt text).
+5. The footer's dictionary item changes. `/articles` and `/en-us/about` must show it, through the
+   site's own `[CacheTagged]` API.
+6. Getting around's guides are sorted. `/guides` must refetch its guide listing (by type) and its
+   recently updated listing (whose order the index decides, keyed by the catch-all `search-` key),
+   and On foot's own page must keep its cache.
+7. The article document type's alias is renamed. Harbour mornings must refetch its response, which
+   is recorded under the old alias.
+8. Getting around is unpublished, then published again. `/guides` must stop listing On foot under
+   it, then list it again.
+9. On foot is renamed. Its old route must answer Umbraco's 301 with `Cache-Control: no-store` and no
+   `X-Umbraco-Cache-Keys`.
 
 Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
 page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its

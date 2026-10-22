@@ -23,6 +23,13 @@ internal sealed class PendingOperations : IDisposable
     /// <summary>The live URL segments kept for an item before its publish, once.</summary>
     public IReadOnlyDictionary<string, string?>? TakeSegments(Guid key) => Take<IReadOnlyDictionary<string, string?>>(("segments", key));
 
+    /// <summary>Keeps a content or media type's alias before it is renamed.</summary>
+    public void RememberAlias(Guid key, string alias)
+        => _items.Set(("alias", key), alias, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = Lifetime });
+
+    /// <summary>The alias a type had before it was renamed, once.</summary>
+    public string? TakeAlias(Guid key) => Take<string>(("alias", key));
+
     /// <summary>Marks published items being sorted: Umbraco publishes them again, which is not a change of their own.</summary>
     public void MarkSorting(IEnumerable<Guid> keys)
     {

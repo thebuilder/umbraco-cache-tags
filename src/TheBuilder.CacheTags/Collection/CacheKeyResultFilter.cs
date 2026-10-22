@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using TheBuilder.CacheTags.Configuration;
@@ -16,8 +17,8 @@ namespace TheBuilder.CacheTags.Collection;
 ///     Runs after every Delivery API action, and every action with <see cref="CacheTaggedAttribute" />:
 ///     gives a cacheable response its keys in the response header and queues the record of what it
 ///     covers. Preview responses get <c>no-store</c> and member responses <c>private</c>, and neither
-///     gets a key. Nor does a response other than a 200, or one whose request headers are too long to
-///     record: both get <c>no-store</c>.
+///     gets a key. Nor does a response other than a 200 (a redirect included), or one whose request
+///     headers are too long to record: both get <c>no-store</c>.
 /// </summary>
 internal sealed class CacheKeyResultFilter(
     IOptionsMonitor<CacheTagsOptions> options,
@@ -133,13 +134,18 @@ internal sealed class CacheKeyResultFilter(
         });
     }
 
-    /// <summary>The status a result answers with, and its body for results that carry one.</summary>
-    private static (int Status, object? Value) Outcome(IActionResult result, HttpResponse response) => result switch
+    /// <summary>
+    ///     The status a result answers with, and its body for results that carry one. The response is
+    ///     tagged before the result runs, so a result that sets its status only as it runs (a redirect,
+    ///     such as the Delivery API's 301 for a moved item, a challenge, a forbid, or one this does not
+    ///     know) counts as not a 200: the response still says 200 here.
+    /// </summary>
+    internal static (int Status, object? Value) Outcome(IActionResult result, HttpResponse response) => result switch
     {
         ObjectResult objectResult => (objectResult.StatusCode ?? 200, objectResult.Value),
         JsonResult json => (json.StatusCode ?? 200, json.Value),
-        ContentResult content => (content.StatusCode ?? 200, null),
-        StatusCodeResult statusCode => (statusCode.StatusCode, null),
-        _ => (response.StatusCode, null),
+        IStatusCodeActionResult statusCode => (statusCode.StatusCode ?? 200, null),
+        FileResult or EmptyResult => (response.StatusCode, null),
+        _ => (0, null),
     };
 }

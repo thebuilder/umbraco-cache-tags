@@ -38,6 +38,7 @@ Like a Delivery API response, the response gets a `response-` key and `umbraco`,
 - **Custom keys** start with `x-` and use lowercase letters, digits and hyphens, at most 200 characters. An item's `content-` or `media-` key works too.
 - **`QueryParameters`** lists the parameters that select what a response covers. Only those are part of its key, and there are none by default.
 - **`Recorded = false`** puts the keys in each response's header instead of recording them. Use it for an action whose input varies without end, such as a search.
+- **Only a 200 is tagged.** The package tags a response before its result runs, so it reads the status from the result: return an `ObjectResult` (`Ok(...)`), a `JsonResult`, a `ContentResult`, a status code result or a file. Anything else, such as a redirect, a challenge or a typed `IResult`, gets `no-store` and no key.
 
 :::caution
 Every value of a listed query parameter makes a new key and a new recorded response. List only parameters with a known, small set of values, such as a locale.

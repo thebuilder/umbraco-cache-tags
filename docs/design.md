@@ -169,8 +169,20 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 
 - A route change (rename, move, unpublish) also reaches the descendants, whose routes follow. The
   planner expands them at purge time with `IDocumentNavigationQueryService.TryGetDescendantsKeys`,
-  up to `CacheTags:MaxDescendants`, and plans `type-` or `umbraco` keys past that. The mapping
-  stores no ancestor keys.
+  up to `CacheTags:MaxDescendants`, and plans `umbraco` past that. The mapping stores no ancestor
+  keys.
+- A route change also plans the descendants' `type-` keys: on an unpublish (of the item or one of
+  its cultures), move or trash they leave or join the listings of their types with the item,
+  including pages of a listing that do not show them, which their `content-` keys would not reach.
+  On a rename this only over-purges. Umbraco itself lists the published descendants of a moved or
+  trashed item, and publishes the published descendants of an item published again after an
+  unpublish, so those plan their own keys too.
+- A sort plans no item keys, since the items did not change, but every listing that can show them
+  in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
+  `search-` key. It waits for the index like any listing.
+- Renaming a content or media type's alias plans the `type-` and `schema-` keys of the old alias as
+  well as the new one: responses rendered before the rename are recorded under the old one. Umbraco's
+  changed notification carries only the new alias, so the old one is read when the type is saving.
 - Unpublishing always purges every culture, because Umbraco raises it only when the whole document
   goes.
 - A sort's re-publish of the sorted items is not recorded as a publish, and items deleted from the
@@ -220,7 +232,9 @@ timeout). A server that restarts after a change was released is a new identity t
 for, and serves Umbraco's listings as its index rebuilds.
 
 Non-200 Delivery API responses (not found, redirects) get `no-store`: no item covers them, so no
-purge would reach them.
+purge would reach them. The package tags a response before its result runs, so a result that sets
+its status only as it runs (a redirect, such as the Delivery API's 301 for an item's old route, a
+challenge or a forbid) counts as not a 200, as does a result type it does not know.
 
 Every package write takes the package's own Umbraco write lock first (`umbracoLock` id -91730).
 On SQLite, two transactions that each read and then write deadlock otherwise.
@@ -258,7 +272,10 @@ public sealed class DictionaryController(ICacheTagsResponse cacheTags, ...) : Co
 
 `QueryParameters` lists the parameters that select what a response covers; none by default, and only
 those are part of its key, so listing an unbounded parameter makes a key per value. `Recorded = false`
-makes each response carry its keys itself instead, for an action whose input varies without end.
+makes each response carry its keys itself instead, for an action whose input varies without end. Only
+a 200 is tagged, read from the result before it runs: an `ObjectResult`, `JsonResult`,
+`ContentResult`, status code result or file. Any other result (a redirect, a challenge, a typed
+`IResult`) gets `no-store` and no key.
 
 **Changes.** `ICacheTagsChanges.Record(keys, waitFor, cultures, reason)` records a change that purges
 the keys: custom keys (`x-` and lowercase letters, digits and hyphens), items' `content-` or `media-`
