@@ -2,18 +2,24 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Configuration;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using TheBuilder.CacheTags.Composition;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Targets;
+using Umbraco.Cms.Core.Composing;
+using Umbraco.Cms.Core.DependencyInjection;
 
 namespace TheBuilder.CacheTags.Tests;
 
 /// <summary>
-///     The private network guard as the package registers it: a purge to a backoffice target goes
-///     through the client the composer adds, against a real socket on this machine.
+///     The purge clients as the package's composer registers them, against a real socket on this
+///     machine: the private network guard for backoffice targets, and no redirects or proxies.
+///     Not run in parallel with other tests, because the proxy test sets the process-wide default proxy.
 /// </summary>
+[Collection(nameof(PrivateNetworkTests))]
 public sealed class PrivateNetworkTests : IAsyncLifetime
 {
     private const string Secret = "a-signing-secret-of-thirty-two-c";
@@ -23,11 +29,21 @@ public sealed class PrivateNetworkTests : IAsyncLifetime
     private int _connections;
     private Task? _accepting;
 
+    // Answered by every connection the listener accepts.
+    private string _response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
     public PrivateNetworkTests()
     {
+        // Everything Compose registers, on a builder that scans no assemblies.
         var services = new ServiceCollection();
-        CacheTagsComposer.AddPurgeClients(services);
+        var typeLoader = new TypeLoader(new TypeFinder(NullLogger<TypeFinder>.Instance, new NoAssemblies(), null, null), NullLogger<TypeLoader>.Instance, []);
+        new CacheTagsComposer().Compose(new UmbracoBuilder(services, new ConfigurationBuilder().Build(), typeLoader));
         _services = services.BuildServiceProvider();
+    }
+
+    private sealed class NoAssemblies : IAssemblyProvider
+    {
+        public IEnumerable<Assembly> Assemblies => [];
     }
 
     private int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -46,7 +62,7 @@ public sealed class PrivateNetworkTests : IAsyncLifetime
         await _services.DisposeAsync();
     }
 
-    // Answers every request with 204, and counts the connections that got this far.
+    // Answers every request with _response, and counts the connections that got this far.
     private async Task AcceptAsync()
     {
         try
@@ -65,7 +81,7 @@ public sealed class PrivateNetworkTests : IAsyncLifetime
                     read += last;
                 }
 
-                await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray());
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(_response));
             }
         }
         catch (Exception exception) when (exception is SocketException or ObjectDisposedException or IOException)
@@ -114,6 +130,37 @@ public sealed class PrivateNetworkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_redirect_is_not_followed_so_the_signed_purge_stays_with_the_target()
+    {
+        _response = $"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{Port}/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        var target = new CacheTagsTargetOptions { Type = WebhookTarget.TypeName, Url = $"http://127.0.0.1:{Port}/api/cache-tags", Secret = Secret };
+
+        Assert.StartsWith("302", await SendAsync(target));
+        Assert.Equal(1, Volatile.Read(ref _connections));
+    }
+
+    [Fact]
+    public async Task A_backoffice_target_is_connected_to_itself_and_never_through_a_proxy()
+    {
+        // Through a proxy, the guard would check the proxy's address rather than the target's.
+        IWebProxy before = HttpClient.DefaultProxy;
+        HttpClient.DefaultProxy = new WebProxy($"http://127.0.0.1:{Port}");
+        try
+        {
+            ResolvedTarget target = Resolve(Backoffice("http://cache-tags-test.invalid/api/cache-tags"), allowPrivateNetwork: false);
+
+            var error = await SendAsync(target.Options);
+
+            Assert.Contains("cache-tags-test.invalid", error);
+            Assert.DoesNotContain("127.0.0.1", error);
+        }
+        finally
+        {
+            HttpClient.DefaultProxy = before;
+        }
+    }
+
+    [Fact]
     public async Task A_target_from_configuration_reaches_a_private_address()
     {
         var target = new CacheTagsTargetOptions { Type = WebhookTarget.TypeName, Url = $"http://127.0.0.1:{Port}/api/cache-tags", Secret = Secret };
@@ -122,3 +169,6 @@ public sealed class PrivateNetworkTests : IAsyncLifetime
         Assert.Equal(1, Volatile.Read(ref _connections));
     }
 }
+
+[CollectionDefinition(nameof(PrivateNetworkTests), DisableParallelization = true)]
+public sealed class PrivateNetworkTestsCollection;

@@ -15,7 +15,11 @@ namespace TheBuilder.CacheTags.Tests;
 /// <summary>
 ///     A SQLite database with the package's schema made by its own migration plan, run through
 ///     Umbraco's SQLite syntax provider, so the SQL tests run against the tables a site gets. A step
-///     missing from the plan, or a column missing from a step, fails the tests that use it.
+///     missing from the plan fails the tests that use the tables or rows it adds. A fresh install
+///     creates each table from today's row class, so a column a later step adds to an existing table
+///     is only checked by the upgrade tests in <see cref="MigrationTests" />.
+///     The steps run one after another with a minimal <see cref="IMigrationContext" />, not through
+///     Umbraco's migration executor: no scopes, no post-migrations, and SQLite only.
 /// </summary>
 internal sealed class MigratedDatabase : IDisposable
 {
@@ -86,6 +90,46 @@ internal sealed class MigratedDatabase : IDisposable
             await migration.RunAsync();
             State = transition.TargetState;
         }
+    }
+
+    /// <summary>The package's tables, their columns and their indexes, one line each, for comparing two databases.</summary>
+    public IReadOnlyList<string> Schema()
+    {
+        var lines = new List<string>();
+        foreach (var table in Database.Fetch<string>("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'theBuilderCacheTags%' ORDER BY name"))
+        {
+            foreach (IDictionary<string, object> column in Database.Fetch<dynamic>("SELECT * FROM pragma_table_info(@0)", table))
+            {
+                var notNull = Convert.ToInt64(column["notnull"]) == 1 ? " NOT NULL" : "";
+                var primaryKey = Convert.ToInt64(column["pk"]) > 0 ? " PRIMARY KEY" : "";
+                lines.Add($"{table}.{column["name"]} {column["type"]}{notNull}{primaryKey}");
+            }
+
+            lines.AddRange(Indexes(table));
+        }
+
+        return lines.Order(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>A table's own indexes (not the ones SQLite makes for a primary key): name, unique, columns.</summary>
+    public IReadOnlyList<string> Indexes(string table)
+    {
+        var indexes = new List<string>();
+        foreach (IDictionary<string, object> index in Database.Fetch<dynamic>("SELECT * FROM pragma_index_list(@0)", table))
+        {
+            if ((string)index["origin"] != "c")
+            {
+                continue;
+            }
+
+            var columns = Database.Fetch<dynamic>("SELECT * FROM pragma_index_info(@0)", index["name"])
+                .Cast<IDictionary<string, object>>()
+                .OrderBy(column => Convert.ToInt64(column["seqno"]))
+                .Select(column => (string)column["name"]);
+            indexes.Add($"{table} {(Convert.ToInt64(index["unique"]) == 1 ? "UNIQUE " : "")}{index["name"]} ({string.Join(", ", columns)})");
+        }
+
+        return indexes.Order(StringComparer.Ordinal).ToList();
     }
 
     public void Dispose()

@@ -12,12 +12,30 @@ public sealed class MigrationTests
     private static readonly Guid Recorded = new("01a1606c-318c-77da-8780-ba1b54b6add3");
 
     [Fact]
-    public void A_fresh_install_reaches_the_final_state_with_the_lock_every_package_write_takes()
+    public void A_fresh_install_adds_the_lock_every_package_write_takes()
     {
         using MigratedDatabase migrated = MigratedDatabase.Create();
 
-        Assert.Equal(migrated.Plan.FinalState, migrated.State);
         Assert.Equal("TheBuilder.CacheTags", migrated.Database.ExecuteScalar<string>("SELECT name FROM umbracoLock WHERE id = -91730"));
+    }
+
+    [Fact]
+    public void A_fresh_install_has_the_indexes_the_package_s_queries_and_upserts_rely_on()
+    {
+        using MigratedDatabase migrated = MigratedDatabase.Create();
+
+        Assert.Equal(
+            [
+                "theBuilderCacheTagsAck UNIQUE IX_theBuilderCacheTagsAck_Pair (EventId, Server)",
+                "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_CreatedUtc (CreatedUtc)",
+                "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_Status (Status)",
+                "theBuilderCacheTagsOutbox IX_theBuilderCacheTagsOutbox_Due (State, NotBeforeUtc)",
+                "theBuilderCacheTagsResponse IX_theBuilderCacheTagsResponse_SeenUtc (SeenUtc)",
+                "theBuilderCacheTagsResponseKey IX_theBuilderCacheTagsResponseKey_CacheKey (CacheKey)",
+                "theBuilderCacheTagsResponseKey UNIQUE IX_theBuilderCacheTagsResponseKey_Pair (ResponseKey, CacheKey)",
+            ],
+            new[] { "theBuilderCacheTagsAck", "theBuilderCacheTagsEvent", "theBuilderCacheTagsOutbox", "theBuilderCacheTagsResponse", "theBuilderCacheTagsResponseKey", "theBuilderCacheTagsServer", "theBuilderCacheTagsTarget" }
+                .SelectMany(migrated.Indexes));
     }
 
     [Fact]
@@ -38,6 +56,7 @@ public sealed class MigrationTests
 
         Assert.Equal("Released", Status(migrated, Recorded));
         Assert.Empty(LedgerSql.InStage(migrated.Database, ChangeStage.Pending, 10));
+        AssertSameSchemaAsAFreshInstall(migrated);
     }
 
     [Fact]
@@ -51,6 +70,7 @@ public sealed class MigrationTests
 
         Assert.Equal([Releasing], LedgerSql.InStage(migrated.Database, ChangeStage.Pending, 10).Select(row => row.Id));
         Assert.Equal("Released", Status(migrated, TimedOut));
+        AssertSameSchemaAsAFreshInstall(migrated);
     }
 
     [Fact]
@@ -69,6 +89,14 @@ public sealed class MigrationTests
 
         AckSql.Indexed(migrated.Database, "server-1", [Recorded], new DateTime(2026, 10, 20, 9, 1, 0, DateTimeKind.Utc));
         Assert.Equal(["server-1"], AckSql.Acks(migrated.Database, [Recorded]).IndexedBy(Recorded));
+        AssertSameSchemaAsAFreshInstall(migrated);
+    }
+
+    // An upgraded site must end with the tables, columns and indexes a new one gets.
+    private static void AssertSameSchemaAsAFreshInstall(MigratedDatabase upgraded)
+    {
+        using MigratedDatabase fresh = MigratedDatabase.Create();
+        Assert.Equal(fresh.Schema(), upgraded.Schema());
     }
 
     private static void InsertEvent(MigratedDatabase migrated, Guid id, string? status)
