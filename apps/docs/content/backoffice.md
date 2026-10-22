@@ -9,6 +9,8 @@ Administrators find the package under **Settings > Advanced > Cache tags**, and 
 
 ## Changes
 
+![Changes, with a publish of Harbour mornings open: the keys it planned, the responses it reaches, the server that applied and indexed it, and its two purges to the nextjs target](./screenshots/changes.png)
+
 The latest changes, newest first, each with:
 
 - what it planned: the item and listing keys;
@@ -21,6 +23,8 @@ A change shows **Waiting for servers** until every server has applied it, **Wait
 Failed purges, those given up after their last attempt, are listed at the top. **Retry** sends one again once the target answers; **Set aside** stops it showing.
 
 ## Look up
+
+![Look up after searching for harbour: the items named Harbour with their keys, and the responses whose request matches](./screenshots/lookup.png)
 
 Search by an item's name, or by part of a path, a query or a key, and open what you find:
 
@@ -41,5 +45,7 @@ Every target purges go to. Add a webhook, a Cloudflare zone, or a target type yo
 ## The Info tab
 
 A document's or media item's **Info** tab has a **Cache** box: how many served responses include it, the first few of them, a link to all of them in Look up, and **Purge this item**.
+
+![The Cache box on Harbour mornings' Info tab: how many served responses include it, the first five of them, a link to the rest, the item's key and Purge this item](./screenshots/info.png)
 
 The list is what the package has recorded, not what a cache holds right now. After a purge the responses stay listed, because the next render of each includes the item again.

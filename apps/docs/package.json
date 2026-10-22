@@ -7,6 +7,7 @@
     "build": "pnpm run generate:brand && pnpm run generate:og && blume build",
     "check": "blume check",
     "generate:brand": "node scripts/generate-brand.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
     "generate:og": "umbraco-docs-og",
     "check:og": "umbraco-docs-og --check"
   },
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "playwright": "^1.64.0",
     "sharp": "^0.35.4"
   }
 }
