@@ -22,7 +22,7 @@ public sealed class OutputWalkerTests
         => new(id, "name", "page", DateTime.UnixEpoch, DateTime.UnixEpoch, Route, properties ?? []);
 
     [Fact]
-    public void Collects_every_document_and_media_item_the_output_shows_and_no_block_elements()
+    public void Collects_every_document_and_media_item_the_output_shows_and_the_types_it_renders()
     {
         var markup = $"<p><a href=\"/f/\" data-destination-id=\"{InMarkup}\" data-link-type=\"Content\">F</a>"
             + $"<a href=\"/media/3.png\" data-destination-id=\"{MediaLink}\" data-link-type=\"Media\">3</a></p>";
@@ -58,6 +58,9 @@ public sealed class OutputWalkerTests
                 "content-10000000-0000-0000-0000-000000000010",
                 "media-20000000-0000-0000-0000-000000000001",
                 "media-20000000-0000-0000-0000-000000000003",
+                "schema-image",
+                "schema-linkblock",
+                "schema-page",
             ],
             keys.Order(StringComparer.Ordinal));
     }
@@ -70,6 +73,6 @@ public sealed class OutputWalkerTests
         var keys = new HashSet<string>();
         OutputWalker.Collect(listing, keys);
 
-        Assert.Equal(["content-10000000-0000-0000-0000-00000000000a", "content-10000000-0000-0000-0000-00000000000d"], keys.Order(StringComparer.Ordinal));
+        Assert.Equal(["content-10000000-0000-0000-0000-00000000000a", "content-10000000-0000-0000-0000-00000000000d", "schema-page"], keys.Order(StringComparer.Ordinal));
     }
 }

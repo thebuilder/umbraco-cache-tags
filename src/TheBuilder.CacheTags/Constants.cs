@@ -4,9 +4,6 @@ internal static class Constants
 {
     public const string PackageName = "TheBuilder.CacheTags";
 
-    /// <summary>The response header that carries a response's cache keys.</summary>
-    public const string HeaderName = "X-Umbraco-Cache-Keys";
-
     /// <summary>Under <c>/umbraco/</c>, which <c>BackOfficeRoute</c> adds.</summary>
     public const string ApiRoot = "management/api/v{version:apiVersion}/cache-tags";
     public const string ApiName = "thebuilder-cache-tags";
@@ -16,5 +13,8 @@ internal static class Constants
         public const string Responses = "theBuilderCacheTagsResponse";
         public const string ResponseKeys = "theBuilderCacheTagsResponseKey";
         public const string Events = "theBuilderCacheTagsEvent";
+        public const string Servers = "theBuilderCacheTagsServer";
+        public const string Acks = "theBuilderCacheTagsAck";
+        public const string Outbox = "theBuilderCacheTagsOutbox";
     }
 }

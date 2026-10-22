@@ -1,24 +1,30 @@
-using System.Text.Json;
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
-using TheBuilder.CacheTags.Storage;
-using Umbraco.Cms.Infrastructure.Scoping;
+using TheBuilder.CacheTags.Delivery;
 
 namespace TheBuilder.CacheTags.Ledger;
 
 /// <summary>
-///     Plans each change, resolves it to the responses it purges, and records both in the ledger.
-///     Milestone 3 sends the result; until then the ledger and the log are where a plan can be checked.
+///     Plans each change and records it in the ledger, on the server that made it. The delivery
+///     worker sends the purge once every server has acknowledged the change. A change that cannot be
+///     recorded (the database is busy, say) is kept in memory and recorded again by the worker, so
+///     its purge comes late rather than never.
 /// </summary>
 internal sealed class ChangeRecorder(
     PurgePlanner planner,
-    IServiceScopeFactory scopeFactory,
-    IScopeProvider scopeProvider,
+    Storage.PackageDatabase database,
+    LedgerStore ledger,
+    ServerIdentity identity,
+    DeliverySignal signal,
     IOptionsMonitor<CacheTagsOptions> options,
     ILogger<ChangeRecorder> logger)
 {
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private readonly ConcurrentQueue<(Change Change, PurgePlan Plan)> _unrecorded = new();
+
+    /// <summary>Whether some changes are waiting to be recorded again.</summary>
+    public bool HasUnrecorded => _unrecorded.IsEmpty is false;
 
     public void Record(Change change)
     {
@@ -28,20 +34,27 @@ internal sealed class ChangeRecorder(
             return;
         }
 
-        PurgePlan plan = planner.Plan(change, settings.DescendantBudget);
-        using (IScope scope = scopeProvider.CreateScope())
+        PurgePlan plan = planner.Plan(change, settings.MaxDescendants);
+
+        if (database.IsInstalled() is false)
         {
-            scope.Database.Insert(new EventRow
-            {
-                Id = change.Id,
-                CreatedUtc = change.CreatedUtc,
-                Kind = change.Kind.ToString(),
-                Server = Environment.MachineName,
-                Change = JsonSerializer.Serialize(change, Json),
-                Plan = JsonSerializer.Serialize(plan, Json),
-            });
-            scope.Complete();
+            // A change made during the first boot, before the package's migrations have run.
+            _unrecorded.Enqueue((change, plan));
         }
+        else
+        {
+            try
+            {
+                ledger.Add(change, plan, identity.Name);
+            }
+            catch (Exception exception)
+            {
+                _unrecorded.Enqueue((change, plan));
+                logger.LogWarning(exception, "Cache tags change {ChangeId} could not be recorded; it is tried again shortly.", change.Id);
+            }
+        }
+
+        signal.Wake();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -53,15 +66,13 @@ internal sealed class ChangeRecorder(
         }
     }
 
-    /// <summary>The response keys a plan reaches now, from the mapping store.</summary>
-    public async Task<IReadOnlyCollection<string>> ResolveAsync(PurgePlan plan, CancellationToken cancellationToken = default)
+    /// <summary>Records the changes that failed before, in order, until one fails again.</summary>
+    public void RecordUnrecorded()
     {
-        if (plan.Everything)
+        while (database.IsInstalled() && _unrecorded.TryPeek(out var unrecorded))
         {
-            return [];
+            ledger.Add(unrecorded.Change, unrecorded.Plan, identity.Name);
+            _unrecorded.TryDequeue(out _);
         }
-
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<ICacheTagStore>().FindResponseKeysAsync(plan.Keys, plan.Cultures, cancellationToken);
     }
 }

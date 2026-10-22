@@ -37,7 +37,18 @@ public sealed class CacheTagSqlTests : IDisposable
     }
 
     private static CachedResponse Render(string responseKey, DateTime at, string culture, params string[] keys)
-        => new(responseKey, "/umbraco/delivery/api/v2/content/item/x/", string.Empty, culture, string.Empty, string.Empty, keys, at, at);
+        => new()
+        {
+            ResponseKey = responseKey,
+            Path = "/umbraco/delivery/api/v2/content/item/x/",
+            Query = string.Empty,
+            Culture = culture,
+            Segment = string.Empty,
+            StartItem = string.Empty,
+            Keys = keys,
+            RenderedUtc = at,
+            SeenUtc = at,
+        };
 
     [Fact]
     public void A_response_is_found_by_any_key_it_covers()
@@ -99,5 +110,18 @@ public sealed class CacheTagSqlTests : IDisposable
 
         Assert.Equal(1, _database.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsResponseKey"));
         Assert.Equal(1, _database.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsResponse"));
+    }
+
+    [Fact]
+    public void A_later_render_adds_its_new_keys_and_refreshes_the_ones_it_still_has()
+    {
+        CacheTagSql.Record(_database, Render("response-a", Monday, "", "content-1", "content-2"));
+        CacheTagSql.Record(_database, Render("response-a", Tuesday, "", "content-2", "content-3"));
+
+        CacheTagSql.Prune(_database, Monday.AddHours(1));
+
+        Assert.Empty(CacheTagSql.FindResponseKeys(_database, ["content-1"], null));
+        Assert.Equal(["response-a"], CacheTagSql.FindResponseKeys(_database, ["content-2"], null));
+        Assert.Equal(["response-a"], CacheTagSql.FindResponseKeys(_database, ["content-3"], null));
     }
 }

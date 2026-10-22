@@ -40,4 +40,73 @@ internal sealed class EventRow
 
     /// <summary>The planned purge, as JSON.</summary>
     [Column(nameof(Plan)), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Plan { get; set; } = string.Empty;
+
+    /// <summary>What a server's cache refresh must show for it to acknowledge this change, as JSON.</summary>
+    [Column(nameof(Signal)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Signal { get; set; }
+
+    /// <summary>Pending, Releasing, Released or ReleasedAfterTimeout.</summary>
+    [Column(nameof(Status)), Length(30), NullSetting(NullSetting = NullSettings.Null)] public string? Status { get; set; }
+
+    [Column(nameof(ReleasedUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? ReleasedUtc { get; set; }
+
+    /// <summary>The servers that had not acknowledged when the change was released, as JSON.</summary>
+    [Column(nameof(Missing)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Missing { get; set; }
+
+    [Column(nameof(LeaseOwner)), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? LeaseOwner { get; set; }
+
+    [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
+}
+
+[TableName(Constants.Tables.Servers), PrimaryKey(nameof(Server), AutoIncrement = false), ExplicitColumns]
+internal sealed class ServerRow
+{
+    [Column(nameof(Server)), PrimaryKeyColumn(AutoIncrement = false), Length(200)] public string Server { get; set; } = string.Empty;
+    [Column(nameof(FirstSeenUtc))] public DateTime FirstSeenUtc { get; set; }
+    [Column(nameof(LastSeenUtc))] public DateTime LastSeenUtc { get; set; }
+}
+
+[TableName(Constants.Tables.Acks), PrimaryKey(nameof(Id), AutoIncrement = true), ExplicitColumns]
+internal sealed class AckRow
+{
+    [Column(nameof(Id)), PrimaryKeyColumn(AutoIncrement = true)] public long Id { get; set; }
+    [Column(nameof(EventId))] public Guid EventId { get; set; }
+    [Column(nameof(Server)), Length(200)] public string Server { get; set; } = string.Empty;
+    [Column(nameof(AckedUtc))] public DateTime AckedUtc { get; set; }
+}
+
+[TableName(Constants.Tables.Outbox), PrimaryKey(nameof(Id), AutoIncrement = false), ExplicitColumns]
+internal sealed class OutboxRow
+{
+    /// <summary>Also the id sent with the purge, so a target can ignore a repeat.</summary>
+    [Column(nameof(Id)), PrimaryKeyColumn(AutoIncrement = false)] public Guid Id { get; set; }
+    [Column(nameof(EventId))] public Guid EventId { get; set; }
+    [Column(nameof(Target)), Length(100)] public string Target { get; set; } = string.Empty;
+
+    /// <summary>The keys this request purges, as JSON.</summary>
+    [Column(nameof(Keys)), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Keys { get; set; } = "[]";
+
+    /// <summary>Pending, Sent or Dead.</summary>
+    [Column(nameof(State)), Length(20)] public string State { get; set; } = OutboxStates.Pending;
+    [Column(nameof(Attempts))] public int Attempts { get; set; }
+    [Column(nameof(CreatedUtc))] public DateTime CreatedUtc { get; set; }
+    [Column(nameof(NotBeforeUtc))] public DateTime NotBeforeUtc { get; set; }
+    [Column(nameof(SentUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? SentUtc { get; set; }
+    [Column(nameof(LastError)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? LastError { get; set; }
+    [Column(nameof(LeaseOwner)), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? LeaseOwner { get; set; }
+    [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
+}
+
+internal static class EventStatuses
+{
+    public const string Pending = "Pending";
+    public const string Releasing = "Releasing";
+    public const string Released = "Released";
+    public const string ReleasedAfterTimeout = "ReleasedAfterTimeout";
+}
+
+internal static class OutboxStates
+{
+    public const string Pending = "Pending";
+    public const string Sent = "Sent";
+    public const string Dead = "Dead";
 }

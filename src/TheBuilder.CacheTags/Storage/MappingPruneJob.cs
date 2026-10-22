@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Ledger;
 using Umbraco.Cms.Core.Sync;
 using Umbraco.Cms.Infrastructure.BackgroundJobs;
 
@@ -11,7 +13,10 @@ namespace TheBuilder.CacheTags.Storage;
 ///     one server.
 /// </summary>
 internal sealed class MappingPruneJob(
-    IServiceScopeFactory scopeFactory,
+    ICacheTagStore store,
+    IAckTransport transport,
+    LedgerStore ledger,
+    PackageDatabase database,
     IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<MappingPruneJob> logger) : IRecurringBackgroundJob
@@ -26,9 +31,18 @@ internal sealed class MappingPruneJob(
 
     public async Task RunJobAsync()
     {
-        DateTime cutoff = time.GetUtcNow().UtcDateTime - options.CurrentValue.MappingRetention;
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        var removed = await scope.ServiceProvider.GetRequiredService<ICacheTagStore>().PruneAsync(cutoff);
-        logger.LogInformation("Pruned {Count} cache tag mapping rows older than {Cutoff:u}.", removed, cutoff);
+        if (database.IsInstalled() is false)
+        {
+            return;
+        }
+
+        DateTime now = time.GetUtcNow().UtcDateTime;
+        DateTime mappingCutoff = now - options.CurrentValue.MappingRetention;
+        var removed = await store.PruneAsync(mappingCutoff);
+        logger.LogInformation("Pruned {Count} cache tag mapping rows older than {Cutoff:u}.", removed, mappingCutoff);
+
+        DateTime ledgerCutoff = now - options.CurrentValue.LedgerRetention;
+        await transport.PruneAsync(ledgerCutoff);
+        ledger.Prune(ledgerCutoff);
     }
 }

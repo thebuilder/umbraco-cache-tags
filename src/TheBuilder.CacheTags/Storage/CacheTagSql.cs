@@ -34,17 +34,19 @@ internal static class CacheTagSql
             });
         }
 
-        foreach (var key in response.Keys.Distinct(StringComparer.Ordinal))
+        var existing = database.Fetch<string>(
+            $"SELECT CacheKey FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey = @0",
+            response.ResponseKey).ToHashSet(StringComparer.Ordinal);
+        var keys = response.Keys.Distinct(StringComparer.Ordinal).ToList();
+        foreach (var chunk in keys.Where(existing.Contains).Chunk(ChunkSize))
         {
-            var refreshed = database.Execute(
-                $"UPDATE {Constants.Tables.ResponseKeys} SET RenderedUtc = @0 WHERE ResponseKey = @1 AND CacheKey = @2",
-                response.RenderedUtc,
-                response.ResponseKey,
-                key);
-            if (refreshed == 0)
-            {
-                database.Insert(new ResponseKeyRow { ResponseKey = response.ResponseKey, CacheKey = key, RenderedUtc = response.RenderedUtc });
-            }
+            database.Execute(
+                new Sql($"UPDATE {Constants.Tables.ResponseKeys} SET RenderedUtc = @rendered WHERE ResponseKey = @response AND CacheKey IN (@keys)", new { rendered = response.RenderedUtc, response = response.ResponseKey, keys = chunk }));
+        }
+
+        foreach (var key in keys.Where(key => existing.Contains(key) is false))
+        {
+            database.Insert(new ResponseKeyRow { ResponseKey = response.ResponseKey, CacheKey = key, RenderedUtc = response.RenderedUtc });
         }
     }
 
@@ -92,21 +94,36 @@ internal static class CacheTagSql
             $"SELECT CacheKey FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey = @0 AND RenderedUtc = @1 ORDER BY CacheKey",
             responseKey,
             row.RenderedUtc);
-        return new CachedResponse(row.ResponseKey, row.Path, row.Query, row.Culture, row.Segment, row.StartItem, keys, row.RenderedUtc, row.SeenUtc);
+        return new CachedResponse
+        {
+            ResponseKey = row.ResponseKey,
+            Path = row.Path,
+            Query = row.Query,
+            Culture = row.Culture,
+            Segment = row.Segment,
+            StartItem = row.StartItem,
+            Keys = keys,
+            RenderedUtc = row.RenderedUtc,
+            SeenUtc = row.SeenUtc,
+        };
     }
 
     public static int Prune(IDatabase database, DateTime cutoffUtc)
-    {
-        // Keys a later render no longer included, once they are older than the cutoff.
-        var dropped = database.Execute(
+        => PruneDroppedKeys(database, cutoffUtc) + PruneUnseenKeys(database, cutoffUtc) + PruneUnseenResponses(database, cutoffUtc);
+
+    /// <summary>Keys a later render no longer included, once they are older than the cutoff.</summary>
+    public static int PruneDroppedKeys(IDatabase database, DateTime cutoffUtc)
+        => database.Execute(
             $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE RenderedUtc < @0 AND RenderedUtc < (SELECT r.RenderedUtc FROM {Constants.Tables.Responses} r WHERE r.ResponseKey = {Constants.Tables.ResponseKeys}.ResponseKey)",
             cutoffUtc);
 
-        // Responses nobody has asked for since the cutoff, with all their keys.
-        var orphaned = database.Execute(
+    /// <summary>The keys of responses nobody has asked for since the cutoff.</summary>
+    public static int PruneUnseenKeys(IDatabase database, DateTime cutoffUtc)
+        => database.Execute(
             $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey IN (SELECT ResponseKey FROM {Constants.Tables.Responses} WHERE SeenUtc < @0)",
             cutoffUtc);
-        var responses = database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
-        return dropped + orphaned + responses;
-    }
+
+    /// <summary>Responses nobody has asked for since the cutoff; their keys go first.</summary>
+    public static int PruneUnseenResponses(IDatabase database, DateTime cutoffUtc)
+        => database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
 }

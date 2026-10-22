@@ -7,13 +7,24 @@ import { revalidateTag } from "next/cache";
  *   POST /api/cache-tags
  *   X-Cache-Tags-Timestamp: <unix time in seconds>
  *   X-Cache-Tags-Signature: sha256=<lowercase hex HMAC-SHA256>
- *   { "id": "<event id>", "keys": ["response-<hash>", "content-<guid>", "type-article", ...] }
+ *   {
+ *     "version": 1,
+ *     "id": "<purge id>",
+ *     "changeId": "<change id>",
+ *     "expire": ["response-<hash>", "content-<guid>", ...],
+ *     "stale": ["type-article", "children-<guid>", "umbraco", ...]
+ *   }
+ *
+ * Keys in "expire" name one response or one item: the next request waits for fresh content. Keys
+ * in "stale" are listings or everything: they touch many pages, so they are served stale while
+ * they refresh. A body over 1 MB, or of a version this receiver does not know, is refused.
  *
  * The signature covers `${method}\n${path}\n${timestamp}\n${body}`, with the raw body. Either the
  * current or the previous secret may have signed it, so secrets can be rotated without downtime.
  */
 
 const toleranceSeconds = 5 * 60;
+const maxBodyBytes = 1024 * 1024;
 
 /** Event ids already handled, with when they may be forgotten. In memory, so per process. */
 const handled = new Map<string, number>();
@@ -24,6 +35,10 @@ export async function POST(request: Request) {
   );
   if (secrets.length === 0) {
     return Response.json({ error: "CACHE_TAGS_WEBHOOK_SECRET is not set." }, { status: 500 });
+  }
+
+  if (Number(request.headers.get("content-length") ?? maxBodyBytes + 1) > maxBodyBytes) {
+    return Response.json({ error: "The body is missing a Content-Length or is over 1 MB." }, { status: 413 });
   }
 
   const body = await request.text();
@@ -40,16 +55,19 @@ export async function POST(request: Request) {
     return Response.json({ error: "The signature does not match." }, { status: 401 });
   }
 
-  let event: { id?: unknown; keys?: unknown };
+  let purge: { version?: unknown; id?: unknown; expire?: unknown; stale?: unknown };
   try {
-    event = JSON.parse(body);
+    purge = JSON.parse(body);
   } catch {
     return Response.json({ error: "The body is not JSON." }, { status: 400 });
   }
 
-  const { id, keys } = event;
-  if (typeof id !== "string" || id === "" || !Array.isArray(keys) || !keys.every((key) => typeof key === "string")) {
-    return Response.json({ error: 'The body needs an "id" string and a "keys" array of strings.' }, { status: 400 });
+  const { version, id, expire, stale } = purge;
+  if (version !== 1) {
+    return Response.json({ error: `Purge version ${String(version)} is not supported.` }, { status: 400 });
+  }
+  if (typeof id !== "string" || id === "" || !isStrings(expire) || !isStrings(stale)) {
+    return Response.json({ error: 'The body needs an "id" string and "expire" and "stale" arrays of strings.' }, { status: 400 });
   }
 
   for (const [seen, forgetAt] of handled) {
@@ -61,29 +79,21 @@ export async function POST(request: Request) {
     return Response.json({ id, duplicate: true });
   }
 
-  const expired: string[] = [];
-  const stale: string[] = [];
-  const ignored: string[] = [];
-  for (const key of new Set(keys as string[])) {
-    if (/^(response|content|media)-/.test(key)) {
-      // One response or one item: the next request waits for fresh content.
-      revalidateTag(key, { expire: 0 });
-      expired.push(key);
-    } else if (/^(type|children|search)-/.test(key) || key === "umbraco") {
-      // Listings (by content type, by parent, by other query) and everything: these touch many
-      // pages, so serve stale while they refresh.
-      revalidateTag(key, "max");
-      stale.push(key);
-    } else {
-      // A kind this example does not know is reported back, not purged.
-      ignored.push(key);
-    }
+  for (const key of expire) {
+    revalidateTag(key, { expire: 0 });
+  }
+  for (const key of stale) {
+    revalidateTag(key, "max");
   }
 
   // A replay is rejected by the timestamp once the window has passed, so the id only needs keeping
   // until then. The timestamp may be up to the tolerance ahead of this clock.
   handled.set(id, seconds + toleranceSeconds + 1);
-  return Response.json({ id, duplicate: false, expired, stale, ignored });
+  return Response.json({ id, duplicate: false, expired: expire.length, stale: stale.length });
+}
+
+function isStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 function sign(secret: string, payload: string) {

@@ -9,8 +9,9 @@ Two sites to check TheBuilder.CacheTags end to end:
   response under the keys in `X-Umbraco-Cache-Keys`, and purges them when the webhook calls it.
 
 The Umbraco sample references the package (`src/TheBuilder.CacheTags`), which installs itself through
-its composer. It tags every Delivery API response and plans the purge for every change. Sending the
-purge comes with Milestone 3, so until then see [Until purges are sent](#until-purges-are-sent).
+its composer. It tags every Delivery API response, and once a change has reached every server it sends
+the signed purge webhook to the Next.js site (`CacheTags:Targets` in `appsettings.json`, with the
+secret from `samples/nextjs/.env`).
 
 `pnpm e2e` checks the whole loop automatically: see [Check it automatically](#check-it-automatically).
 
@@ -191,8 +192,11 @@ Content-Type: application/json
 X-Cache-Tags-Timestamp: 1792612800
 X-Cache-Tags-Signature: sha256=<lowercase hex>
 
-{"id":"<event id>","keys":["response-3f9a0c...","content-e0000000-0000-0000-0000-000000000003","type-article"]}
+{"version":1,"id":"<purge id>","changeId":"<change id>","expire":["response-3f9a0c...","content-e0000000-0000-0000-0000-000000000003"],"stale":["type-article"]}
 ```
+
+- `expire` keys are purged at once; `stale` keys are served stale while they refresh. A body of
+  another version, or over 1 MB, is refused.
 
 - The signature is HMAC-SHA256, keyed with the secret's UTF-8 bytes, over
   `POST\n/api/cache-tags\n<timestamp>\n<raw body>`: method, path, timestamp and body, joined by
@@ -201,7 +205,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 - `CACHE_TAGS_WEBHOOK_SECRET` and `CACHE_TAGS_WEBHOOK_SECRET_PREVIOUS` are both accepted, so the secret
   can be rotated: set the new one as current and the old one as previous, switch Umbraco, then clear
   previous.
-- An event id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
+- A purge id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
   Ids are kept in memory, per process.
 - `response-`, `content-` and `media-` keys are expired at once (`revalidateTag(key, { expire: 0 })`):
   the next request waits for fresh content. `type-`, `children-` and `search-` keys and `umbraco` are
@@ -263,12 +267,19 @@ change when it ends, and a run first cleans up after one that was stopped halfwa
 again and again against the same database. Before a change, each case waits until the pages it checks
 are cached and steady, so a page that refetches only because its cache entry was empty cannot pass.
 
+**Known issue:** on SQLite, the sample can lock up after a few runs: requests and Umbraco's own
+background jobs wait on a database lock that nothing releases, and it needs a restart. It happens
+right after `pnpm e2e` creates and publishes its new article, and it reproduces with the package
+switched off (`CacheTags__Enabled=false`) and on `main` without the package, so it is Umbraco on
+SQLite under this load. Restart Umbraco between longer series of runs, or run the sample on SQL
+Server.
+
 `E2E_TIMEOUT` sets how many seconds a case waits (default 30). `UMBRACO_URL`, `FRONTEND_URL`,
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the
 environment or `.env.local`.
 
-Until Milestone 3 sends purges, every case fails: the pages carry their `response-` tags, but nothing
-purges them.
+A run needs both sites started fresh enough that Umbraco's Delivery API index is filled (about a
+minute after a first start).
 
 ### Check the packed package
 
@@ -288,18 +299,52 @@ dotnet run --project samples/TheBuilder.CacheTags.Example -p:CacheTagsPackageVer
 global packages folder and does not look at the file again, so give each pack a new version. Then run
 `pnpm e2e` as above.
 
-### Until purges are sent
+### What the package logged
 
-Umbraco sends `X-Umbraco-Cache-Keys`, so the Cache box shows a `response-` tag per call, but the
-package does not send the purge webhook until Milestone 3. A publish then shows up only after the
-hourly revalidate, or after restarting `pnpm start` (the cache is in memory). What each change would
-purge is already planned and can be checked:
+Each change is logged when it is planned and when it is released:
+`Cache tags change <id> (Published) plans content-..., type-...` and
+`Cache tags change <id> released: 10 keys in 2 purges.` The later purges re-purge listings
+(`CacheTags:ListingRepurgeDelays`, 5, 20 and 45 seconds), as the Delivery API index catches up with
+the change.
 
-- Umbraco's log has a line per change: `Cache tags change <id> (Published) plans content-..., type-...`.
-- The admin-only lookup API answers what a key covers and what recent changes planned:
-  `GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
-  `GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
-  API user works; see `scripts/e2e.mts` for getting a token).
+The admin-only lookup API answers what a key covers and what recent changes planned, sent and to whom:
+`GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
+`GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
+API user works; see `scripts/e2e.mts` for getting a token).
 
 `pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
 `stale`.
+
+## Check it on two servers
+
+`two-servers/run.sh` runs the Umbraco sample as two servers on one SQL Server database, the way a
+load-balanced site runs: A on http://localhost:5320 and B on http://localhost:5321. It needs Docker
+(SQL Server 2022 Developer edition, in `two-servers/compose.yaml`, sa password `LocalOnly-Sql-42!`,
+local only) and the .NET 10 SDK.
+
+```bash
+samples/two-servers/run.sh
+```
+
+It starts SQL Server on port 14330, publishes the sample twice into `two-servers/out/` (each server
+needs its own content root for its Examine index and MainDom), starts A, which installs and seeds the
+database, then B. Wait for A's article listing to fill (about a minute), then, with the Next.js site
+running against A (the default `UMBRACO_URL`), make every change on B:
+
+```bash
+cd samples/nextjs && UMBRACO_URL=http://localhost:5321 pnpm e2e
+```
+
+A purge must now wait for A: B records each change and acknowledges it from its own cache refresh at
+once, A applies the change when it next reads Umbraco's cache instructions (every few seconds), and
+only then is the purge released. The cases take 3 to 8 seconds instead of 1. Without the wait, the
+frontend would refetch from A before A had the change and cache the old content again.
+
+The ledger shows it per change (`theBuilderCacheTagsEvent`, `theBuilderCacheTagsAck`):
+
+```bash
+docker compose -f samples/two-servers/compose.yaml exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'LocalOnly-Sql-42!' -d CacheTags -Q "SELECT e.Kind, e.CreatedUtc, a.Server, a.AckedUtc, e.ReleasedUtc FROM theBuilderCacheTagsEvent e JOIN theBuilderCacheTagsAck a ON a.EventId = e.Id ORDER BY e.CreatedUtc DESC, a.AckedUtc"
+```
+
+`samples/two-servers/run.sh stop` stops both servers and removes the SQL Server container, so the
+next run starts from an empty database.

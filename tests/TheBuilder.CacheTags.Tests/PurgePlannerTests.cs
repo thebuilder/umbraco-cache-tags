@@ -98,13 +98,13 @@ public sealed class PurgePlannerTests
     }
 
     [Fact]
-    public void A_type_change_reaches_each_type()
+    public void A_type_change_reaches_each_types_listings_and_every_response_rendering_it()
     {
         PurgePlan plan = new PurgePlanner(new Tree()).Plan(
             new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.TypesChanged, [], ["articlePage", "Image"], null),
             500);
 
-        Assert.Equal(["type-articlepage", "type-image"], plan.Keys);
+        Assert.Equal(["schema-articlepage", "schema-image", "type-articlepage", "type-image"], plan.Keys);
     }
 
     [Fact]

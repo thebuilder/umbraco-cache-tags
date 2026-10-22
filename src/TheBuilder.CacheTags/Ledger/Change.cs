@@ -42,10 +42,11 @@ internal sealed record Change(
 /// <param name="ParentKey">Its parent's key; <see cref="Guid.Empty" /> at the root.</param>
 /// <param name="OldParentKey">For moves: the parent it left.</param>
 /// <param name="RouteChanged">
+/// <param name="Ancestors">Its ancestors' keys, root first: a refresh of an ancestor's branch also refreshes it.</param>
 ///     Its route changed in a way its descendants' routes follow: a new URL segment, a move, an
 ///     unpublish.
 /// </param>
-internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false);
+internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null);
 
 /// <summary>
 ///     The keys a change purges, before they are resolved to <c>response-</c> keys.

@@ -50,4 +50,12 @@ public sealed class ListingSelectorsTests
         Assert.Equal(["type-image"], ListingSelectors.For(null, ["mediaType:Image"], Resolve, media: true));
         Assert.Equal(["search-media"], ListingSelectors.For(null, [], Resolve, media: true));
     }
+
+    [Fact]
+    public void A_content_type_longer_than_an_alias_can_be_is_not_a_selector()
+    {
+        var keys = ListingSelectors.For(null, ["contentType:article," + new string('a', 256)], Resolve, media: false);
+
+        Assert.Equal(["type-article"], keys);
+    }
 }

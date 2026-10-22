@@ -1,4 +1,4 @@
-using Umbraco.Cms.Infrastructure.Scoping;
+using Microsoft.Extensions.Logging;
 
 namespace TheBuilder.CacheTags.Storage;
 
@@ -6,9 +6,9 @@ namespace TheBuilder.CacheTags.Storage;
 ///     The default <see cref="ICacheTagStore" />: the mapping lives in the Umbraco database. Every
 ///     server that serves the Delivery API writes to it, so it needs write access.
 /// </summary>
-internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICacheTagStore
+internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<UmbracoCacheTagStore> logger) : ICacheTagStore
 {
-    // One scope per response: when another server inserts the same row at the same moment, the
+    // One transaction per response: when another server inserts the same row at the same moment, the
     // unique index rejects one insert, and only that response is retried rather than the batch lost.
     public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default)
     {
@@ -16,50 +16,44 @@ internal sealed class UmbracoCacheTagStore(IScopeProvider scopeProvider) : ICach
         {
             try
             {
-                RecordOne(response);
+                database.Write(db => CacheTagSql.Record(db, response));
             }
-            catch (System.Data.Common.DbException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The rows now exist, so the retry updates them.
-                RecordOne(response);
+                // The rows now exist, so the retry updates them. A response that fails again is
+                // skipped, so it does not cost the rest of the batch.
+                try
+                {
+                    database.Write(db => CacheTagSql.Record(db, response));
+                }
+                catch (Exception retryException) when (retryException is not OperationCanceledException)
+                {
+                    logger.LogWarning(retryException, "Recording cache tag response {ResponseKey} failed; it is recorded on its next render.", response.ResponseKey);
+                }
             }
         }
 
         return Task.CompletedTask;
     }
 
-    private void RecordOne(CachedResponse response)
-    {
-        using IScope scope = scopeProvider.CreateScope();
-        CacheTagSql.Record(scope.Database, response);
-        scope.Complete();
-    }
-
     public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default)
     {
-        using IScope scope = scopeProvider.CreateScope();
-        CacheTagSql.Touch(scope.Database, responseKeys, seenUtc);
-        scope.Complete();
+        database.Write(db => CacheTagSql.Touch(db, responseKeys, seenUtc));
         return Task.CompletedTask;
     }
 
     public Task<IReadOnlyCollection<string>> FindResponseKeysAsync(IReadOnlyCollection<string> keys, IReadOnlyCollection<string>? cultures, CancellationToken cancellationToken = default)
-    {
-        using IScope scope = scopeProvider.CreateScope(autoComplete: true);
-        return Task.FromResult(CacheTagSql.FindResponseKeys(scope.Database, keys, cultures));
-    }
+        => Task.FromResult(database.Read(db => CacheTagSql.FindResponseKeys(db, keys, cultures)));
 
     public Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default)
-    {
-        using IScope scope = scopeProvider.CreateScope(autoComplete: true);
-        return Task.FromResult(CacheTagSql.Get(scope.Database, responseKey));
-    }
+        => Task.FromResult(database.Read(db => CacheTagSql.Get(db, responseKey)));
 
+    // Each step in its own short transaction, so a publish waiting for the write lock is not held up
+    // by one long delete. A render can skip rewriting keys written within the writer's touch interval,
+    // so a dropped key gets that much longer.
     public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
-    {
-        using IScope scope = scopeProvider.CreateScope();
-        var removed = CacheTagSql.Prune(scope.Database, cutoffUtc);
-        scope.Complete();
-        return Task.FromResult(removed);
-    }
+        => Task.FromResult(
+            database.Write(db => CacheTagSql.PruneDroppedKeys(db, cutoffUtc - MappingWriter.TouchInterval))
+            + database.Write(db => CacheTagSql.PruneUnseenKeys(db, cutoffUtc))
+            + database.Write(db => CacheTagSql.PruneUnseenResponses(db, cutoffUtc)));
 }

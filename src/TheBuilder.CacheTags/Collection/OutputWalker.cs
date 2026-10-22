@@ -7,7 +7,8 @@ using Umbraco.Cms.Core.Models.DeliveryApi;
 namespace TheBuilder.CacheTags.Collection;
 
 /// <summary>
-///     Collects the documents and media a Delivery API result shows, by walking the result objects.
+///     Collects the documents and media a Delivery API result shows, and the types of everything it
+///     renders (documents, media and block elements), by walking the result objects.
 ///     Only the Delivery API's own model types are walked, so a custom value converter is covered when
 ///     it emits them. Block elements are walked into but not collected: they are not publish targets.
 /// </summary>
@@ -31,13 +32,16 @@ internal static partial class OutputWalker
                 return;
             case IApiContent content:
                 keys.Add(CacheKeys.Content(content.Id));
+                keys.Add(CacheKeys.Schema(content.ContentType));
                 WalkProperties(content.Properties, keys, depth);
                 return;
             case IApiMedia media:
                 keys.Add(CacheKeys.Media(media.Id));
+                keys.Add(CacheKeys.Schema(media.MediaType));
                 WalkProperties(media.Properties, keys, depth);
                 return;
             case IApiElement element:
+                keys.Add(CacheKeys.Schema(element.ContentType));
                 WalkProperties(element.Properties, keys, depth);
                 return;
             case ApiLink link:

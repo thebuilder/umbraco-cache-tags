@@ -77,4 +77,21 @@ public sealed class ResponseIdentityTests
 
         Assert.NotEqual(baseline.ToKey(), varied.ToKey());
     }
+
+    [Fact]
+    public void Parameters_the_delivery_api_does_not_read_do_not_change_the_key()
+    {
+        Assert.Equal("take=5", ResponseIdentity.NormaliseQuery([P("take", "5"), P("utm_source", "mail"), P("x", "8f2c")]));
+    }
+
+    [Theory]
+    [InlineData(100, 200, true)]
+    [InlineData(101, 0, false)]
+    [InlineData(0, 201, false)]
+    public void A_segment_or_start_item_longer_than_the_mapping_holds_does_not_fit(int segment, int startItem, bool fits)
+    {
+        ResponseIdentity identity = ResponseIdentity.Create("/umbraco/delivery/api/v2/content", [], null, new string('s', segment), new string('i', startItem));
+
+        Assert.Equal(fits, identity.Fits);
+    }
 }
