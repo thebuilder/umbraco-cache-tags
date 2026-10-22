@@ -194,6 +194,34 @@ public sealed class TargetTests : IDisposable
     }
 
     [Fact]
+    public void A_stored_value_with_neither_a_value_nor_a_setting_is_a_problem_not_an_exception()
+    {
+        ResolvedTarget resolved = TargetResolver.Resolve(Webhook(new NamedValue("x-api-key")), Types, Configuration(), allowPrivateNetwork: false);
+
+        Assert.NotNull(resolved.Problem);
+    }
+
+    [Fact]
+    public void A_stored_row_this_version_cannot_read_is_a_target_with_a_problem()
+    {
+        _database.Execute("INSERT INTO theBuilderCacheTagsTarget (Name, Definition, CreatedUtc, UpdatedUtc) VALUES ('broken', '{not json', '1970-01-01', '1970-01-01')");
+        TargetSql.Add(_database, Webhook(), DateTime.UnixEpoch);
+
+        var stored = TargetSql.All(_database);
+        ResolvedTarget broken = TargetResolver.Resolve(stored.Single(target => target.Name == "broken"), Types, Configuration(), allowPrivateNetwork: false);
+
+        Assert.Equal(["broken", "vercel"], stored.Select(target => target.Name));
+        Assert.Equal("The target's stored settings could not be read. Save it again.", broken.Problem);
+    }
+
+    [Theory]
+    [InlineData("https://user:pass@hooks.example.com/purge?token=s3cr3t#x", "https://hooks.example.com/purge")]
+    [InlineData("http://localhost:3000/api/cache-tags", "http://localhost:3000/api/cache-tags")]
+    [InlineData("not a url", "")]
+    public void A_configured_url_is_shown_without_its_query_or_credentials(string url, string shown)
+        => Assert.Equal(shown, TheBuilder.CacheTags.ManagementApi.CacheTagsTargets.WithoutSecrets(url));
+
+    [Fact]
     public void An_app_setting_with_a_line_break_is_a_problem_rather_than_a_second_header()
     {
         ResolvedTarget resolved = TargetResolver.Resolve(
@@ -351,5 +379,17 @@ public sealed class TargetTests : IDisposable
         Assert.Empty(TargetSql.All(_database));
         var states = _database.Fetch<OutboxRow>("SELECT * FROM theBuilderCacheTagsOutbox").Select(row => $"{row.Target}:{row.State}").Order().ToList();
         Assert.Equal(["nextjs:Pending", "vercel:Discarded", "vercel:Discarded", "vercel:Sent"], states);
+    }
+
+    [Fact]
+    public void Deleting_a_target_a_configured_one_shadows_keeps_the_purges_the_configured_one_owns()
+    {
+        TargetSql.Add(_database, Webhook(), DateTime.UnixEpoch);
+        _database.Insert(new OutboxRow { Id = Guid.NewGuid(), EventId = Guid.NewGuid(), Target = "vercel", State = OutboxStates.Pending, CreatedUtc = DateTime.UnixEpoch, NotBeforeUtc = DateTime.UnixEpoch });
+
+        Assert.True(TargetSql.Delete(_database, "vercel", keepPurges: true));
+
+        Assert.Empty(TargetSql.All(_database));
+        Assert.Equal(OutboxStates.Pending, _database.ExecuteScalar<string>("SELECT State FROM theBuilderCacheTagsOutbox"));
     }
 }

@@ -8,13 +8,19 @@ namespace TheBuilder.CacheTags.Targets;
 /// <param name="Options">The target, with every app setting it names read.</param>
 /// <param name="FromConfiguration">Whether it is configured in appsettings rather than the backoffice.</param>
 /// <param name="Problem">Why purges to it fail on this server, or null. Never names an app setting.</param>
-internal sealed record ResolvedTarget(string Name, CacheTagsTargetOptions Options, bool FromConfiguration, string? Problem = null);
+/// <param name="Definition">For a backoffice target, what is stored.</param>
+internal sealed record ResolvedTarget(string Name, CacheTagsTargetOptions Options, bool FromConfiguration, string? Problem = null, TargetDefinition? Definition = null);
 
 /// <summary>Turns a backoffice target into the options its <see cref="Delivery.IPurgeTarget" /> sends with.</summary>
 internal static class TargetResolver
 {
     public static ResolvedTarget Resolve(TargetDefinition target, IEnumerable<string> types, IConfiguration configuration, bool allowPrivateNetwork)
     {
+        if (target.Unreadable)
+        {
+            return new ResolvedTarget(target.Name, new CacheTagsTargetOptions(), FromConfiguration: false, "The target's stored settings could not be read. Save it again.", target);
+        }
+
         var problems = new List<string>();
         string Read(string what, string? value, string? setting)
         {
@@ -23,7 +29,13 @@ internal static class TargetResolver
                 return value;
             }
 
-            var configured = configuration[setting!];
+            if (string.IsNullOrEmpty(setting))
+            {
+                problems.Add($"{what} has no value and names no app setting.");
+                return string.Empty;
+            }
+
+            var configured = configuration[setting];
             if (string.IsNullOrEmpty(configured))
             {
                 // Not the setting's name: an error is shown in the backoffice and kept with the purge,
@@ -67,6 +79,6 @@ internal static class TargetResolver
             invalid = "The signing secret's app setting holds fewer than 32 characters.";
         }
 
-        return new ResolvedTarget(target.Name, options, FromConfiguration: false, invalid ?? problems.FirstOrDefault());
+        return new ResolvedTarget(target.Name, options, FromConfiguration: false, invalid ?? problems.FirstOrDefault(), target);
     }
 }

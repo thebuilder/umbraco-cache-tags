@@ -30,15 +30,36 @@ internal sealed class PurgeTargets(
     /// <summary>The registered target types.</summary>
     public IReadOnlyList<string> Types => senders.Select(sender => sender.Type).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-    /// <summary>Every target, by name.</summary>
+    /// <summary>Every target, by name, resolved at most every <see cref="CacheFor" />.</summary>
     public IReadOnlyDictionary<string, ResolvedTarget> Current()
     {
+        DateTimeOffset now = time.GetUtcNow();
+        if (_stored is { } stored && now - stored.ReadAt < CacheFor)
+        {
+            return stored.Targets;
+        }
+
         CacheTagsOptions settings = options.CurrentValue;
-        return Merge(
+        IReadOnlyList<string> types = Types;
+        Dictionary<string, ResolvedTarget> targets = Merge(
             settings.Targets,
-            Stored(),
-            stored => TargetResolver.Resolve(stored, Types, configuration, settings.AllowPrivateNetworkTargets),
+            database.IsInstalled() ? store.All() : [],
+            target =>
+            {
+                try
+                {
+                    return TargetResolver.Resolve(target, types, configuration, settings.AllowPrivateNetworkTargets);
+                }
+                catch (Exception exception)
+                {
+                    // One target that cannot be resolved must not stop purges to the others.
+                    logger.LogError(exception, "The cache tags target {Target} could not be resolved.", target.Name);
+                    return new ResolvedTarget(target.Name, new CacheTagsTargetOptions(), FromConfiguration: false, "The target could not be read; the log says why.", target);
+                }
+            },
             WarnOnce);
+        _stored = new Snapshot(now, targets);
+        return targets;
     }
 
     /// <summary>
@@ -83,23 +104,5 @@ internal sealed class PurgeTargets(
     /// <summary>Forgets the targets read, after this server changed them.</summary>
     public void Invalidate() => _stored = null;
 
-    private IReadOnlyList<TargetDefinition> Stored()
-    {
-        if (database.IsInstalled() is false)
-        {
-            return [];
-        }
-
-        DateTimeOffset now = time.GetUtcNow();
-        if (_stored is { } stored && now - stored.ReadAt < CacheFor)
-        {
-            return stored.Targets;
-        }
-
-        IReadOnlyList<TargetDefinition> targets = store.All();
-        _stored = new Snapshot(now, targets);
-        return targets;
-    }
-
-    private sealed record Snapshot(DateTimeOffset ReadAt, IReadOnlyList<TargetDefinition> Targets);
+    private sealed record Snapshot(DateTimeOffset ReadAt, IReadOnlyDictionary<string, ResolvedTarget> Targets);
 }

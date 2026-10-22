@@ -33,6 +33,7 @@ Administrators add, edit, test and remove targets under **Settings > Advanced > 
 - **The name never changes.** Purges are queued under it. Deleting a target sets its unsent purges aside.
 - **A name in `appsettings.json` wins.** A backoffice target with the same name is ignored, and the log says so.
 - **Public addresses only.** A backoffice target may only connect to public internet addresses, so an administrator cannot point one at a service inside your network. Set `CacheTags:AllowPrivateNetworkTargets` to `true` to allow private ones, such as `localhost` in development. Targets in `appsettings.json` are not limited. A target type you register does its own requests, so the limit covers only the built-in types.
+- **No outbound proxy.** To check the address it connects to, a backoffice target connects directly, not through `HTTPS_PROXY` or the system proxy. A site that reaches the internet only through a proxy must configure its targets in `appsettings.json`, which use the proxy as usual.
 - Other servers see a change to a target within a few seconds.
 
 ## Request headers

@@ -28,6 +28,14 @@ internal sealed class PurgeSender(
 
         foreach (Purge purge in due.Where(purge => ledger.ClaimSend(purge.Id, identity.Name, now, now + Lease)))
         {
+            if (Exists(purge.Target) is false)
+            {
+                // Queued from another server's list just before the target was deleted.
+                ledger.Discard(purge.Id);
+                logger.LogInformation("Cache tags purge {PurgeId} was set aside: no target named {Target} exists any more.", purge.Id, purge.Target);
+                continue;
+            }
+
             var error = await SendAsync(purge, settings, cancellationToken);
             DateTime finished = time.GetUtcNow().UtcDateTime;
             if (error is null)
@@ -41,6 +49,18 @@ internal sealed class PurgeSender(
         }
 
         return Math.Max(0, pending - due.Count);
+    }
+
+    // The targets this server knows are up to a few seconds old, so a miss is read again before it counts.
+    private bool Exists(string target)
+    {
+        if (targets.Current().ContainsKey(target))
+        {
+            return true;
+        }
+
+        targets.Invalidate();
+        return targets.Current().ContainsKey(target);
     }
 
     /// <summary>Sends one purge through its target's type. Returns null on success, or what went wrong.</summary>

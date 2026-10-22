@@ -64,34 +64,30 @@ internal sealed class CacheTagsTargets(
     public const string TestKey = "x-cache-tags-test";
 
     public TargetsView List()
-    {
-        IReadOnlyDictionary<string, ResolvedTarget> current = targets.Current();
-        var configured = options.CurrentValue.Targets.Select(target => new TargetView(
-            target.Key,
-            target.Value.Type,
-            target.Value.Enabled,
-            FromConfiguration: true,
-            target.Value.Url,
-            target.Value.MaxKeysPerRequest,
-            Secret: null,
-            target.Value.Headers.Keys.Select(name => new NamedValue(name)).ToList(),
-            target.Value.Settings.Keys.Select(name => new NamedValue(name)).ToList(),
-            Problem: null));
-        var stored = store.All()
-            .Where(target => options.CurrentValue.Targets.ContainsKey(target.Name) is false)
-            .Select(target => new TargetView(
+        => new(
+            targets.Types,
+            targets.Current().Values.Select(View).OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase).ToList());
+
+    private static TargetView View(ResolvedTarget target)
+        => target.Definition is { } stored
+            ? new TargetView(stored.Name, stored.Type, stored.Enabled, FromConfiguration: false, stored.Url, stored.MaxKeysPerRequest, stored.Secret, stored.Headers, stored.Settings, target.Problem)
+            : new TargetView(
                 target.Name,
-                target.Type,
-                target.Enabled,
-                FromConfiguration: false,
-                target.Url,
-                target.MaxKeysPerRequest,
-                target.Secret,
-                target.Headers,
-                target.Settings,
-                current.TryGetValue(target.Name, out ResolvedTarget? resolved) ? resolved.Problem : null));
-        return new TargetsView(targets.Types, configured.Concat(stored).OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase).ToList());
-    }
+                target.Options.Type,
+                target.Options.Enabled,
+                FromConfiguration: true,
+                WithoutSecrets(target.Options.Url),
+                target.Options.MaxKeysPerRequest,
+                Secret: null,
+                target.Options.Headers.Keys.Select(name => new NamedValue(name)).ToList(),
+                target.Options.Settings.Keys.Select(name => new NamedValue(name)).ToList(),
+                Problem: null);
+
+    // A configured URL can carry a token in its query or user info; neither is the backoffice's to show.
+    internal static string WithoutSecrets(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
+            ? new UriBuilder(uri) { UserName = string.Empty, Password = string.Empty, Query = string.Empty, Fragment = string.Empty }.Uri.ToString()
+            : string.Empty;
 
     public TargetSaveResult Add(TargetDefinition target)
     {
@@ -130,7 +126,7 @@ internal sealed class CacheTagsTargets(
 
     public bool Delete(string name)
     {
-        var deleted = store.Delete(name);
+        var deleted = store.Delete(name, keepPurges: options.CurrentValue.Targets.ContainsKey(name));
         targets.Invalidate();
         return deleted;
     }
@@ -188,15 +184,15 @@ internal sealed class CacheTagsTargets(
     // Trimmed names, the registered type's own spelling, and an empty value or setting as none.
     private TargetDefinition Normalise(TargetDefinition target) => target with
     {
-        Name = target.Name.Trim(),
-        Type = targets.Types.FirstOrDefault(type => string.Equals(type, target.Type.Trim(), StringComparison.OrdinalIgnoreCase)) ?? target.Type.Trim(),
-        Url = target.Url.Trim(),
+        Name = (target.Name ?? string.Empty).Trim(),
+        Type = targets.Types.FirstOrDefault(type => string.Equals(type, (target.Type ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)) ?? (target.Type ?? string.Empty).Trim(),
+        Url = (target.Url ?? string.Empty).Trim(),
         Secret = target.Secret is { } secret ? new TargetValue(Empty(secret.Value), Empty(secret.Setting?.Trim())) : null,
-        Headers = (target.Headers ?? []).Select(Normalise).ToList(),
-        Settings = (target.Settings ?? []).Select(Normalise).ToList(),
+        Headers = (target.Headers ?? []).Where(header => header is not null).Select(Normalise).ToList(),
+        Settings = (target.Settings ?? []).Where(setting => setting is not null).Select(Normalise).ToList(),
     };
 
-    private static NamedValue Normalise(NamedValue value) => new(value.Name.Trim(), Empty(value.Value), Empty(value.Setting?.Trim()));
+    private static NamedValue Normalise(NamedValue value) => new((value.Name ?? string.Empty).Trim(), Empty(value.Value), Empty(value.Setting?.Trim()));
 
     private static string? Empty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 }

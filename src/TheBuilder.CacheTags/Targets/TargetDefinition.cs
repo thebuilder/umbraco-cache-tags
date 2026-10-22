@@ -29,6 +29,10 @@ internal sealed record TargetDefinition
 
     /// <summary>For other types: their settings, such as Cloudflare's ZoneId and ApiToken.</summary>
     public IReadOnlyList<NamedValue> Settings { get; init; } = [];
+
+    /// <summary>Set, instead of everything else, for a stored row that could not be read.</summary>
+    [JsonIgnore]
+    public bool Unreadable { get; init; }
 }
 
 /// <summary>A value typed in, or the name of the app setting that holds it. Exactly one is set.</summary>

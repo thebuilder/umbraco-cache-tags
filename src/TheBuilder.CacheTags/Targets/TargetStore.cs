@@ -15,8 +15,11 @@ internal sealed class TargetStore(PackageDatabase database, TimeProvider time)
     /// <summary>Replaces a target. Returns false when there is none with its name.</summary>
     public bool Update(TargetDefinition target) => database.Write(db => TargetSql.Update(db, target, time.GetUtcNow().UtcDateTime));
 
-    /// <summary>Deletes a target and sets its unsent purges aside. Returns false when there is none with the name.</summary>
-    public bool Delete(string name) => database.Write(db => TargetSql.Delete(db, name));
+    /// <summary>
+    ///     Deletes a target, and sets its unsent purges aside unless <paramref name="keepPurges" />: a
+    ///     configured target of the same name owns them. Returns false when there is none with the name.
+    /// </summary>
+    public bool Delete(string name, bool keepPurges = false) => database.Write(db => TargetSql.Delete(db, name, keepPurges));
 }
 
 /// <summary>The target store's SQL, against any NPoco database.</summary>
@@ -24,8 +27,21 @@ internal static class TargetSql
 {
     public static List<TargetDefinition> All(IDatabase database)
         => database.Fetch<TargetRow>(new Sql($"SELECT * FROM {Constants.Tables.Targets} ORDER BY Name"))
-            .Select(row => JsonSerializer.Deserialize(row.Definition, TargetJson.Default.TargetDefinition)!)
+            .Select(Read)
             .ToList();
+
+    // A row this version cannot read becomes a target with a problem, so it cannot stop the others.
+    private static TargetDefinition Read(TargetRow row)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(row.Definition, TargetJson.Default.TargetDefinition) ?? new TargetDefinition { Name = row.Name, Unreadable = true };
+        }
+        catch (JsonException)
+        {
+            return new TargetDefinition { Name = row.Name, Unreadable = true };
+        }
+    }
 
     public static bool Add(IDatabase database, TargetDefinition target, DateTime nowUtc)
     {
@@ -46,11 +62,16 @@ internal static class TargetSql
             target.Name) == 1;
 
     /// <summary>Deletes the target, and sets its pending and failed purges aside: nothing could send them.</summary>
-    public static bool Delete(IDatabase database, string name)
+    public static bool Delete(IDatabase database, string name, bool keepPurges = false)
     {
         if (database.Execute($"DELETE FROM {Constants.Tables.Targets} WHERE Name = @0", name) == 0)
         {
             return false;
+        }
+
+        if (keepPurges)
+        {
+            return true;
         }
 
         database.Execute(
