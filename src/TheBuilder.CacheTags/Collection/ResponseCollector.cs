@@ -29,7 +29,7 @@ internal sealed class ResponseCollector(
     /// <summary>The most keys one response is recorded with.</summary>
     public const int MaxKeys = 1000;
 
-    public IReadOnlySet<string> Collect(object result, HttpContext http, DeliveryEndpoint endpoint)
+    public IReadOnlySet<string> Collect(object? result, HttpContext http, DeliveryEndpoint endpoint)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         OutputWalker.Collect(result, keys);

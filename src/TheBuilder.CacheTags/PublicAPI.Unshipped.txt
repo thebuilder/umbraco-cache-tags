@@ -1,4 +1,10 @@
 #nullable enable
+TheBuilder.CacheTags.CacheTaggedAttribute
+TheBuilder.CacheTags.CacheTaggedAttribute.CacheTaggedAttribute() -> void
+TheBuilder.CacheTags.CacheTaggedAttribute.QueryParameters.get -> string![]!
+TheBuilder.CacheTags.CacheTaggedAttribute.QueryParameters.set -> void
+TheBuilder.CacheTags.CacheTaggedAttribute.Recorded.get -> bool
+TheBuilder.CacheTags.CacheTaggedAttribute.Recorded.set -> void
 TheBuilder.CacheTags.Composition.CacheTagsComposer
 TheBuilder.CacheTags.Composition.CacheTagsComposer.CacheTagsComposer() -> void
 TheBuilder.CacheTags.Composition.CacheTagsComposer.Compose(Umbraco.Cms.Core.DependencyInjection.IUmbracoBuilder! builder) -> void
@@ -94,11 +100,23 @@ TheBuilder.CacheTags.Delivery.ServerPresence.LastSeenUtc.init -> void
 TheBuilder.CacheTags.Delivery.ServerPresence.Server.get -> string!
 TheBuilder.CacheTags.Delivery.ServerPresence.Server.init -> void
 TheBuilder.CacheTags.Delivery.ServerPresence.ServerPresence(string! Server, System.DateTime FirstSeenUtc, System.DateTime LastSeenUtc) -> void
+TheBuilder.CacheTags.ICacheTagsChanges
+TheBuilder.CacheTags.ICacheTagsChanges.Applied(string! signal) -> void
+TheBuilder.CacheTags.ICacheTagsChanges.Record(System.Collections.Generic.IEnumerable<string!>! keys, string? waitFor = null, System.Collections.Generic.IEnumerable<string!>? cultures = null, string? reason = null) -> System.Guid
+TheBuilder.CacheTags.ICacheTagsResponse
+TheBuilder.CacheTags.ICacheTagsResponse.Add(params string![]! keys) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.CacheTagsLookupController(TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup! lookup) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Changes(int take = 20, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Lookup(string! key, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.CacheTagsPurgesController(TheBuilder.CacheTags.ICacheTagsChanges! changes, TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox! outbox, Umbraco.Cms.Core.Security.IBackOfficeSecurityAccessor! security) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Discard(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purge(string![]! keys) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purges(string! state = "Dead", int take = 50) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Retry(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup
+TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox
 TheBuilder.CacheTags.Storage.CachedResponse
 TheBuilder.CacheTags.Storage.CachedResponse.CachedResponse() -> void
 TheBuilder.CacheTags.Storage.CachedResponse.Culture.get -> string!

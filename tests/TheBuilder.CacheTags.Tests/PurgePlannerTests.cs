@@ -11,7 +11,7 @@ public sealed class PurgePlannerTests
     private static readonly Guid Image = new("20000000-0000-0000-0000-000000000001");
     private static readonly Guid Folder = new("20000000-0000-0000-0000-0000000000ff");
 
-    private sealed class Tree : IDescendants
+    internal sealed class Tree : IDescendants
     {
         public IEnumerable<Guid> Of(Guid key) => key == C ? [Child, Grandchild] : [];
     }

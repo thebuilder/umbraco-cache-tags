@@ -8,8 +8,8 @@ using Umbraco.Cms.Web.Common.Routing;
 namespace TheBuilder.CacheTags.ManagementApi;
 
 /// <summary>
-///     Admin-only answers to "what does this key stand for?" and "what did this change purge?". The
-///     backoffice view (Milestone 5) is built on it.
+///     Admin-only answers to "what does this key stand for?" and "what did this change purge?", for the
+///     backoffice view.
 /// </summary>
 [ApiController]
 [ApiVersion("1.0")]

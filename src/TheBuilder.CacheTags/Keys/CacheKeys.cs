@@ -14,6 +14,12 @@ internal static class CacheKeys
     public const string SchemaPrefix = "schema-";
     public const string All = "umbraco";
 
+    /// <summary>The prefix of keys a site names for its own output (<c>x-dictionary-da-dk</c>).</summary>
+    public const string CustomPrefix = "x-";
+
+    /// <summary>The longest custom key, so it fits the mapping with a key prefix.</summary>
+    public const int MaxCustomKeyLength = 200;
+
     public static string Content(Guid key) => ContentPrefix + key.ToString("D");
 
     public static string Media(Guid key) => MediaPrefix + key.ToString("D");
@@ -38,13 +44,41 @@ internal static class CacheKeys
             || key.StartsWith(SearchPrefix, StringComparison.Ordinal);
 
     /// <summary>
-    ///     Whether a (prefixed) key names one response or item, which a purge expires at once, rather
-    ///     than a listing selector or everything, which a purge marks stale.
+    ///     Whether a (prefixed) key names one response, item or piece of custom output, which a purge
+    ///     expires at once, rather than a listing selector or everything, which a purge marks stale.
     /// </summary>
     public static bool Expires(string key, string prefix)
     {
         var bare = key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
-        return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare);
+        return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare) || IsCustom(bare);
+    }
+
+    /// <summary>Whether a key is one a site named for its own output (<c>x-</c>).</summary>
+    public static bool IsCustom(string key) => key.StartsWith(CustomPrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Whether a site may name this key: a custom key (<c>x-</c> and lowercase letters, digits and
+    ///     hyphens, at most <see cref="MaxCustomKeyLength" /> characters), a <c>content-</c> or
+    ///     <c>media-</c> key of an item, or <c>umbraco</c> (everything).
+    /// </summary>
+    public static bool IsNameable(string key)
+    {
+        if (key == All)
+        {
+            return true;
+        }
+
+        if (IsCustom(key))
+        {
+            return key.Length > CustomPrefix.Length
+                && key.Length <= MaxCustomKeyLength
+                && key.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-');
+        }
+
+        var prefix = key.StartsWith(ContentPrefix, StringComparison.Ordinal) ? ContentPrefix
+            : key.StartsWith(MediaPrefix, StringComparison.Ordinal) ? MediaPrefix
+            : null;
+        return prefix is not null && Guid.TryParseExact(key[prefix.Length..], "D", out Guid id) && key == prefix + id.ToString("D");
     }
 
     /// <summary>Whether a key is the catch-all selector of an index or of media listings (<c>search-</c>).</summary>

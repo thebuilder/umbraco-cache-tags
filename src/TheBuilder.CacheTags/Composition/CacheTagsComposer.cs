@@ -44,6 +44,8 @@ public sealed class CacheTagsComposer : IComposer
         // Collecting.
         builder.Services.AddSingleton<ReferenceReader>();
         builder.Services.AddScoped<ResponseCollector>();
+        builder.Services.AddScoped<CacheTagsResponse>();
+        builder.Services.AddScoped<ICacheTagsResponse>(services => services.GetRequiredService<CacheTagsResponse>());
         builder.Services.AddScoped<CacheKeyResultFilter>();
         builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
         builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, OutputCacheTags>();
@@ -61,6 +63,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<PurgePlanner>();
         builder.Services.AddSingleton<LedgerStore>();
         builder.Services.AddSingleton<ChangeRecorder>();
+        builder.Services.AddSingleton<ICacheTagsChanges, CacheTagsChanges>();
         builder.Services.AddSingleton<PendingOperations>();
         builder
             .AddNotificationHandler<ContentPublishingNotification, SourceChangeHandlers>()
@@ -114,6 +117,7 @@ public sealed class CacheTagsComposer : IComposer
 
         // The lookup API.
         builder.Services.AddSingleton<ICacheTagsLookup, CacheTagsLookup>();
+        builder.Services.AddSingleton<ICacheTagsOutbox, CacheTagsOutbox>();
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();
         builder.Services.AddAuthorization(options => options.AddPolicy(
             AdministratorRequirement.Policy,

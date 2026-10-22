@@ -98,12 +98,38 @@ internal static class LedgerSql
             id,
             owner);
 
+    /// <summary>The purges in a state, newest first.</summary>
+    public static List<OutboxRow> InState(IDatabase database, string state, int take)
+        => database.SkipTake<OutboxRow>(0, take, new Sql(
+            $"SELECT * FROM {Constants.Tables.Outbox} WHERE State = @0 ORDER BY CreatedUtc DESC",
+            state));
+
+    /// <summary>Sends a dead or discarded purge again, from its first attempt. Returns whether there was one.</summary>
+    public static bool Retry(IDatabase database, Guid id, DateTime nowUtc)
+        => database.Execute(
+            $"UPDATE {Constants.Tables.Outbox} SET State = @0, Attempts = 0, LastError = NULL, NotBeforeUtc = @1, LeaseOwner = NULL, LeaseUntilUtc = NULL WHERE Id = @2 AND (State = @3 OR State = @4)",
+            OutboxStates.Pending,
+            nowUtc,
+            id,
+            OutboxStates.Dead,
+            OutboxStates.Discarded) == 1;
+
+    /// <summary>Sets a pending or dead purge aside, so it is not sent. Returns whether there was one.</summary>
+    public static bool Discard(IDatabase database, Guid id)
+        => database.Execute(
+            $"UPDATE {Constants.Tables.Outbox} SET State = @0 WHERE Id = @1 AND (State = @2 OR State = @3)",
+            OutboxStates.Discarded,
+            id,
+            OutboxStates.Pending,
+            OutboxStates.Dead) == 1;
+
     public static void Prune(IDatabase database, DateTime cutoffUtc)
     {
         database.Execute(
-            $"DELETE FROM {Constants.Tables.Outbox} WHERE (State = @0 OR State = @1) AND CreatedUtc < @2",
+            $"DELETE FROM {Constants.Tables.Outbox} WHERE (State = @0 OR State = @1 OR State = @2) AND CreatedUtc < @3",
             OutboxStates.Sent,
             OutboxStates.Dead,
+            OutboxStates.Discarded,
             cutoffUtc);
         database.Execute(
             $"DELETE FROM {Constants.Tables.Events} WHERE Status = @0 AND CreatedUtc < @1 AND Id NOT IN (SELECT EventId FROM {Constants.Tables.Outbox})",

@@ -110,6 +110,14 @@ internal sealed class LedgerStore(PackageDatabase database)
             .Select(Purge)
             .ToList();
 
+    /// <summary>The purges in a state (Pending, Sent, Dead, Discarded), newest first.</summary>
+    public IReadOnlyList<Purge> InState(string state, int take)
+        => database.Read(db => LedgerSql.InState(db, state, take)).Select(Purge).ToList();
+
+    public bool Retry(Guid purgeId, DateTime nowUtc) => database.Write(db => LedgerSql.Retry(db, purgeId, nowUtc));
+
+    public bool Discard(Guid purgeId) => database.Write(db => LedgerSql.Discard(db, purgeId));
+
     public bool ClaimSend(Guid purgeId, string owner, DateTime nowUtc, DateTime leaseUntilUtc)
         => database.Write(db => LedgerSql.ClaimSend(db, purgeId, owner, nowUtc, leaseUntilUtc));
 

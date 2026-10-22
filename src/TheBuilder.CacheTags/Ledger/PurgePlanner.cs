@@ -17,6 +17,15 @@ internal sealed class PurgePlanner(IDescendants descendants)
             return new PurgePlan([], Everything: true, Cultures: null);
         }
 
+        if (change.Kind == ChangeKind.Custom)
+        {
+            // The keys as named; "umbraco" among them purges everything.
+            var named = change.Keys ?? [];
+            return named.Contains(CacheKeys.All)
+                ? new PurgePlan([], Everything: true, Cultures: null)
+                : new PurgePlan(named.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList(), Everything: false, change.Cultures);
+        }
+
         var keys = new SortedSet<string>(StringComparer.Ordinal);
         if (change.Kind == ChangeKind.TypesChanged)
         {

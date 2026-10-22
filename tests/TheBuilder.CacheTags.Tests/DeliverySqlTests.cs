@@ -173,4 +173,24 @@ public sealed class DeliverySqlTests : IDisposable
         Assert.Empty(acks.IndexedBy(other));
         Assert.Equal(["server-1", "server-2"], acks.AcknowledgedBy(Change).Order(StringComparer.Ordinal));
     }
+
+    [Fact]
+    public void A_dead_purge_can_be_sent_again_from_its_first_attempt_and_a_pending_one_set_aside()
+    {
+        Guid dead = Guid.NewGuid();
+        Guid pending = Guid.NewGuid();
+        _database.Insert(Purge(dead, Now));
+        _database.Insert(Purge(pending, Now));
+        _database.Execute("UPDATE theBuilderCacheTagsOutbox SET State = 'Dead', Attempts = 10, LastError = 'down' WHERE Id = @0", dead);
+
+        Assert.Equal([dead], LedgerSql.InState(_database, OutboxStates.Dead, 10).Select(row => row.Id));
+        Assert.True(LedgerSql.Retry(_database, dead, Now.AddHours(1)));
+        Assert.False(LedgerSql.Retry(_database, pending, Now.AddHours(1)));
+        Assert.True(LedgerSql.Discard(_database, pending));
+        Assert.False(LedgerSql.Discard(_database, pending));
+
+        OutboxRow retried = LedgerSql.Due(_database, Now.AddHours(1), 10).Single();
+        Assert.Equal((dead, 0, (string?)null), (retried.Id, retried.Attempts, retried.LastError));
+        Assert.Equal([pending], LedgerSql.InState(_database, OutboxStates.Discarded, 10).Select(row => row.Id));
+    }
 }

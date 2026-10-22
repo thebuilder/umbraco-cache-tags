@@ -22,9 +22,10 @@ internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded)
     /// <param name="responseKey">The response's <c>response-</c> key.</param>
     /// <param name="keys">Everything the response covers.</param>
     /// <param name="typesOf">The <c>type-</c> keys of the given items.</param>
-    public static ResponseTags For(CacheKeyMode mode, int maxItemKeys, string responseKey, IReadOnlySet<string> keys, Func<IReadOnlyList<string>, IEnumerable<string>> typesOf)
+    /// <param name="recordable">Whether the endpoint allows recording at all (<see cref="CacheTaggedAttribute.Recorded" />).</param>
+    public static ResponseTags For(CacheKeyMode mode, int maxItemKeys, string responseKey, IReadOnlySet<string> keys, Func<IReadOnlyList<string>, IEnumerable<string>> typesOf, bool recordable = true)
     {
-        var catchAll = keys.Any(CacheKeys.IsSearch);
+        var catchAll = recordable is false || keys.Any(CacheKeys.IsSearch);
         if (mode == CacheKeyMode.ResponseKey && catchAll is false)
         {
             return new ResponseTags([responseKey, CacheKeys.All], Recorded: true);
@@ -35,7 +36,7 @@ internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded)
         return new ResponseTags(
             own
                 .Concat(items.Count <= maxItemKeys ? items : typesOf(items))
-                .Concat(keys.Where(key => CacheKeys.IsSelector(key) || CacheKeys.IsSchema(key)).Order(StringComparer.Ordinal))
+                .Concat(keys.Where(key => CacheKeys.IsSelector(key) || CacheKeys.IsSchema(key) || CacheKeys.IsCustom(key)).Order(StringComparer.Ordinal))
                 .Append(CacheKeys.All)
                 .Distinct(StringComparer.Ordinal)
                 .ToList(),
