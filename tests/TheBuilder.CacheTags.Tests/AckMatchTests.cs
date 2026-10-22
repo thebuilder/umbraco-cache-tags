@@ -1,4 +1,3 @@
-using System.Text.Json;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
 using Umbraco.Cms.Core.Services.Changes;
@@ -13,7 +12,7 @@ public sealed class AckMatchTests
     private static LedgerEntry Change(DateTime createdUtc)
     {
         var change = new Change(Guid.NewGuid(), createdUtc, ChangeKind.Published, [new ChangedItem(Item, "page", Guid.Empty)], [], null);
-        return new LedgerEntry(change.Id, createdUtc, "Published", "server-1", default(JsonElement), new PurgePlan([], false, null), AckSignal.For(change), "Pending", null, []);
+        return new LedgerEntry(change, "server-1", new PurgePlan([], false, null), AckSignal.For(change), ChangeStage.Pending, null, []);
     }
 
     private static (DateTime, ObservedRefresh) Publish(DateTime observedUtc)

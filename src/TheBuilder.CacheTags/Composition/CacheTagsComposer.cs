@@ -34,7 +34,7 @@ public sealed class CacheTagsComposer : IComposer
             .Validate(options => options.MaxItemKeys > 0, "CacheTags:MaxItemKeys must be above 0.")
             .Validate(options => options.MaxDescendants >= 0, "CacheTags:MaxDescendants must be 0 or more.")
             .Validate(options => options.MappingRetention > TimeSpan.Zero && options.LedgerRetention > TimeSpan.Zero, "CacheTags:MappingRetention and LedgerRetention must be above zero.")
-            .Validate(options => options.ListingRepurgeDelays.All(delay => delay >= TimeSpan.Zero), "CacheTags:ListingRepurgeDelays must not be negative.")
+            .Validate(options => options.IndexTimeout > TimeSpan.Zero, "CacheTags:IndexTimeout must be above zero.")
             .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
             .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)
             .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
@@ -46,7 +46,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddScoped<ResponseCollector>();
         builder.Services.AddScoped<CacheKeyResultFilter>();
         builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
-        builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, ResponseKeyOutputCacheTags>();
+        builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, OutputCacheTags>();
         builder.Services.Configure<UmbracoPipelineOptions>(options => options.AddFilter(SeenPipeline.Filter()));
 
         // The mapping.
@@ -92,6 +92,9 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<PurgeResolver>();
         builder.Services.AddSingleton<OutputCacheEviction>();
         builder.Services.AddSingleton<AckProcessor>();
+        builder.Services.AddSingleton<LocalDeliveryIndex>();
+        builder.Services.AddSingleton<IndexStage>();
+        builder.ContentIndexHandlers().Add<IndexStamp>();
         builder.Services.AddSingleton<Releaser>();
         builder.Services.AddSingleton<PurgeSender>();
         builder.Services.AddHostedService<Heartbeat>();

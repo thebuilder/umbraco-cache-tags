@@ -33,6 +33,11 @@ internal sealed class ResponseCollector(
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         OutputWalker.Collect(result, keys);
+        if (endpoint.Listing is false)
+        {
+            CollectRequestedItems(http.Request.Query["id"], endpoint.Media, keys);
+        }
+
         CollectReferences(http, keys);
         if (endpoint.Listing)
         {
@@ -55,21 +60,24 @@ internal sealed class ResponseCollector(
         return keys;
     }
 
-    /// <summary>The header value: the response key, or in direct mode the item keys (or their types, past the budget) and selectors.</summary>
-    public string Header(CacheTagsOptions options, string responseKey, IReadOnlySet<string> keys)
+    /// <summary>
+    ///     Items asked for by id (<c>items?id=…</c>): a later publish of one the response could not show
+    ///     yet must reach it, so it covers every id asked for. A request for an item that does not exist
+    ///     is a catch-all, like a fetch of one, so random ids cannot make a recorded response each.
+    /// </summary>
+    /// <param name="ids">The <c>id</c> parameters.</param>
+    /// <param name="media">Whether the ids are media.</param>
+    /// <param name="keys">The keys collected from what the response shows, added to.</param>
+    public static void CollectRequestedItems(IEnumerable<string?> ids, bool media, ISet<string> keys)
     {
-        if (options.KeyMode == CacheKeyMode.ResponseKey)
+        foreach (var value in ids)
         {
-            return CacheKeys.WithPrefix(options.KeyPrefix, responseKey);
+            // The walk has already added what the response shows; an id not among it does not exist.
+            if (Guid.TryParse(value, out Guid id) && keys.Add(media ? CacheKeys.Media(id) : CacheKeys.Content(id)))
+            {
+                keys.Add(CacheKeys.Search(media ? ListingSelectors.MediaSearch : ListingSelectors.ContentIndex));
+            }
         }
-
-        var items = keys.Where(CacheKeys.IsItem).Order(StringComparer.Ordinal).ToList();
-        IEnumerable<string> shown = items.Count <= options.MaxItemKeys ? items : TypeKeys(items);
-        return string.Join(", ", new[] { responseKey }
-            .Concat(shown)
-            .Concat(keys.Where(key => CacheKeys.IsSelector(key) || CacheKeys.IsSchema(key)).Order(StringComparer.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .Select(key => CacheKeys.WithPrefix(options.KeyPrefix, key)));
     }
 
     private void CollectReferences(HttpContext http, HashSet<string> keys)
@@ -115,8 +123,8 @@ internal sealed class ResponseCollector(
         return item?.Key ?? (target is "/" or "" ? Guid.Empty : null);
     }
 
-    // Past the direct-mode budget: the types of every item, which a publish of any of them purges.
-    private SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
+    /// <summary>The types of the given items, which a publish of any of them purges; <c>umbraco</c> for an item no longer cached.</summary>
+    public SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
     {
         var types = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var key in itemKeys)

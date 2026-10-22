@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { CacheInfo } from "@/app/cache-info";
-import { Pending } from "@/app/pending";
 import { type ApiContent, type ApiMedia, type ApiPaged, contentByRoute, cultures, deliveryApi, href, mediaUrl } from "@/lib/umbraco";
 
 type EventList = { title: string; intro: string };
@@ -12,15 +10,7 @@ type EventSummary = { title: string; description: string; date: string; image: A
  * The events in one culture. The list is invariant and the events vary by culture, so /da-dk/events
  * leaves out the winter market, which is published in en-US only.
  */
-export default function EventsPage({ params }: PageProps<"/[locale]/events">) {
-  return (
-    <Suspense fallback={<Pending />}>
-      <EventsContent params={params} />
-    </Suspense>
-  );
-}
-
-async function EventsContent({ params }: Pick<PageProps<"/[locale]/events">, "params">) {
+export default async function EventsPage({ params }: PageProps<"/[locale]/events">) {
   const { locale } = await params;
   const culture = cultures[locale];
   if (!culture) {

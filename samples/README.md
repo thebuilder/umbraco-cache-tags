@@ -303,9 +303,9 @@ global packages folder and does not look at the file again, so give each pack a 
 
 Each change is logged when it is planned and when it is released:
 `Cache tags change <id> (Published) plans content-..., type-...` and
-`Cache tags change <id> released: 10 keys in 2 purges.` The later purges re-purge listings
-(`CacheTags:ListingRepurgeDelays`, 5, 20 and 45 seconds), as the Delivery API index catches up with
-the change.
+`Cache tags change <id> released: 10 keys in 2 purges.` A change that reaches listings is purged a
+second time once every server's Delivery API index has it:
+`Cache tags change <id> indexed: 6 listing keys purged.`
 
 The admin-only lookup API answers what a key covers and what recent changes planned, sent and to whom:
 `GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
@@ -314,6 +314,33 @@ API user works; see `scripts/e2e.mts` for getting a token).
 
 `pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
 `stale`.
+
+Right after Umbraco starts, its Delivery API index can take a minute or more to catch up, and a
+change's listing purge waits for it, so run the checks with a longer timeout then:
+`E2E_TIMEOUT=120 pnpm e2e`.
+
+## Search
+
+The Umbraco sample adds full-text search to the Delivery API (`TheBuilder.CacheTags.Example/Search`):
+an index handler puts each item's published text (name, text fields, rich text without markup) into
+the Delivery API content index as analyzed text, and a filter queries it. Each `search:` filter
+matches words starting with any of its words; send one per word to require all of them:
+
+```http
+GET /umbraco/delivery/api/v2/content?filter=search:harbour&filter=search:morning
+```
+
+The Delivery API index is an Examine (Lucene) index, so this needs no second index. Umbraco does not
+reindex existing items when a handler adds a field: after adding one to a site with content, rebuild
+the Delivery API index once (Settings > Examine Management, or
+`POST /umbraco/management/api/v1/indexer/DeliveryApiContentIndex/rebuild`).
+
+A search result is a Delivery API listing, so the package tags it and purges it when a publish could
+change it, once every server's index has the change. Searches come from user input, so the package
+does not record them: each carries its own keys (its items, `search-deliveryapicontentindex` and
+`umbraco`), and the one `search-` key purges every cached search at once. The Next.js page (`app/search/page.tsx`) normalises the words so the same search is one cache
+entry. Searching Examine directly from a custom endpoint gives relevance ranking, but those responses
+are not Delivery API responses: the package does not tag them, and nothing purges them.
 
 ## Check it on two servers
 

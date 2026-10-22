@@ -1,9 +1,7 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { CacheInfo } from "@/app/cache-info";
 import { Downloads, Picture, editedCrops } from "@/app/media";
-import { Pending } from "@/app/pending";
 import { RichText } from "@/app/rich-text";
 import { type ApiMedia, type ApiMediaItem, type ApiPaged, type ApiRichText, contentByRoute, deliveryApi, mediaUrl } from "@/lib/umbraco";
 
@@ -19,15 +17,7 @@ type PhotoEssay = {
  * Seven picked images with crops, a PDF, rich text with an inline image, and a media folder listed
  * through the Media Delivery API. Renaming or recropping an image, or replacing the PDF, shows here.
  */
-export default function PhotoEssayPage() {
-  return (
-    <Suspense fallback={<Pending />}>
-      <PhotoEssayContent />
-    </Suspense>
-  );
-}
-
-async function PhotoEssayContent() {
+export default async function PhotoEssayPage() {
   await connection();
   const [page, city] = await Promise.all([
     contentByRoute<PhotoEssay>("/photo-essay/"),

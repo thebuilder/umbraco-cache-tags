@@ -126,7 +126,7 @@ async function page(path: string): Promise<Page> {
   }
 
   const fetches: Fetched[] = [];
-  const item = /<li><code>(.*?)<\/code>.*?<time dateTime="([^"]+)" data-testid="fetched-at">.*?, tags:(?:<!-- -->)?\s*(?:<em>none<\/em>|<code>(.*?)<\/code>)<\/li>/g;
+  const item = /<li><code>(.*?)<\/code>.*?<time dateTime="([^"]+)"[^>]*>.*?, tags:(?:<!-- -->)?\s*(?:<em>none<\/em>|<code>(.*?)<\/code>)<\/li>/g;
   for (const [, request, fetchedAt, tags] of html.matchAll(item)) {
     fetches.push({ request: text(request), fetchedAt, tags: tags ? text(tags) : "none" });
   }
@@ -265,13 +265,16 @@ const cases: Case[] = [
     },
   },
   {
-    name: "Publishing a new article under Articles adds it to the listing",
+    name: "Publishing a new article under Articles adds it to the listing and to search results",
     async run(report) {
       const title = `A new article${marker}`;
-      await settle(["/articles"]);
+      // A word only this run's article has. Its search page is cached first, finding nothing.
+      const word = `e2e${runId}`;
+      const search = `/search?q=${word}`;
+      await settle(["/articles", search]);
       const values = [
         { alias: "title", culture: null, segment: null, value: title },
-        { alias: "summary", culture: null, segment: null, value: "Published by the end-to-end check, and deleted again." },
+        { alias: "summary", culture: null, segment: null, value: `Published by the end-to-end check (${word}), and deleted again.` },
       ];
       await management("POST", "document", {
         id: keys.newArticle,
@@ -284,7 +287,12 @@ const cases: Case[] = [
       await publish(keys.newArticle);
 
       // The listing comes from the Delivery API index, which picks a publish up a little later.
-      report.checks(await waitFor([shows("/articles", title, "the new article")], timeoutMs * 2));
+      report.checks(
+        await waitFor(
+          [shows("/articles", title, "the new article"), shows(search, title, "the new article in the search results")],
+          timeoutMs * 2,
+        ),
+      );
     },
     async undo() {
       await deleteNewArticle();

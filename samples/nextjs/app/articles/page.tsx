@@ -1,23 +1,13 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { CacheInfo } from "@/app/cache-info";
-import { Pending } from "@/app/pending";
 import { type ApiContent, type ApiImage, type ApiPaged, contentByRoute, deliveryApi, href, mediaUrl } from "@/lib/umbraco";
 
 type ArticleList = { title: string; intro: string };
 type ArticleSummary = { title: string; summary: string; image: ApiImage[] };
 
-export default function ArticlesPage() {
-  return (
-    <Suspense fallback={<Pending />}>
-      <ArticlesContent />
-    </Suspense>
-  );
-}
-
-async function ArticlesContent() {
+export default async function ArticlesPage() {
   await connection();
   const [listing, children] = await Promise.all([
     contentByRoute<ArticleList>("/articles/"),

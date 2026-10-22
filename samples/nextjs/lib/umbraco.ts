@@ -116,9 +116,15 @@ export type Fetched<T> = {
 export async function deliveryApi<T>(request: string, culture: Culture | null = null): Promise<Fetched<T>> {
   "use cache";
 
-  const response = await fetch(`${umbracoUrl}/umbraco/delivery/api/v2/${request.replace(/^\//, "")}`, {
-    headers: culture ? { "Accept-Language": culture } : {},
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${umbracoUrl}/umbraco/delivery/api/v2/${request.replace(/^\//, "")}`, {
+      headers: culture ? { "Accept-Language": culture } : {},
+    });
+  } catch {
+    // Thrown, so the failure is not cached. app/error.tsx shows it and tries again.
+    throw new Error(`Umbraco is not reachable at ${umbracoUrl}; it may still be starting.`);
+  }
 
   if (!response.ok && response.status !== 404) {
     // Thrown, so the failure is not cached.

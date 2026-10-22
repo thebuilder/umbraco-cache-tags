@@ -49,7 +49,8 @@ internal sealed record ChangeLookup(
     DateTime? ReleasedUtc,
     IReadOnlyList<string> AcknowledgedBy,
     IReadOnlyList<string> NotAcknowledgedBy,
-    JsonElement Change,
+    IReadOnlyList<string> IndexedBy,
+    Change Change,
     PurgePlan Plan,
     IReadOnlyList<string> Responses,
     IReadOnlyList<Purge> Purges);
@@ -94,7 +95,7 @@ internal sealed class CacheTagsLookup(
     public async Task<IReadOnlyList<ChangeLookup>> ChangesAsync(int take, CancellationToken cancellationToken)
     {
         IReadOnlyList<LedgerEntry> changes = ledger.Latest(Math.Clamp(take, 1, 200));
-        IReadOnlyDictionary<Guid, IReadOnlySet<string>> acks = await transport.GetAcksAsync(changes.Select(change => change.Id).ToList(), cancellationToken);
+        IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>> acks = await transport.GetAcksAsync(changes.Select(change => change.Id).ToList(), cancellationToken);
 
         var lookups = new List<ChangeLookup>();
         foreach (LedgerEntry change in changes)
@@ -103,12 +104,13 @@ internal sealed class CacheTagsLookup(
             lookups.Add(new ChangeLookup(
                 change.Id,
                 change.CreatedUtc,
-                change.Kind,
+                change.Change.Kind.ToString(),
                 change.Server,
-                change.Status,
+                change.Stage.ToString(),
                 change.ReleasedUtc,
-                (acks.GetValueOrDefault(change.Id) ?? new HashSet<string>()).Append(change.Server).Distinct().Order(StringComparer.Ordinal).ToList(),
+                acks.AcknowledgedBy(change.Id).Order(StringComparer.Ordinal).ToList(),
                 change.NotAcknowledgedBy,
+                acks.IndexedBy(change.Id).Order(StringComparer.Ordinal).ToList(),
                 change.Change,
                 change.Plan,
                 resolved.Responses,

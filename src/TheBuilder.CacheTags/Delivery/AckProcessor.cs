@@ -66,7 +66,7 @@ internal sealed class AckProcessor(
         var completed = new List<LedgerEntry>();
         try
         {
-            IReadOnlyList<LedgerEntry> unreleased = ledger.Unreleased(500);
+            IReadOnlyList<LedgerEntry> unreleased = ledger.InStage(ChangeStage.Pending, 500);
             foreach (Guid released in _acknowledged.Keys.Except(unreleased.Select(change => change.Id)))
             {
                 _acknowledged.TryRemove(released, out _);
@@ -116,25 +116,25 @@ internal sealed class AckProcessor(
         }
     }
 
-    private async Task AcknowledgeAsync(IReadOnlyList<LedgerEntry> changes, CancellationToken cancellationToken)
+    private async Task AcknowledgeAsync(IReadOnlyList<LedgerEntry> completed, CancellationToken cancellationToken)
     {
         if (eviction.Enabled)
         {
-            foreach (LedgerEntry change in changes)
+            foreach (LedgerEntry change in completed)
             {
                 await eviction.EvictAsync(await resolver.ResolveAsync(change.Plan, cancellationToken));
             }
         }
 
-        await transport.AckAsync(identity.Name, changes.Select(change => change.Id).ToList(), time.GetUtcNow().UtcDateTime, cancellationToken);
-        foreach (LedgerEntry change in changes)
+        await transport.AckAsync(identity.Name, completed.Select(change => change.Id).ToList(), time.GetUtcNow().UtcDateTime, cancellationToken);
+        foreach (LedgerEntry change in completed)
         {
             _acknowledged.TryAdd(change.Id, 0);
         }
 
         if (logger.IsEnabled(LogLevel.Debug))
         {
-            logger.LogDebug("Cache tags: {Server} acknowledged {Changes}.", identity.Name, string.Join(", ", changes.Select(change => change.Id)));
+            logger.LogDebug("Cache tags: {Server} acknowledged {Changes}.", identity.Name, string.Join(", ", completed.Select(change => change.Id)));
         }
     }
 }

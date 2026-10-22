@@ -24,8 +24,26 @@ internal static class ListingSelectors
     public static IReadOnlyCollection<string> For(string? fetch, IEnumerable<string> filters, Func<string, Guid?> resolve, bool media)
     {
         var keys = new SortedSet<string>(StringComparer.Ordinal);
+        var catchAll = CacheKeys.Search(media ? MediaSearch : ContentIndex);
+        var typeFilter = media ? "mediaType:" : "contentType:";
+        var filterList = filters.ToList();
         var (axis, target) = Split(fetch);
         Guid? targetKey = target is null ? null : resolve(target);
+
+        // A fetch of an item that does not exist matches nothing until something is published there.
+        if (target is not null && targetKey is null)
+        {
+            keys.Add(catchAll);
+            return keys;
+        }
+
+        // A filter on anything but the type (a name, a search, a custom filter) narrows the listing by
+        // input that can vary without end. The listing is then a catch-all as well as whatever else
+        // selects it, so it is not recorded (see ResponseTags) and every publish purges it.
+        if (filterList.Any(filter => filter.StartsWith(typeFilter, StringComparison.OrdinalIgnoreCase) is false))
+        {
+            keys.Add(catchAll);
+        }
 
         // The fetched item itself: an ancestors listing changes when its own route does.
         if (targetKey is { } fetched && fetched != Guid.Empty && axis is "children" or "descendants" or "ancestors")
@@ -45,8 +63,7 @@ internal static class ListingSelectors
             return keys;
         }
 
-        var typeFilter = media ? "mediaType:" : "contentType:";
-        var types = filters
+        var types = filterList
             .Where(f => f.StartsWith(typeFilter, StringComparison.OrdinalIgnoreCase))
             .Select(f => f[typeFilter.Length..])
             .SelectMany(v => v.Split(','))
@@ -65,7 +82,7 @@ internal static class ListingSelectors
             return keys;
         }
 
-        keys.Add(CacheKeys.Search(media ? MediaSearch : ContentIndex));
+        keys.Add(catchAll);
         return keys;
     }
 

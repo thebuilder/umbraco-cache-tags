@@ -1,3 +1,4 @@
+import { LocalTime } from "@/app/local-time";
 import type { Fetched } from "@/lib/umbraco";
 
 /** Shows when each Delivery API response on the page was cached, and the keys it was tagged with. */
@@ -13,9 +14,7 @@ export function CacheInfo({ fetches }: { fetches: Fetched<unknown>[] }) {
               {fetched.culture ? ` (${fetched.culture})` : ""}
             </code>{" "}
             fetched from Umbraco at{" "}
-            <time dateTime={fetched.fetchedAt} data-testid="fetched-at">
-              {fetched.fetchedAt}
-            </time>
+            <LocalTime iso={fetched.fetchedAt} />
             , tags:{" "}
             {fetched.cacheKeys.length > 0 ? <code>{fetched.cacheKeys.join(", ")}</code> : <em>none</em>}
           </li>

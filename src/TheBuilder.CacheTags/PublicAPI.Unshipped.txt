@@ -13,14 +13,14 @@ TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.HeaderName.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.HeaderName.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.IndexTimeout.get -> System.TimeSpan
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.IndexTimeout.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyMode.get -> TheBuilder.CacheTags.Configuration.CacheKeyMode
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyMode.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyPrefix.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyPrefix.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.LedgerRetention.get -> System.TimeSpan
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.LedgerRetention.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.ListingRepurgeDelays.get -> System.TimeSpan[]!
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.ListingRepurgeDelays.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MappingRetention.get -> System.TimeSpan
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MappingRetention.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxAttempts.get -> int
@@ -51,9 +51,10 @@ TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Url.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Url.set -> void
 TheBuilder.CacheTags.Delivery.IAckTransport
 TheBuilder.CacheTags.Delivery.IAckTransport.AckAsync(string! server, System.Collections.Generic.IReadOnlyCollection<System.Guid>! changeIds, System.DateTime ackedUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-TheBuilder.CacheTags.Delivery.IAckTransport.GetAcksAsync(System.Collections.Generic.IReadOnlyCollection<System.Guid>! changeIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<System.Guid, System.Collections.Generic.IReadOnlySet<string!>!>!>!
+TheBuilder.CacheTags.Delivery.IAckTransport.GetAcksAsync(System.Collections.Generic.IReadOnlyCollection<System.Guid>! changeIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<System.Guid, System.Collections.Generic.IReadOnlyList<TheBuilder.CacheTags.Delivery.ServerAck!>!>!>!
 TheBuilder.CacheTags.Delivery.IAckTransport.GetServersAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyCollection<TheBuilder.CacheTags.Delivery.ServerPresence!>!>!
 TheBuilder.CacheTags.Delivery.IAckTransport.HeartbeatAsync(string! server, System.DateTime firstSeenUtc, System.DateTime nowUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+TheBuilder.CacheTags.Delivery.IAckTransport.IndexedAsync(string! server, System.Collections.Generic.IReadOnlyCollection<System.Guid>! changeIds, System.DateTime indexedUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 TheBuilder.CacheTags.Delivery.IAckTransport.LeaveAsync(string! server, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 TheBuilder.CacheTags.Delivery.IAckTransport.PruneAsync(System.DateTime cutoffUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 TheBuilder.CacheTags.Delivery.IPurgeTarget
@@ -71,6 +72,17 @@ TheBuilder.CacheTags.Delivery.PurgeRequest.Stale.get -> System.Collections.Gener
 TheBuilder.CacheTags.Delivery.PurgeRequest.Stale.init -> void
 TheBuilder.CacheTags.Delivery.PurgeRequest.TargetName.get -> string!
 TheBuilder.CacheTags.Delivery.PurgeRequest.TargetName.init -> void
+TheBuilder.CacheTags.Delivery.ServerAck
+TheBuilder.CacheTags.Delivery.ServerAck.<Clone>$() -> TheBuilder.CacheTags.Delivery.ServerAck!
+TheBuilder.CacheTags.Delivery.ServerAck.AckedUtc.get -> System.DateTime
+TheBuilder.CacheTags.Delivery.ServerAck.AckedUtc.init -> void
+TheBuilder.CacheTags.Delivery.ServerAck.Deconstruct(out string! Server, out System.DateTime AckedUtc, out System.DateTime? IndexedUtc) -> void
+TheBuilder.CacheTags.Delivery.ServerAck.Equals(TheBuilder.CacheTags.Delivery.ServerAck? other) -> bool
+TheBuilder.CacheTags.Delivery.ServerAck.IndexedUtc.get -> System.DateTime?
+TheBuilder.CacheTags.Delivery.ServerAck.IndexedUtc.init -> void
+TheBuilder.CacheTags.Delivery.ServerAck.Server.get -> string!
+TheBuilder.CacheTags.Delivery.ServerAck.Server.init -> void
+TheBuilder.CacheTags.Delivery.ServerAck.ServerAck(string! Server, System.DateTime AckedUtc, System.DateTime? IndexedUtc) -> void
 TheBuilder.CacheTags.Delivery.ServerPresence
 TheBuilder.CacheTags.Delivery.ServerPresence.<Clone>$() -> TheBuilder.CacheTags.Delivery.ServerPresence!
 TheBuilder.CacheTags.Delivery.ServerPresence.Deconstruct(out string! Server, out System.DateTime FirstSeenUtc, out System.DateTime LastSeenUtc) -> void
@@ -114,8 +126,13 @@ TheBuilder.CacheTags.Storage.ICacheTagStore.PruneAsync(System.DateTime cutoffUtc
 TheBuilder.CacheTags.Storage.ICacheTagStore.RecordAsync(System.Collections.Generic.IReadOnlyCollection<TheBuilder.CacheTags.Storage.CachedResponse!>! responses, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 TheBuilder.CacheTags.Storage.ICacheTagStore.TouchAsync(System.Collections.Generic.IReadOnlyCollection<string!>! responseKeys, System.DateTime seenUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 const TheBuilder.CacheTags.Configuration.CacheTagsOptions.SectionName = "CacheTags" -> string!
+override TheBuilder.CacheTags.Delivery.ServerAck.Equals(object? obj) -> bool
+override TheBuilder.CacheTags.Delivery.ServerAck.GetHashCode() -> int
+override TheBuilder.CacheTags.Delivery.ServerAck.ToString() -> string!
 override TheBuilder.CacheTags.Delivery.ServerPresence.Equals(object? obj) -> bool
 override TheBuilder.CacheTags.Delivery.ServerPresence.GetHashCode() -> int
 override TheBuilder.CacheTags.Delivery.ServerPresence.ToString() -> string!
+static TheBuilder.CacheTags.Delivery.ServerAck.operator !=(TheBuilder.CacheTags.Delivery.ServerAck? left, TheBuilder.CacheTags.Delivery.ServerAck? right) -> bool
+static TheBuilder.CacheTags.Delivery.ServerAck.operator ==(TheBuilder.CacheTags.Delivery.ServerAck? left, TheBuilder.CacheTags.Delivery.ServerAck? right) -> bool
 static TheBuilder.CacheTags.Delivery.ServerPresence.operator !=(TheBuilder.CacheTags.Delivery.ServerPresence? left, TheBuilder.CacheTags.Delivery.ServerPresence? right) -> bool
 static TheBuilder.CacheTags.Delivery.ServerPresence.operator ==(TheBuilder.CacheTags.Delivery.ServerPresence? left, TheBuilder.CacheTags.Delivery.ServerPresence? right) -> bool

@@ -44,17 +44,13 @@ internal sealed class EventRow
     /// <summary>What a server's cache refresh must show for it to acknowledge this change, as JSON.</summary>
     [Column(nameof(Signal)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Signal { get; set; }
 
-    /// <summary>Pending, Releasing, Released or ReleasedAfterTimeout.</summary>
+    /// <summary>The change's <c>ChangeStage</c>: Pending, Indexing or Released.</summary>
     [Column(nameof(Status)), Length(30), NullSetting(NullSetting = NullSettings.Null)] public string? Status { get; set; }
 
     [Column(nameof(ReleasedUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? ReleasedUtc { get; set; }
 
-    /// <summary>The servers that had not acknowledged when the change was released, as JSON.</summary>
+    /// <summary>The servers that had not acknowledged when the change was released after the ack timeout, as JSON.</summary>
     [Column(nameof(Missing)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Missing { get; set; }
-
-    [Column(nameof(LeaseOwner)), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? LeaseOwner { get; set; }
-
-    [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
 }
 
 [TableName(Constants.Tables.Servers), PrimaryKey(nameof(Server), AutoIncrement = false), ExplicitColumns]
@@ -72,6 +68,9 @@ internal sealed class AckRow
     [Column(nameof(EventId))] public Guid EventId { get; set; }
     [Column(nameof(Server)), Length(200)] public string Server { get; set; } = string.Empty;
     [Column(nameof(AckedUtc))] public DateTime AckedUtc { get; set; }
+
+    /// <summary>When the server's Delivery API index had the change, for a change whose listings wait for it.</summary>
+    [Column(nameof(IndexedUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? IndexedUtc { get; set; }
 }
 
 [TableName(Constants.Tables.Outbox), PrimaryKey(nameof(Id), AutoIncrement = false), ExplicitColumns]
@@ -94,14 +93,6 @@ internal sealed class OutboxRow
     [Column(nameof(LastError)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? LastError { get; set; }
     [Column(nameof(LeaseOwner)), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? LeaseOwner { get; set; }
     [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
-}
-
-internal static class EventStatuses
-{
-    public const string Pending = "Pending";
-    public const string Releasing = "Releasing";
-    public const string Released = "Released";
-    public const string ReleasedAfterTimeout = "ReleasedAfterTimeout";
 }
 
 internal static class OutboxStates

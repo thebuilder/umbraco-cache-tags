@@ -66,13 +66,12 @@ public sealed class CacheTagsOptions
     public int MaxAttempts { get; set; } = 10;
 
     /// <summary>
-    ///     Listings come from Umbraco's Delivery API index, which is updated in the background after a
-    ///     change, so a listing purged at once can be refetched before the index has the change.
-    ///     Listing responses are purged again after each of these delays. Defaults to 5, 20 and 45
-    ///     seconds: the index usually takes a few seconds, and over half a minute right after a
-    ///     restart. Setting it replaces the defaults; <c>["00:00:00"]</c> turns the re-purge off.
+    ///     Listings come from each server's Delivery API index, which Umbraco updates in the background
+    ///     after a change, so a change's listings are purged a second time once every server's index has
+    ///     it. This is the longest that second purge waits for a server. Defaults to 5 minutes: the
+    ///     index usually takes a second or two, and can take over a minute right after a restart.
     /// </summary>
-    public TimeSpan[] ListingRepurgeDelays { get; set; } = [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(45)];
+    public TimeSpan IndexTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>How long released changes and sent purges are kept for the lookup API. Defaults to 7 days.</summary>
     public TimeSpan LedgerRetention { get; set; } = TimeSpan.FromDays(7);
