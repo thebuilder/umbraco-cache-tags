@@ -49,7 +49,7 @@ export interface SearchResult {
   responses: ResponseSummary[];
 }
 
-/** A value typed in, or the name of the app setting that holds it. Exactly one is set. */
+/** A value typed in, or the name of the secret under CacheTags:Secrets that holds it. Exactly one is set. */
 export interface TargetValue {
   value?: string | null;
   setting?: string | null;
@@ -75,7 +75,7 @@ export interface TargetDraft {
 /** A target as listed. One from configuration shows only its header and setting names. */
 export interface TargetView extends TargetDraft {
   fromConfiguration: boolean;
-  /** Why purges to it fail on this server, such as an app setting that is not set. */
+  /** Why purges to it fail on this server, such as a secret that is not set. */
   problem: string | null;
 }
 

@@ -131,9 +131,11 @@ Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, an
 Targets are configured in `CacheTags:Targets` or added in the backoffice (Settings > Advanced > Cache
 tags > Targets, administrators only), stored in `theBuilderCacheTagsTarget` as JSON and read by every
 server at most 5 seconds late. A configured name wins over a backoffice one. Each backoffice value
-(signing secret, header, setting) is typed in or names an app setting read at send time; the package
-stores no secret of its own. A setting missing on a server fails that server's purges with an error
-that names the header or secret, never the setting, so they retry until it is deployed. Backoffice
+(signing secret, header, setting) is typed in or names a secret under `CacheTags:Secrets`, read at
+send time. A name cannot contain `:`, so a target can read nothing else from configuration, and an
+administrator cannot send it the connection string or another target's secret. The package stores
+no secret of its own. A secret missing on a server fails that server's purges with an error that
+names the header or signing secret, never the secret's name, and they retry like any purge. Backoffice
 targets reach only public addresses unless `CacheTags:AllowPrivateNetworkTargets`; webhooks send their
 target's `Headers`, but never one the purge sets itself.
 

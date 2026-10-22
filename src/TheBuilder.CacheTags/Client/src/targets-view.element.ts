@@ -22,7 +22,10 @@ const newTarget = (): TargetDraft => ({
 /** The settings a Cloudflare target needs, in the order the form shows them. */
 const CLOUDFLARE_SETTINGS = ["ZoneId", "ApiToken"];
 
-/** Whether a value names an app setting rather than holding a typed value. */
+/** Where a target's named secrets are read from. */
+const SECRETS = "CacheTags:Secrets";
+
+/** Whether a value names a secret rather than holding a typed value. */
 const fromSetting = (value: TargetValue | null | undefined) => value?.setting !== undefined && value?.setting !== null;
 
 const describe = (target: TargetView) =>
@@ -318,11 +321,11 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       <uui-form-layout-item>
         <uui-label slot="label" for="secret" required>Signing secret</uui-label>
         <span slot="description">At least 32 characters, the same as the receiver checks with.</span>
-        ${this.#renderValue("secret", "Signing secret", draft.secret ?? { value: "" }, (secret) => this.#patch({ secret }), "CacheTags:Vercel:Secret")}
+        ${this.#renderValue("secret", "Signing secret", draft.secret ?? { value: "" }, (secret) => this.#patch({ secret }), "VercelSecret")}
       </uui-form-layout-item>
       ${this.#renderNamedValues("Request headers", "Sent with every purge, such as a gateway's API key or x-vercel-protection-bypass.", draft.headers, (headers) => this.#patch({ headers }), "x-vercel-protection-bypass", "Add header")}
       <p class="muted small">
-        Keep secrets in an app setting: a value typed here is stored in the database in plain text and shown to administrators.
+        Keep secrets under <span class="mono">${SECRETS}</span> in the site's configuration. A value typed here is stored in the database in plain text and shown to administrators.
       </p>
     `;
   }
@@ -335,15 +338,15 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       <uui-form-layout-item>
         <uui-label slot="label" for="zone" required>Zone ID</uui-label>
         <span slot="description">On the zone's Overview page in Cloudflare.</span>
-        ${this.#renderValue("zone", "Zone ID", setting("ZoneId"), (value) => update("ZoneId", value), "Cloudflare:ZoneId")}
+        ${this.#renderValue("zone", "Zone ID", setting("ZoneId"), (value) => update("ZoneId", value), "CloudflareZone")}
       </uui-form-layout-item>
       <uui-form-layout-item>
         <uui-label slot="label" for="token" required>API token</uui-label>
         <span slot="description">A token with the Zone, Cache Purge permission for this zone.</span>
-        ${this.#renderValue("token", "API token", setting("ApiToken"), (value) => update("ApiToken", value), "Cloudflare:ApiToken")}
+        ${this.#renderValue("token", "API token", setting("ApiToken"), (value) => update("ApiToken", value), "CloudflareToken")}
       </uui-form-layout-item>
       <p class="muted small">
-        Keep the token in an app setting: a value typed here is stored in the database in plain text and shown to administrators.
+        Keep the token under <span class="mono">${SECRETS}</span> in the site's configuration. A value typed here is stored in the database in plain text and shown to administrators.
       </p>
     `;
   }
@@ -352,7 +355,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
     return this.#renderNamedValues("Settings", "What this target type reads, by name.", draft.settings, (settings) => this.#patch({ settings }), "ApiToken", "Add setting");
   }
 
-  /** One value: typed in, or the name of the app setting that holds it, with a link to switch. */
+  /** One value: typed in, or the name of the secret under CacheTags:Secrets that holds it, with a link to switch. */
   #renderValue(id: string, label: string, value: TargetValue, change: (value: TargetValue) => void, settingPlaceholder: string) {
     const setting = fromSetting(value);
     return html`
@@ -360,12 +363,12 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
         ${setting
           ? html`<uui-input
               id=${id}
-              label=${`${label} app setting`}
+              label=${`${label} secret name`}
               placeholder=${settingPlaceholder}
               maxlength="200"
               .value=${value.setting ?? ""}
               @input=${(event: Event) => change({ setting: (event.target as HTMLInputElement).value })}>
-              <span slot="prepend" class="prefix">App setting</span>
+              <span slot="prepend" class="prefix mono">${SECRETS}:</span>
             </uui-input>`
           : html`<uui-input
               id=${id}
@@ -374,7 +377,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
               .value=${value.value ?? ""}
               @input=${(event: Event) => change({ value: (event.target as HTMLInputElement).value })}></uui-input>`}
         <button type="button" class="switch" @click=${() => change(setting ? { value: "" } : { setting: "" })}>
-          ${setting ? "Type the value instead" : "Read it from an app setting instead"}
+          ${setting ? "Type the value instead" : `Read it from ${SECRETS} instead`}
         </button>
       </div>
     `;
@@ -402,7 +405,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
                 maxlength="100"
                 .value=${item.name}
                 @input=${(event: Event) => update(index, { ...item, name: (event.target as HTMLInputElement).value })}></uui-input>
-              ${this.#renderValue(`${title}-${index}`, item.name || "Value", item, (value) => update(index, { name: item.name, ...value }), "CacheTags:Gateway:Key")}
+              ${this.#renderValue(`${title}-${index}`, item.name || "Value", item, (value) => update(index, { name: item.name, ...value }), "GatewayKey")}
               <uui-button compact look="secondary" label="Remove" @click=${() => change(items.filter((_, i) => i !== index))}>
                 <uui-icon name="icon-trash"></uui-icon>
               </uui-button>

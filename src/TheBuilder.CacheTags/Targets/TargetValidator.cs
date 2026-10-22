@@ -15,6 +15,12 @@ internal static partial class TargetValidator
     public const int MaxSettings = 20;
     public const int MaxValueLength = 1000;
     public const int MaxSettingNameLength = 200;
+
+    /// <summary>
+    ///     Where a backoffice target's secrets are read from. A target names a secret, never a whole
+    ///     configuration key, so an administrator can only send values someone put here.
+    /// </summary>
+    public const string SecretsSection = "CacheTags:Secrets";
     public const int MaxKeysPerRequestLimit = 10_000;
 
     /// <summary>Headers the purge request sets itself.</summary>
@@ -41,9 +47,9 @@ internal static partial class TargetValidator
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9]*$")]
     private static partial Regex SettingName();
 
-    // A configuration key, as in CacheTags:Targets:nextjs:Token or its environment variable form.
-    [GeneratedRegex("^[A-Za-z0-9_.:-]+$")]
-    private static partial Regex AppSettingName();
+    // A secret's name under CacheTags:Secrets. No colon, so it cannot reach outside that section.
+    [GeneratedRegex("^[A-Za-z0-9_.-]+$")]
+    private static partial Regex SecretName();
 
     /// <summary>What is wrong with a backoffice target, or null. <paramref name="types" /> are the registered target types.</summary>
     public static string? Validate(TargetDefinition target, IEnumerable<string> types)
@@ -139,7 +145,7 @@ internal static partial class TargetValidator
         return null;
     }
 
-    /// <summary>What is wrong with a list of request headers, or null. Values may be typed in or name an app setting.</summary>
+    /// <summary>What is wrong with a list of request headers, or null. Values may be typed in or name a secret.</summary>
     public static string? ValidateHeaders(IReadOnlyCollection<NamedValue> headers)
     {
         if (headers.Count > MaxHeaders)
@@ -182,12 +188,12 @@ internal static partial class TargetValidator
                 : null)
             .FirstOrDefault(error => error is not null);
 
-    /// <summary>A value is typed in or names an app setting, not both, and a typed value fits on one line.</summary>
+    /// <summary>A value is typed in or names a secret, not both, and a typed value fits on one line.</summary>
     public static string? ValidateValue(string what, string? value, string? setting)
     {
         if (string.IsNullOrEmpty(value) == string.IsNullOrEmpty(setting))
         {
-            return $"{what} needs a value or the name of an app setting, not both.";
+            return $"{what} needs a value or the name of a secret, not both.";
         }
 
         if (value is not null)
@@ -197,8 +203,8 @@ internal static partial class TargetValidator
                 : null;
         }
 
-        return setting!.Length > MaxSettingNameLength || AppSettingName().IsMatch(setting) is false
-            ? $"{what} names an app setting with characters a setting name cannot have."
+        return setting!.Length > MaxSettingNameLength || SecretName().IsMatch(setting) is false
+            ? $"{what} names a secret with characters a secret's name cannot have. Use letters, digits, dots, hyphens and underscores."
             : null;
     }
 

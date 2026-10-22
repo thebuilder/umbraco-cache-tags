@@ -10,7 +10,7 @@ using TheBuilder.CacheTags.Targets;
 
 namespace TheBuilder.CacheTags.Tests;
 
-/// <summary>Targets added in the backoffice: their rules, reading their app settings, and how they are kept and merged.</summary>
+/// <summary>Targets added in the backoffice: their rules, reading their secrets, and how they are kept and merged.</summary>
 public sealed class TargetTests : IDisposable
 {
     private static readonly string[] Types = ["webhook", "cloudflare", "fastly"];
@@ -38,8 +38,8 @@ public sealed class TargetTests : IDisposable
     [Fact]
     public void A_complete_webhook_and_cloudflare_target_are_valid()
     {
-        Assert.Null(TargetValidator.Validate(Webhook(new NamedValue("x-vercel-protection-bypass", Setting: "Vercel:Bypass")), Types));
-        Assert.Null(TargetValidator.Validate(Cloudflare(new NamedValue("ZoneId", "023e105f4ecef8ad9ca31a8372d0c353"), new NamedValue("ApiToken", Setting: "Cloudflare:Token")), Types));
+        Assert.Null(TargetValidator.Validate(Webhook(new NamedValue("x-vercel-protection-bypass", Setting: "VercelBypass")), Types));
+        Assert.Null(TargetValidator.Validate(Cloudflare(new NamedValue("ZoneId", "023e105f4ecef8ad9ca31a8372d0c353"), new NamedValue("ApiToken", Setting: "CloudflareToken")), Types));
     }
 
     [Theory]
@@ -81,7 +81,7 @@ public sealed class TargetTests : IDisposable
     [Fact]
     public void A_value_is_typed_or_names_a_setting_not_both_and_not_neither()
     {
-        Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", "key", "Gateway:Key")), Types));
+        Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", "key", "GatewayKey")), Types));
         Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key")), Types));
     }
 
@@ -125,10 +125,29 @@ public sealed class TargetTests : IDisposable
     }
 
     [Fact]
-    public void A_setting_name_has_only_characters_a_configuration_key_can_have()
+    public void A_secret_name_has_only_letters_digits_dots_hyphens_and_underscores()
     {
-        Assert.Null(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "CacheTags__Gateway.Key-1")), Types));
+        Assert.Null(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "Gateway_Key.prod-1")), Types));
         Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: "sk_live 123")), Types));
+    }
+
+    [Theory]
+    [InlineData("ConnectionStrings:umbracoDbDSN")]
+    [InlineData("CacheTags:Targets:nextjs:Secret")]
+    public void A_secret_name_cannot_reach_another_configuration_key(string setting)
+        => Assert.NotNull(TargetValidator.Validate(Webhook(new NamedValue("x-api-key", Setting: setting)), Types));
+
+    [Fact]
+    public void A_target_reads_a_secret_only_from_CacheTags_Secrets()
+    {
+        IConfiguration configuration = Configuration(("GatewayKey", "outside the section"), ("CacheTags:Secrets:VercelBypass", "inside"));
+
+        ResolvedTarget outside = TargetResolver.Resolve(Webhook(new NamedValue("x-api-key", Setting: "GatewayKey")), Types, configuration, allowPrivateNetwork: false);
+        ResolvedTarget inside = TargetResolver.Resolve(Webhook(new NamedValue("x-vercel-protection-bypass", Setting: "VercelBypass")), Types, configuration, allowPrivateNetwork: false);
+
+        Assert.Equal("The request header 'x-api-key' names a secret that is not in CacheTags:Secrets on this server.", outside.Problem);
+        Assert.Null(inside.Problem);
+        Assert.Equal("inside", inside.Options.Headers["x-vercel-protection-bypass"]);
     }
 
     [Fact]
@@ -167,19 +186,19 @@ public sealed class TargetTests : IDisposable
     [Fact]
     public void Resolving_reads_each_named_app_setting_and_keeps_typed_values()
     {
-        TargetDefinition target = Webhook(new NamedValue("x-api-key", Setting: "Gateway:Key"), new NamedValue("x-env", "production")) with
+        TargetDefinition target = Webhook(new NamedValue("x-api-key", Setting: "GatewayKey"), new NamedValue("x-env", "production")) with
         {
-            Secret = new TargetValue(Setting: "CacheTags:VercelSecret"),
+            Secret = new TargetValue(Setting: "VercelSecret"),
         };
 
-        ResolvedTarget resolved = TargetResolver.Resolve(target, Types, Configuration(("Gateway:Key", "k-123"), ("CacheTags:VercelSecret", Secret)), allowPrivateNetwork: false);
+        ResolvedTarget resolved = TargetResolver.Resolve(target, Types, Configuration(("CacheTags:Secrets:GatewayKey", "k-123"), ("CacheTags:Secrets:VercelSecret", Secret)), allowPrivateNetwork: false);
 
         Assert.Null(resolved.Problem);
         Assert.Equal(Secret, resolved.Options.Secret);
         Assert.Equal("k-123", resolved.Options.Headers["x-api-key"]);
         Assert.Equal("production", resolved.Options.Headers["x-env"]);
         Assert.True(resolved.Options.PublicNetworkOnly);
-        Assert.False(TargetResolver.Resolve(target, Types, Configuration(("Gateway:Key", "k"), ("CacheTags:VercelSecret", Secret)), allowPrivateNetwork: true).Options.PublicNetworkOnly);
+        Assert.False(TargetResolver.Resolve(target, Types, Configuration(("CacheTags:Secrets:GatewayKey", "k"), ("CacheTags:Secrets:VercelSecret", Secret)), allowPrivateNetwork: true).Options.PublicNetworkOnly);
     }
 
     [Fact]
@@ -189,7 +208,7 @@ public sealed class TargetTests : IDisposable
 
         ResolvedTarget resolved = TargetResolver.Resolve(target, Types, Configuration(), allowPrivateNetwork: false);
 
-        Assert.Equal("The request header 'x-api-key' names an app setting that is not set on this server.", resolved.Problem);
+        Assert.Equal("The request header 'x-api-key' names a secret that is not in CacheTags:Secrets on this server.", resolved.Problem);
         Assert.DoesNotContain("sk_live_pasted_by_mistake", resolved.Problem);
     }
 
@@ -225,24 +244,24 @@ public sealed class TargetTests : IDisposable
     public void An_app_setting_with_a_line_break_is_a_problem_rather_than_a_second_header()
     {
         ResolvedTarget resolved = TargetResolver.Resolve(
-            Webhook(new NamedValue("x-api-key", Setting: "Gateway:Key")),
+            Webhook(new NamedValue("x-api-key", Setting: "GatewayKey")),
             Types,
-            Configuration(("Gateway:Key", "k\r\nX-Injected: yes")),
+            Configuration(("CacheTags:Secrets:GatewayKey", "k\r\nX-Injected: yes")),
             allowPrivateNetwork: false);
 
-        Assert.Equal("The request header 'x-api-key' reads an app setting with a line break in it.", resolved.Problem);
+        Assert.Equal("The request header 'x-api-key' reads a secret with a line break in it.", resolved.Problem);
     }
 
     [Fact]
     public void A_signing_secret_setting_shorter_than_32_characters_is_a_problem()
     {
         ResolvedTarget resolved = TargetResolver.Resolve(
-            Webhook() with { Secret = new TargetValue(Setting: "CacheTags:VercelSecret") },
+            Webhook() with { Secret = new TargetValue(Setting: "VercelSecret") },
             Types,
-            Configuration(("CacheTags:VercelSecret", "short")),
+            Configuration(("CacheTags:Secrets:VercelSecret", "short")),
             allowPrivateNetwork: false);
 
-        Assert.Equal("The signing secret's app setting holds fewer than 32 characters.", resolved.Problem);
+        Assert.Equal("The signing secret in CacheTags:Secrets holds fewer than 32 characters.", resolved.Problem);
     }
 
     [Fact]
@@ -309,7 +328,7 @@ public sealed class TargetTests : IDisposable
     {
         var targets = new[]
         {
-            new ResolvedTarget("vercel", new CacheTagsTargetOptions(), FromConfiguration: false, Problem: "The request header 'x-api-key' names an app setting that is not set on this server."),
+            new ResolvedTarget("vercel", new CacheTagsTargetOptions(), FromConfiguration: false, Problem: "The request header 'x-api-key' names a secret that is not in CacheTags:Secrets on this server."),
             new ResolvedTarget("paused", new CacheTagsTargetOptions { Enabled = false }, FromConfiguration: false),
         };
 
@@ -342,14 +361,14 @@ public sealed class TargetTests : IDisposable
     [Fact]
     public void A_stored_target_reads_back_with_its_headers_and_a_name_is_added_once()
     {
-        TargetDefinition target = Webhook(new NamedValue("x-api-key", Setting: "Gateway:Key"));
+        TargetDefinition target = Webhook(new NamedValue("x-api-key", Setting: "GatewayKey"));
 
         Assert.True(TargetSql.Add(_database, target, DateTime.UnixEpoch));
         Assert.False(TargetSql.Add(_database, target with { Url = "https://other.example.com/" }, DateTime.UnixEpoch));
 
         TargetDefinition stored = Assert.Single(TargetSql.All(_database));
         Assert.Equal("https://www.example.com/api/cache-tags", stored.Url);
-        Assert.Equal(new NamedValue("x-api-key", Setting: "Gateway:Key"), Assert.Single(stored.Headers));
+        Assert.Equal(new NamedValue("x-api-key", Setting: "GatewayKey"), Assert.Single(stored.Headers));
         Assert.Equal(new TargetValue(Secret), stored.Secret);
     }
 

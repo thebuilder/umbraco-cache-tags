@@ -27,13 +27,33 @@ Every target gets every purge. Set `"Enabled": false` to pause a target without 
 
 Administrators add, edit, test and remove targets under **Settings > Advanced > Cache tags > Targets**. The tab also lists the targets in `appsettings.json`, read-only and without their secrets or header values.
 
-Each value, whether the signing secret, a header or a Cloudflare token, is either typed in or names an app setting such as `CacheTags:Vercel:Secret`. The package reads a named setting when it sends a purge.
+Each value, whether the signing secret, a header or a Cloudflare token, is either typed in or names a secret under `CacheTags:Secrets` in the site's configuration. The package reads a named secret when it sends a purge.
 
-:::caution[Keep secrets in an app setting]
-The package stores a typed value in the database in plain text, and shows it to administrators. Put secrets in an environment variable, such as `CacheTags__Vercel__Secret`, or in your host's secret store, and name that setting instead.
+<CodeGroup>
+```json appsettings.json
+{
+  "CacheTags": {
+    "Secrets": {
+      "VercelSecret": "<at least 32 characters>",
+      "VercelBypass": "<bypass secret>"
+    }
+  }
+}
+```
+
+```sh Environment variables
+CacheTags__Secrets__VercelSecret=<at least 32 characters>
+CacheTags__Secrets__VercelBypass=<bypass secret>
+```
+</CodeGroup>
+
+A target that names `VercelBypass` reads `CacheTags:Secrets:VercelBypass`, and nothing outside that section. A secret's name uses letters, digits, dots, hyphens and underscores. So an administrator can send a target only the values you put under `CacheTags:Secrets`, never the database connection string or other settings.
+
+:::caution[Keep secrets out of the database]
+The package stores a typed value in the database in plain text, and shows it to administrators. Put secrets under `CacheTags:Secrets`, ideally as environment variables or in your host's secret store, and name them instead.
 :::
 
-- **A missing setting fails the purge, not the save.** If a setting that a target names is not set on a server, the target shows a problem. Its purges from that server fail with an error that names the header or secret, never the setting. The package retries them with backoff, up to `MaxAttempts` (10 tries over about 17 minutes), and then lists them under **Failed purges**, where **Retry** sends them again once the setting is deployed.
+- **A missing secret fails the purge, not the save.** If a secret that a target names is not set on a server, the target shows a problem. Its purges from that server fail with an error that names the header or signing secret, never the secret's name. The package retries them with backoff, up to `MaxAttempts` (10 tries over about 17 minutes), and then lists them under **Failed purges**, where **Retry** sends them again once the secret is deployed.
 - **Send test purge** sends the target a purge of `x-cache-tags-test`, a key nothing carries, and says whether the target accepted it. It works before you save.
 - **The name never changes**, because the package queues purges under it. Deleting a target sets its unsent purges aside.
 - **A name in `appsettings.json` wins.** The package ignores a backoffice target with the same name, and logs a warning.
