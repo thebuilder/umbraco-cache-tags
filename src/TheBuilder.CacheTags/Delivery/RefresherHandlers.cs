@@ -8,8 +8,7 @@ namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>
 ///     Turns this server's cache refreshes into acknowledgements. Umbraco raises these after it has
-///     updated the published cache, navigation and routing on this server (docs/findings.md,
-///     section 3). A failure is logged, never thrown: a throwing handler would stop Umbraco's
+///     updated the published cache, navigation and routing on this server. A failure is logged, never thrown: a throwing handler would stop Umbraco's
 ///     remaining notifications for the refresh.
 /// </summary>
 internal sealed class RefresherHandlers(AckProcessor processor, ILogger<RefresherHandlers> logger)

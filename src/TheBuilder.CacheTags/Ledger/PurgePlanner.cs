@@ -6,7 +6,7 @@ namespace TheBuilder.CacheTags.Ledger;
 /// <summary>
 ///     Turns a change into the keys to purge. The planned keys reach every response that showed the
 ///     changed items (item keys) and every listing they could have joined or left (selector keys).
-///     Route changes reach the descendants too, whose routes follow (docs/findings.md, section 1).
+///     Route changes reach the descendants too, whose routes follow.
 /// </summary>
 internal sealed class PurgePlanner(IDescendants descendants)
 {

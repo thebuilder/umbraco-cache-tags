@@ -14,9 +14,8 @@ applied a change.
   keeps which keys each response covers, `Ledger/` plans the purge for each change on the server
   that makes it, `ManagementApi/` is the admin lookup.
 - `tests/TheBuilder.CacheTags.Tests`: unit tests, including the store's SQL against SQLite.
-- `docs/design.md`: the key scheme, the header and webhook contract, and the decisions. Keep it true.
-- `docs/findings.md`: what the Milestone 1 spike measured in Umbraco, the evidence for the design.
-  The probe itself was removed; it is in the git history under `spike/`.
+- `docs/design.md`: the key scheme, the header and webhook contract, and how a purge is planned and
+  delivered. Keep it true.
 - `apps/docs`: the documentation site.
 - `samples/TheBuilder.CacheTags.Example`: an Umbraco site with seeded content, on http://localhost:5320.
 - `samples/nextjs`: a Next.js site that renders it and receives purge webhooks. `samples/README.md`

@@ -4,7 +4,7 @@
     <!-- Floating versions, so CI can build against the newest release of each major. -->
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
     <!-- The Umbraco versions the package supports. 17.4.0 is the floor: it added the Delivery API
-         output cache eviction and the resolved-items stash the package relies on (docs/findings.md).
+         output cache eviction and the resolved-items stash the package relies on.
          CI overrides it to test the lowest release and the newest of each major. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
     <!-- The sample site runs a fixed, patched release rather than the lowest the range allows. -->
