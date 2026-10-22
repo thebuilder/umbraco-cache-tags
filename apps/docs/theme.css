@@ -10,3 +10,13 @@
     display: none;
   }
 }
+
+/* Steps opt out of Blume's prose styles, so inline code in a step gets the prose look here. */
+[data-blume-step] :not(pre) > code {
+  background: var(--blume-code-background);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  font-weight: 500;
+  border-radius: 0.3rem;
+  padding: 0.15em 0.35em;
+}

@@ -67,7 +67,11 @@ You can configure the target in `appsettings.json` instead:
 }
 ```
 
-Give the frontend the same secret, as `CACHE_TAGS_WEBHOOK_SECRET`. Generate one with `openssl rand -base64 32`, and use a different one for each environment.
+Give the frontend the same secret, as `CACHE_TAGS_WEBHOOK_SECRET`, and use a different one for each environment. To generate one:
+
+```sh
+openssl rand -base64 32
+```
 
 </Step>
 <Step title="Publish something">
