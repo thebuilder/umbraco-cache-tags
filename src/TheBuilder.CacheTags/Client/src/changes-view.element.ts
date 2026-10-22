@@ -1,9 +1,9 @@
 import { UmbElementMixin } from "@umbraco-cms/backoffice/element-api";
-import { css, customElement, html, LitElement, nothing, state } from "@umbraco-cms/backoffice/external/lit";
+import { css, customElement, html, LitElement, nothing, repeat, state } from "@umbraco-cms/backoffice/external/lit";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import { UmbTextStyles } from "@umbraco-cms/backoffice/style";
-import { api, type ChangeLookup, type Purge } from "./api.js";
-import { DOCS, errorMessage, sharedStyles, time } from "./shared.js";
+import { api, ApiError, type ChangeLookup, type Purge } from "./api.js";
+import { DOCS, errorMessage, parseUtc, sharedStyles, time } from "./shared.js";
 
 const STAGES: Record<ChangeLookup["status"], { label: string; color: string; hint: string }> = {
   Pending: { label: "Waiting for servers", color: "warning", hint: "Waiting for every server to apply it." },
@@ -32,6 +32,16 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
 
   #notification?: typeof UMB_NOTIFICATION_CONTEXT.TYPE;
   #refreshTimer?: ReturnType<typeof setTimeout>;
+  /** How long to wait after a failed refresh; it doubles with each failure in a row. */
+  #errorDelay = REFRESH_DELAY;
+  /** The changes the user has opened, by id, so a refresh keeps them open. */
+  #open = new Set<string>();
+  #whenVisible = () => {
+    if (!document.hidden) {
+      document.removeEventListener("visibilitychange", this.#whenVisible);
+      this.#load();
+    }
+  };
 
   constructor() {
     super();
@@ -48,24 +58,45 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     clearTimeout(this.#refreshTimer);
+    document.removeEventListener("visibilitychange", this.#whenVisible);
   }
 
   async #load(): Promise<void> {
     clearTimeout(this.#refreshTimer);
     this._loading = true;
     this._error = undefined;
+    let denied = false;
     try {
       [this._changes, this._failed] = await Promise.all([api.changes(30), api.purges("Dead")]);
+      this.#errorDelay = REFRESH_DELAY;
     } catch (error) {
       this._error = errorMessage(error, "Could not load the changes.");
+      // Not allowed: trying again changes nothing. Anything else may pass, so wait longer each time.
+      denied = error instanceof ApiError && (error.status === 401 || error.status === 403);
+      this.#errorDelay = Math.min(this.#errorDelay * 2, 60_000);
     } finally {
       this._loading = false;
     }
 
-    // Follow a change until it is released and its purges are sent.
-    const inProgress = this._changes.some((change) => change.status !== "Released" || change.purges.some((purge) => purge.state === "Pending"));
-    if (inProgress && !this._error && this.isConnected) {
-      this.#refreshTimer = setTimeout(() => this.#load(), REFRESH_DELAY);
+    // Follow a change until it is released and its due purges are sent. A purge waiting out a
+    // retry backoff is not followed, and a failed refresh is tried again later.
+    const soon = Date.now() + REFRESH_DELAY * 5;
+    const inProgress = this._changes.some(
+      (change) =>
+        change.status !== "Released" ||
+        change.purges.some((purge) => purge.state === "Pending" && parseUtc(purge.notBeforeUtc).getTime() <= soon)
+    );
+    if ((inProgress || this._error) && !denied && this.isConnected) {
+      this.#refreshTimer = setTimeout(() => this.#refreshWhenVisible(), this._error ? this.#errorDelay : REFRESH_DELAY);
+    }
+  }
+
+  // A hidden tab waits until it is shown again.
+  #refreshWhenVisible(): void {
+    if (document.hidden) {
+      document.addEventListener("visibilitychange", this.#whenVisible);
+    } else {
+      this.#load();
     }
   }
 
@@ -98,7 +129,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
           ${this._error ? html`<p class="error">${this._error}</p>` : nothing}
           ${this._loading && this._changes.length === 0 ? html`<uui-loader></uui-loader>` : nothing}
           ${!this._loading && this._changes.length === 0 && !this._error ? html`<p class="muted">No changes recorded yet.</p>` : nothing}
-          ${this._changes.map((change) => this.#renderChange(change))}
+          ${repeat(this._changes, (change) => change.id, (change) => this.#renderChange(change))}
         </uui-box>
         <p class="muted">How a change becomes a purge: <a href=${DOCS} target="_blank" rel="noopener">the documentation</a>.</p>
       </div>
@@ -112,7 +143,11 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     const sent = change.purges.filter((purge) => purge.state === "Sent").length;
     const failed = change.purges.some((purge) => purge.state === "Dead");
     return html`
-      <details class="change">
+      <details
+        class="change"
+        ?open=${this.#open.has(change.id)}
+        @toggle=${(event: Event) =>
+          (event.target as HTMLDetailsElement).open ? this.#open.add(change.id) : this.#open.delete(change.id)}>
         <summary>
           <span class="when muted">${time(change.createdUtc)}</span>
           <span class="what"><strong>${change.kind}</strong> <span class="muted">${what}</span></span>
@@ -128,7 +163,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
             <dt>Planned</dt>
             <dd>${planned.map((key) => html`<span class="param">${key}</span>`)}</dd>
             <dt>Reaches</dt>
-            <dd>${plural(change.responses.length, "recorded response")}, and every response carrying a planned key</dd>
+            <dd>${plural(change.responseCount, "recorded response")}, and every response carrying a planned key</dd>
             ${change.plan.cultures ? html`<dt>Cultures</dt><dd>${change.plan.cultures.join(", ")}</dd>` : nothing}
             <dt>Applied by</dt>
             <dd>

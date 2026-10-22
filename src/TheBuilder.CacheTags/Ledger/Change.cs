@@ -49,6 +49,16 @@ internal enum ChangeStage
 ///     For <see cref="ChangeKind.Custom" />: the signal every server reports once it has applied the
 ///     change (<c>ICacheTagsChanges.Applied</c>), or <c>null</c> to purge at once.
 /// </param>
+/// <param name="RenamedAliases">
+///     For <see cref="ChangeKind.TypesChanged" />: the content type aliases renamed away from. Listings
+///     filtered by type come from the Delivery API index, so the change's listings are purged again
+///     once no document there has one of them.
+/// </param>
+/// <param name="Sources">
+///     For <see cref="ChangeKind.TypesChanged" /> and <see cref="ChangeKind.Everything" />: the cache
+///     refreshes Umbraco sends for it (<c>language:5</c>, see <c>AckSignal.Source</c>), which are the
+///     only ones that acknowledge it.
+/// </param>
 internal sealed record Change(
     Guid Id,
     DateTime CreatedUtc,
@@ -58,7 +68,9 @@ internal sealed record Change(
     IReadOnlyList<string>? Cultures,
     string? Reason = null,
     IReadOnlyList<string>? Keys = null,
-    string? WaitFor = null);
+    string? WaitFor = null,
+    IReadOnlyList<string>? RenamedAliases = null,
+    IReadOnlyList<string>? Sources = null);
 
 /// <param name="Key">The document or media key.</param>
 /// <param name="TypeAlias">Its content or media type alias.</param>
@@ -69,7 +81,11 @@ internal sealed record Change(
 ///     unpublish.
 /// </param>
 /// <param name="Ancestors">Its ancestors' keys, root first: a refresh of an ancestor's branch also refreshes it.</param>
-internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null);
+/// <param name="Unpublished">
+///     It, or one of its cultures, was unpublished: its descendants leave every listing with it, which
+///     Umbraco does not list them for.
+/// </param>
+internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null, bool Unpublished = false);
 
 /// <summary>
 ///     The keys a change purges, before they are resolved to <c>response-</c> keys.

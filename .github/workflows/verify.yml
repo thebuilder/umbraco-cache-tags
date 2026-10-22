@@ -172,13 +172,20 @@ jobs:
       - name: Build solution
         run: dotnet build TheBuilder.CacheTags.slnx -c Release
 
-      # The project file holds the only local version, so CI reads it rather than keeping a copy.
-      # Written to GITHUB_ENV so the steps after this one check the same version.
+      # A release passes its tag's version. Any other run packs the project file's version with a
+      # suffix of its own, so the sample's restore below can only find the package this run built,
+      # never one already on nuget.org. Written to GITHUB_ENV so later steps check the same version.
       - name: Resolve version
         env:
           INPUT_VERSION: ${{ inputs.package-version }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          version="${INPUT_VERSION:-$(dotnet msbuild src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj -getProperty:Version)}"
+          if [[ -n "$INPUT_VERSION" ]]; then
+            version="$INPUT_VERSION"
+          else
+            version="$(dotnet msbuild src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj -getProperty:Version)-ci.$RUN_NUMBER.$RUN_ATTEMPT"
+          fi
           echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
 
       # EnablePackageValidation checks the package's own consistency (assets, target frameworks).

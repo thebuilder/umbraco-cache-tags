@@ -46,18 +46,18 @@ public sealed class UmbracoCacheTagStoreTests
     {
         // CacheTagSql.Record starts with an UPDATE; past it, every read finds nothing and every write
         // succeeds.
-        IUmbracoDatabase database = Fake<IUmbracoDatabase>.Of((method, _) => method.Name switch
+        IUmbracoDatabase database = Fake.Of<IUmbracoDatabase>((method, _) => method.Name switch
         {
             "Execute" when fails() => throw new InvalidOperationException("The database is busy."),
             "Fetch" => Activator.CreateInstance(method.ReturnType),
             _ => null,
         });
-        IScope scope = Fake<IScope>.Of((method, _) => method.Name == "get_Database" ? database : null);
+        IScope scope = Fake.Of<IScope>((method, _) => method.Name == "get_Database" ? database : null);
         return new UmbracoCacheTagStore(
             new PackageDatabase(
-                Fake<IScopeProvider>.Of((method, _) => method.Name == "CreateScope" ? scope : null),
-                Fake<IRuntimeState>.Of((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
-                Fake<IKeyValueService>.Of((method, _) => method.Name == "GetValue" ? new CacheTagsMigrationPlan().FinalState : null)),
+                Fake.Of<IScopeProvider>((method, _) => method.Name == "CreateScope" ? scope : null),
+                Fake.Of<IRuntimeState>((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
+                Fake.Of<IKeyValueService>((method, _) => method.Name == "GetValue" ? new CacheTagsMigrationPlan().FinalState : null)),
             NullLogger<UmbracoCacheTagStore>.Instance);
     }
 }

@@ -62,7 +62,7 @@ internal sealed record ChangeLookup(
     IReadOnlyList<string> IndexedBy,
     Change Change,
     PurgePlan Plan,
-    IReadOnlyList<string> Responses,
+    int ResponseCount,
     IReadOnlyList<Purge> Purges);
 
 internal sealed class CacheTagsLookup(
@@ -71,9 +71,15 @@ internal sealed class CacheTagsLookup(
     PurgeResolver resolver,
     IAckTransport transport,
     IEntityService entityService,
-    IEntitySearchService entitySearch) : ICacheTagsLookup
+    IEntitySearchService entitySearch,
+    TimeProvider time) : ICacheTagsLookup
 {
     private const int MaxResponses = 200;
+
+    /// <summary>How long a change's response count is reused: the Changes view asks every few seconds.</summary>
+    private static readonly TimeSpan CountFor = TimeSpan.FromSeconds(30);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, (DateTimeOffset At, int Count)> _counts = new();
     private const int MaxSearchResults = 20;
 
     /// <summary>Documents and media by name, and recorded keys and responses containing the text.</summary>
@@ -123,10 +129,23 @@ internal sealed class CacheTagsLookup(
         IReadOnlyList<LedgerEntry> changes = ledger.Latest(Math.Clamp(take, 1, 200));
         IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>> acks = await transport.GetAcksAsync(changes.Select(change => change.Id).ToList(), cancellationToken);
 
+        // Only the changes listed now are kept, so the counts never outgrow the list.
+        foreach (Guid gone in _counts.Keys.Except(changes.Select(change => change.Id)))
+        {
+            _counts.TryRemove(gone, out _);
+        }
+
+        DateTimeOffset now = time.GetUtcNow();
         var lookups = new List<ChangeLookup>();
         foreach (LedgerEntry change in changes)
         {
-            ResolvedPurge resolved = await resolver.ResolveAsync(change.Plan, cancellationToken);
+            if (_counts.TryGetValue(change.Id, out var cached) is false || now - cached.At >= CountFor)
+            {
+                ResolvedPurge resolved = await resolver.ResolveAsync(change.Plan, cancellationToken);
+                cached = (now, resolved.Responses.Count);
+                _counts[change.Id] = cached;
+            }
+
             lookups.Add(new ChangeLookup(
                 change.Id,
                 change.CreatedUtc,
@@ -140,7 +159,7 @@ internal sealed class CacheTagsLookup(
                 acks.IndexedBy(change.Id).Order(StringComparer.Ordinal).ToList(),
                 change.Change,
                 change.Plan,
-                resolved.Responses,
+                cached.Count,
                 ledger.PurgesOf(change.Id)));
         }
 

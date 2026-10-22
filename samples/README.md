@@ -167,7 +167,7 @@ Settings are in `samples/nextjs/.env` (local values only). Put your own in `.env
 | `/articles/<slug>` | `content/item/articles/<slug>/` |
 | `/en-us/about`, `/da-dk/om-os` | `content/item/<slug>/` with `Accept-Language` |
 | `/guides` | `content/item/guides/`, `content?fetch=children:/guides/`, `content?fetch=descendants:/guides/&filter=contentType:guidePage`, `content?fetch=descendants:/guides/&sort=updateDate:desc&take=3` |
-| `/guides/<path>` (category or guide, any depth) | `content/item/guides/<path>/`, `content?fetch=ancestors:/guides/<path>/`, `content?fetch=children:/guides/<path>/` |
+| `/guides/<path>` (category or guide, any depth) | `content/item/guides/<path>/`, `content?fetch=ancestors:/guides/<path>/`, `content?fetch=children:/guides/<path>/`, `content?fetch=descendants:/guides/<path>/&filter=contentType:guidePage&sort=sortOrder:asc` |
 | `/hidden-courtyard` | `content/item/hidden-courtyard/` |
 | `/blocks` | `content/item/blocks/` |
 | `/photo-essay` | `content/item/photo-essay/`, `media?fetch=children:/photos/city/` |
@@ -207,11 +207,10 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   previous.
 - A purge id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
   Ids are kept in memory, per process.
-- `response-`, `content-` and `media-` keys are expired at once (`revalidateTag(key, { expire: 0 })`):
-  the next request waits for fresh content. `type-`, `children-` and `search-` keys and `umbraco` are
-  marked stale (`revalidateTag(key, 'max')`): the next request still gets the old page and refreshes
-  it in the background. Other keys are returned under `ignored`. The key names are defined in
-  `docs/design.md`.
+- Keys in the body's `expire` list are expired at once (`revalidateTag(key, { expire: 0 })`), so
+  the next request waits for fresh content. Keys in its `stale` list are marked stale
+  (`revalidateTag(key, 'max')`), so the next request still gets the old page and refreshes it in the
+  background. The package decides which list a key goes in; see `docs/design.md`.
 
 `pnpm purge` sends a signed webhook, the same way:
 
@@ -260,6 +259,21 @@ to refresh:
    its cache is reported, not judged.
 4. The Harbour image is renamed. The article and `/articles` must show the new name (it is the
    image's alt text).
+5. The footer's dictionary item changes. `/articles` and `/en-us/about` must show it, through the
+   site's own `[CacheTagged]` API.
+6. Getting around's guides are sorted. `/guides/getting-around` must list them in the new order in
+   its guide listing (by type, in sort order), `/guides` must refetch its recently updated listing
+   (whose order the index decides, keyed by the catch-all `search-` key), and On foot's own
+   response must keep its cache.
+7. The article document type's alias is renamed. Harbour mornings must refetch its response, which
+   is recorded under the old alias.
+8. Getting around is unpublished, then published again. The A to Z guide listing on `/guides` must
+   stop listing On foot, then list it again.
+9. On foot is renamed. Its old route must answer Umbraco's 301 with `Cache-Control: no-store` and no
+   `X-Umbraco-Cache-Keys`.
+10. The guide document type's alias is renamed. The A to Z guide listing on `/guides`, filtered by the
+    old alias, must end up empty. Umbraco indexes the guides under the new alias up to a minute
+    later, and the listing is purged again once it has; the undo waits for the index too.
 
 Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
 page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its
@@ -312,8 +326,8 @@ The admin-only lookup API answers what a key covers and what recent changes plan
 `GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
 API user works; see `scripts/e2e.mts` for getting a token).
 
-`pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
-`stale`.
+`pnpm purge` exercises the webhook by hand. It should answer `200` with how many keys it expired and
+marked stale.
 
 Right after Umbraco starts, its Delivery API index can take a minute or more to catch up, and a
 change's listing purge waits for it, so run the checks with a longer timeout then:

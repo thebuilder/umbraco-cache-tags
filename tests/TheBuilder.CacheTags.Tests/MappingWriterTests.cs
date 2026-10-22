@@ -317,21 +317,11 @@ public sealed class MappingWriterTests
 
 internal static class Writers
 {
+    // The writer only asks whether the package is installed, so one database of each kind serves every test.
+    private static readonly TestDatabase Installed = new(), NotInstalled = new(installed: false);
+
     public static MappingWriter Create(ICacheTagStore store, bool installed = true, CacheTagsOptions? options = null, TimeProvider? time = null)
-        => new(store, Database(installed), Options(options ?? new CacheTagsOptions()), time ?? TimeProvider.System, NullLogger<MappingWriter>.Instance);
-
-    public static IOptionsMonitor<CacheTagsOptions> Options(CacheTagsOptions options)
-        => Fake<IOptionsMonitor<CacheTagsOptions>>.Of((method, _) => method.Name == "get_CurrentValue" ? options : null);
-
-    /// <summary>A package database whose migrations have run, or not; it is never read or written.</summary>
-    public static PackageDatabase Database(bool installed)
-    {
-        var finalState = new CacheTagsMigrationPlan().FinalState;
-        return new PackageDatabase(
-            Fake<IScopeProvider>.Of(),
-            Fake<IRuntimeState>.Of((method, _) => method.Name == "get_Level" ? RuntimeLevel.Run : null),
-            Fake<IKeyValueService>.Of((method, _) => method.Name == "GetValue" && installed ? finalState : null));
-    }
+        => new(store, (installed ? Installed : NotInstalled).Package, new TestOptions(options ?? new CacheTagsOptions()), time ?? TimeProvider.System, NullLogger<MappingWriter>.Instance);
 
     public static CachedResponse Response(string responseKey) => new()
     {

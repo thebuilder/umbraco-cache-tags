@@ -17,7 +17,7 @@ public sealed class KnownNamesTests
         // Every read after the first waits until the test lets it finish.
         var release = new ManualResetEventSlim();
         var names = new KnownNames(
-            Fake<IContentTypeService>.Of((method, _) =>
+            Fake.Of<IContentTypeService>((method, _) =>
             {
                 if (method.Name != "GetAll")
                 {
@@ -29,10 +29,10 @@ public sealed class KnownNamesTests
                     release.Wait(TimeSpan.FromSeconds(10));
                 }
 
-                return Volatile.Read(ref aliases).Select(alias => Fake<IContentType>.Of((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray();
+                return Volatile.Read(ref aliases).Select(alias => Fake.Of<IContentType>((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray();
             }),
-            Fake<IMediaTypeService>.Of((method, _) => method.Name == "GetAll" ? Array.Empty<IMediaType>() : null),
-            Fake<ILanguageService>.Of((method, _) => method.Name == "GetAllAsync" ? Task.FromResult(Enumerable.Empty<ILanguage>()) : null),
+            Fake.Of<IMediaTypeService>((method, _) => method.Name == "GetAll" ? Array.Empty<IMediaType>() : null),
+            Fake.Of<ILanguageService>((method, _) => method.Name == "GetAllAsync" ? Task.FromResult(Enumerable.Empty<ILanguage>()) : null),
             time,
             NullLogger<KnownNames>.Instance);
 

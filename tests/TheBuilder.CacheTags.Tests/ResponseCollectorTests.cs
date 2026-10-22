@@ -54,11 +54,11 @@ public sealed class ResponseCollectorTests
     {
         var collector = new ResponseCollector(
             null!,
-            Fake<IPublishedContentCache>.Of((method, args) => method.Name == "GetById" && args[0] is Guid key && key == Articles ? Item(key) : null),
-            Fake<IPublishedMediaCache>.Of(),
-            Fake<IVariationContextAccessor>.Of(),
-            Fake<IApiContentPathResolver>.Of(),
-            Fake<IApiMediaQueryService>.Of(),
+            Fake.Of<IPublishedContentCache>((method, args) => method.Name == "GetById" && args[0] is Guid key && key == Articles ? Item(key) : null),
+            Fake.Of<IPublishedMediaCache>(),
+            Fake.Of<IVariationContextAccessor>(),
+            Fake.Of<IApiContentPathResolver>(),
+            Fake.Of<IApiMediaQueryService>(),
             Names.Of(["article", "page"]));
 
         var http = new DefaultHttpContext();
@@ -66,5 +66,5 @@ public sealed class ResponseCollectorTests
         return collector.Collect(null, http, Query).Order(StringComparer.Ordinal).ToArray();
     }
 
-    private static IPublishedContent Item(Guid key) => Fake<IPublishedContent>.Of((method, _) => method.Name == "get_Key" ? key : null);
+    private static IPublishedContent Item(Guid key) => Fake.Of<IPublishedContent>((method, _) => method.Name == "get_Key" ? key : null);
 }

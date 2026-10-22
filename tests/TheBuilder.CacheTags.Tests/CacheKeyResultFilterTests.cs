@@ -31,7 +31,7 @@ public sealed class CacheKeyResultFilterTests
     };
 
     // An item in a response, as the Delivery API returns it.
-    private static IApiContent Shown(string id) => Fake<IApiContent>.Of((method, _) => method.Name switch
+    private static IApiContent Shown(string id) => Fake.Of<IApiContent>((method, _) => method.Name switch
     {
         "get_Id" => new Guid(id),
         "get_ContentType" => "article",
@@ -39,7 +39,7 @@ public sealed class CacheKeyResultFilterTests
         _ => null,
     });
 
-    private static IPublishedContent Item(Guid key) => Fake<IPublishedContent>.Of((method, _) => method.Name == "get_Key" ? key : null);
+    private static IPublishedContent Item(Guid key) => Fake.Of<IPublishedContent>((method, _) => method.Name == "get_Key" ? key : null);
 
     [Fact]
     public async Task A_response_whose_record_is_queued_carries_its_response_key()
@@ -164,12 +164,12 @@ public sealed class CacheKeyResultFilterTests
         var named = new CacheTagsResponse();
         named.Add("x-dictionary-en");
         KnownNames names = Names.Of(["article"], cultures: ["en-US", "da-DK"]);
-        IVariationContextAccessor variation = Fake<IVariationContextAccessor>.Of((method, _) => method.Name == "get_VariationContext" && request.Culture is not null ? new VariationContext(request.Culture, request.Segment) : null);
+        IVariationContextAccessor variation = Fake.Of<IVariationContextAccessor>((method, _) => method.Name == "get_VariationContext" && request.Culture is not null ? new VariationContext(request.Culture, request.Segment) : null);
         var filter = new CacheKeyResultFilter(
-            Writers.Options(Settings),
-            Fake<IRequestPreviewService>.Of(),
-            Fake<IRequestCultureService>.Of((method, _) => method.Name == "GetRequestedCulture" ? request.Culture : null),
-            Fake<IRequestStartItemProvider>.Of((method, _) => method.Name switch
+            new TestOptions(Settings),
+            Fake.Of<IRequestPreviewService>(),
+            Fake.Of<IRequestCultureService>((method, _) => method.Name == "GetRequestedCulture" ? request.Culture : null),
+            Fake.Of<IRequestStartItemProvider>((method, _) => method.Name switch
             {
                 "RequestedStartItem" => request.StartItem,
                 "GetStartItem" => StartItems.TryGetValue(request.StartItem ?? string.Empty, out Guid key) ? Item(key) : null,
@@ -178,11 +178,11 @@ public sealed class CacheKeyResultFilterTests
             variation,
             new ResponseCollector(
                 null!,
-                Fake<IPublishedContentCache>.Of(),
-                Fake<IPublishedMediaCache>.Of(),
+                Fake.Of<IPublishedContentCache>(),
+                Fake.Of<IPublishedMediaCache>(),
                 variation,
-                Fake<IApiContentPathResolver>.Of(),
-                Fake<IApiMediaQueryService>.Of(),
+                Fake.Of<IApiContentPathResolver>(),
+                Fake.Of<IApiMediaQueryService>(),
                 names),
             names,
             named,

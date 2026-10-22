@@ -9,10 +9,10 @@ namespace TheBuilder.CacheTags.Tests;
 internal static class Names
 {
     public static KnownNames Of(string[] contentTypes, string[]? mediaTypes = null, string[]? cultures = null) => new(
-        Fake<IContentTypeService>.Of((method, _) => method.Name == "GetAll" ? contentTypes.Select(alias => Fake<IContentType>.Of((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray() : null),
-        Fake<IMediaTypeService>.Of((method, _) => method.Name == "GetAll" ? (mediaTypes ?? []).Select(alias => Fake<IMediaType>.Of((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray() : null),
-        Fake<ILanguageService>.Of((method, _) => method.Name == "GetAllAsync"
-            ? Task.FromResult((cultures ?? []).Select(culture => Fake<ILanguage>.Of((m, _) => m.Name == "get_IsoCode" ? culture : null)))
+        Fake.Of<IContentTypeService>((method, _) => method.Name == "GetAll" ? contentTypes.Select(alias => Fake.Of<IContentType>((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray() : null),
+        Fake.Of<IMediaTypeService>((method, _) => method.Name == "GetAll" ? (mediaTypes ?? []).Select(alias => Fake.Of<IMediaType>((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray() : null),
+        Fake.Of<ILanguageService>((method, _) => method.Name == "GetAllAsync"
+            ? Task.FromResult((cultures ?? []).Select(culture => Fake.Of<ILanguage>((m, _) => m.Name == "get_IsoCode" ? culture : null)))
             : null),
         TimeProvider.System,
         NullLogger<KnownNames>.Instance);

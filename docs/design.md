@@ -30,9 +30,9 @@ case-sensitively, so a key that differed only in case would behave differently p
   broad keys are stale-while-revalidate.
 - `CacheTags:KeyPrefix` (default empty) prefixes every key, for a site that shares a CDN zone with
   another app using the same names.
-- These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`).
-  Those are internal to Umbraco; one internal function maps a key to Umbraco's tag when the package
-  evicts Umbraco's output cache. Do not "align" them.
+- These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`),
+  which are internal to Umbraco. The package adds its own keys to Umbraco's output cache entries
+  (`OutputCacheTags`) and evicts by those, so the two never need to match.
 
 ## The response header
 
@@ -161,9 +161,9 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 }
 ```
 
-- `expire` holds `response-`, `content-` and `media-` keys: one response or item, purged at once.
-  `stale` holds `type-`, `children-`, `search-` and `umbraco`: listings or everything, served stale
-  while they refresh. The package decides, so a receiver needs no knowledge of key names.
+- `expire` holds `response-`, `content-`, `media-` and `x-` keys: one response, item or custom
+  output, purged at once. `stale` holds `type-`, `children-`, `search-`, `schema-` and `umbraco`:
+  listings, types or everything, served stale while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
   A change sends several purges: one per `MaxKeysPerRequest` keys, and its listing purge.
 - A receiver that does not know `version` must not purge, and answers with an error.
@@ -179,9 +179,11 @@ Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, an
 Targets are configured in `CacheTags:Targets` or added in the backoffice (Settings > Advanced > Cache
 tags > Targets, administrators only), stored in `theBuilderCacheTagsTarget` as JSON and read by every
 server at most 5 seconds late. A configured name wins over a backoffice one. Each backoffice value
-(signing secret, header, setting) is typed in or names an app setting read at send time; the package
-stores no secret of its own. A setting missing on a server fails that server's purges with an error
-that names the header or secret, never the setting, so they retry until it is deployed. Backoffice
+(signing secret, header, setting) is typed in or names a secret under `CacheTags:Secrets`, read at
+send time. A name cannot contain `:`, so a target can read nothing else from configuration, and an
+administrator cannot send it the connection string or another target's secret. The package stores
+no secret of its own. A secret missing on a server fails that server's purges with an error that
+names the header or signing secret, never the secret's name, and they retry like any purge. Backoffice
 targets reach only public addresses unless `CacheTags:AllowPrivateNetworkTargets`; webhooks send their
 target's `Headers`, but never one the purge sets itself.
 
@@ -216,9 +218,24 @@ caches the responses that carry the package's keys:
 The server where a change happens plans it as keys, in `PurgePlanner`:
 
 - A route change (rename, move, unpublish) also reaches the descendants, whose routes follow. The
-  planner expands them at purge time with `IDocumentNavigationQueryService.TryGetDescendantsKeys`,
-  up to `CacheTags:MaxDescendants`, and plans `type-` or `umbraco` keys past that. The mapping
-  stores no ancestor keys.
+  planner expands them when the change is recorded, with
+  `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to `CacheTags:MaxDescendants`, and
+  plans `umbraco` past that. The mapping stores no ancestor keys.
+- An unpublish (of the item or one of its cultures) also plans the descendants' `type-` keys, read
+  with `IEntityService`: they leave the listings of their types with the item, including pages of a
+  listing that do not show them, which their `content-` keys would not reach. When their types
+  cannot be read, it plans `umbraco`. Umbraco itself lists every descendant of a trashed item and the
+  published descendants of a moved one, and publishes the published descendants of an item published
+  again after an unpublish, so those plan their own `type-` keys. A rename leaves the descendants in
+  the same listings.
+- A sort plans no item keys, since the items did not change, but every listing that can show them
+  in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
+  `search-` key. It waits for the index like any listing.
+- Renaming a content or media type's alias plans the `type-` and `schema-` keys of the old alias as
+  well as the new one: responses rendered before the rename are recorded under the old one. Umbraco's
+  changed notification carries only the new alias, so the old one is read when the type is saving.
+  A content type's rename waits for the index (Delivery, step 4), which moves its documents from
+  one `filter=contentType:` to the other up to a minute later.
 - Unpublishing always purges every culture, because Umbraco raises it only when the whole document
   goes.
 - A sort's re-publish of the sorted items is not recorded as a publish, and items deleted from the
@@ -234,30 +251,52 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 2. **Acks.** Every server sends a heartbeat every 30 seconds. When a server applies a cache refresh
    that completes a pending change (the refresh must carry what the change did: published cultures
    for a publish, a branch refresh for a move, and so on, so a draft save does not count; a branch
-   refresh or removal of an item's ancestor counts for the item), it evicts
-   the change's responses from its Delivery API output cache and acknowledges the change. A refresh
-   can arrive before its change is recorded, so unmatched refreshes are tried again for 10 seconds,
-   and a refresh counts only for changes made before it (with 10 seconds of slack for clocks).
+   refresh or removal of an item's ancestor counts for the item; a type, data type, language,
+   domain or public access change needs the refresh of that same type, data type, language or
+   domain), it evicts the change's responses from its Delivery API output cache and acknowledges
+   the change. A change is timed when Umbraco raises it, before its items are read. A refresh seen
+   more than 2 seconds after a change reloaded its items after it, so one refresh can complete
+   several changes made before it. A refresh can also arrive moments before its change is
+   recorded (Umbraco raises some changes after refreshing), so unmatched refreshes are tried again
+   for 10 seconds. One seen within 2 seconds of a change, before or after, counts for that one
+   change only, and not if its notification already completed another change. Those 2 seconds also
+   cover how far apart two servers' clocks may be, so keep servers' clocks in sync (NTP does). A
+   server more than 2 seconds behind is not acknowledged in time: its changes wait for the ack
+   timeout, and it evicts them once they are released (step 3).
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
    not. It resolves the plan to response keys and queues one purge per target (split at
    `MaxKeysPerRequest`). Listing responses are in it too, deliberately: the items they show come
    from the published cache, so they are fresh at once, even though their membership and order are
-   not yet.
+   not yet. A server that a change was released without evicts the change's responses and listings
+   from its own output cache once it has seen a refresh of the change, whether before the release
+   (its clock is behind) or up to 15 minutes after (it applied the change late). It keeps the
+   refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
+   costs a cache miss, and the change's own refresh evicts after it. It does not acknowledge the
+   change and is not waited for in the listings stage, so its listings may be cached again from its
+   index before the index has the change.
 4. **Listings.** Listings come from each server's Delivery API index, which Umbraco updates in a
    background task after the refresh (a second or two; over a minute right after a restart). An
    index handler stamps every document with the state of the item it was built from (version,
    published version and cultures, path, sort order). After acknowledging a content change whose
    plan has listing keys, each server compares that stamp with each item's state in the database
-   until they match (or no document is left, for a trashed or deleted item), then evicts the
+   until they match (or no document is left, for a trashed or deleted item; or, for a renamed
+   content type, until no document has the old alias), then evicts the
    change's listing responses from its output cache and records the change as indexed. Once every
    active server that acknowledged the change has, or after `CacheTags:IndexTimeout` (5 minutes), one
    server resolves the listing keys again (a listing first requested in between has a new response
-   key) and queues the listing purge. Media listings walk the media cache, and type and site-wide
-   changes purge as a whole, so those do not wait.
+   key) and queues the listing purge. Media listings walk the media cache, and other type changes
+   and site-wide changes purge as a whole, so those do not wait.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
-   time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
+   time. Each lease runs 30 seconds from when the purge is claimed, just before it is sent, so slow
+   sends before it do not leave it expired, and a purge is claimed only while it is due, so a server
+   working from an older list does not resend one another server just failed. A failure is retried
+   after 2, 4, 8 ... seconds (at most 10 minutes), counted in the database, and kept as dead after
    `CacheTags:MaxAttempts` (10).
+
+The delivery worker and the heartbeat log an error and carry on, so neither stops the site. Settings
+that fail validation at start stop the site; settings that become invalid on a reload of
+appsettings are logged once, and the last valid settings stay in use until they are fixed.
 
 Heartbeats and acks go through `IAckTransport`, which keeps them in the database by default. It is
 a seam of its own, separate from the mapping store (`ICacheTagStore`), so a site can replace either.
@@ -268,7 +307,9 @@ timeout). A server that restarts after a change was released is a new identity t
 for, and serves Umbraco's listings as its index rebuilds.
 
 Non-200 Delivery API responses (not found, redirects) get `no-store`: no item covers them, so no
-purge would reach them.
+purge would reach them. The package tags a response before its result runs, so a result that sets
+its status only as it runs (a redirect, such as the Delivery API's 301 for an item's old route, a
+challenge or a forbid) counts as not a 200, as does a result type it does not know.
 
 Every package write takes the package's own Umbraco write lock first (`umbracoLock` id -91730).
 On SQLite, two transactions that each read and then write deadlock otherwise.
@@ -309,7 +350,11 @@ those are part of its key, so listing an unbounded parameter makes a key per val
 made canonical like the Delivery API's (lowercased, without whitespace, a list after a `:` sorted, an
 id in one form), so `?locale=da-DK` and `?locale=da-dk` share a key; where the action tells such
 values apart, the shared key still covers what each response showed. `Recorded = false`
-makes each response carry its keys itself instead, for an action whose input varies without end.
+makes each response carry its keys itself instead, for an action whose input varies without end. Only
+a 200 is tagged, read from the result before it runs: an `ObjectResult`, `JsonResult`,
+`ContentResult`, status code result, file or `EmptyResult`, or a typed `IResult` (`TypedResults`,
+`Results<...>`) with a status code. Any other result (a redirect, a challenge, a forbid, a result
+type the package does not know) gets `no-store` and no key.
 
 **Changes.** `ICacheTagsChanges.Record(keys, waitFor, cultures, reason)` records a change that purges
 the keys: custom keys (`x-` and lowercase letters, digits and hyphens), items' `content-` or `media-`
@@ -319,8 +364,8 @@ usually its cache refresher's notification handler. Without it, the purge goes a
 server reads straight from the database.
 
 ```csharp
-public Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken token)
-    => changes.Record(languages.Select(l => $"x-dictionary-{l.IsoCode.ToLowerInvariant()}"), "dictionary");
+public async Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken token)
+    => changes.Record((await languages.GetAllAsync()).Select(l => $"x-dictionary-{l.IsoCode.ToLowerInvariant()}"), "dictionary");
 
 public void Handle(DictionaryCacheRefresherNotification notification) => changes.Applied("dictionary");
 ```
