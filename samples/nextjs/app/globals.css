@@ -84,3 +84,61 @@ img {
   margin-top: 0;
   font-size: 1rem;
 }
+
+.tag {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--panel);
+  font-size: 0.85rem;
+}
+
+.breadcrumbs a:not(:last-child)::after {
+  content: " /";
+  color: var(--muted);
+}
+
+.block {
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--panel);
+  border-radius: 0.5rem;
+}
+
+.block h3 {
+  margin-top: 0;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.gallery {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+}
+
+.crop {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.crop img {
+  position: absolute;
+  max-width: none;
+  border-radius: 0;
+}
+
+.crop figcaption {
+  position: absolute;
+  bottom: 0;
+  padding: 0.25rem 0.5rem;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 0.75rem;
+}

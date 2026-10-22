@@ -2,8 +2,9 @@
 
 Two sites to check TheBuilder.CacheTags end to end:
 
-- `TheBuilder.CacheTags.Example`: an Umbraco 17 site (SQLite) that installs itself and seeds a small
-  site on first start. It serves the Delivery API on http://localhost:5320.
+- `TheBuilder.CacheTags.Example`: an Umbraco 17 site (SQLite) that installs itself and seeds a site
+  with nested sections, blocks, media folders and culture-variant pages on first start. It serves the
+  Delivery API on http://localhost:5320.
 - `nextjs`: a Next.js 16 frontend that renders that content from the Delivery API, caches each
   response under the keys in `X-Umbraco-Cache-Keys`, and purges them when the webhook calls it.
 
@@ -21,7 +22,9 @@ Needs the .NET 10 SDK.
 dotnet run --project samples/TheBuilder.CacheTags.Example
 ```
 
-The first start creates `umbraco/Data/Umbraco.sqlite.db` and seeds the content. The backoffice is
+The first start creates `umbraco/Data/Umbraco.sqlite.db` and seeds the content. Every start also adds
+any seeded item that is missing (checked by key), so a database seeded by an older version of the
+sample gets the newer content without being deleted. The backoffice is
 http://localhost:5320/umbraco, user `local@example.invalid`, password `LocalOnly!42` (local only).
 
 Every start also makes sure there is an API user for scripts (`Seeding/ExampleApiUserSeeder.cs`), so
@@ -58,20 +61,76 @@ Settings worth knowing, all in `appsettings.json` under `Umbraco:CMS:DeliveryApi
 
 ### What is seeded
 
-Every key is fixed, so cache keys are the same on every machine.
+Every key is fixed, so cache keys are the same on every machine. Documents are `e0000000-...`, media
+`e1000000-...`, blocks `e2000000-...`, content types `e3000000-...` and data types `e5000000-...`;
+the full list is in `Seeding/ExampleContent.cs`. `Seeding/ExampleSeeder.cs` seeds the first part
+and `Seeding/ExampleSiteSeeder.cs` the rest.
 
-| Item | Route | Key |
+Documents (key `e0000000-0000-0000-0000-<last part>`):
+
+| Item | Route | Last part of key |
 |---|---|---|
-| Home (hero image, featured article, a block list of two teasers) | `/` | `e0000000-0000-0000-0000-000000000001` |
-| Articles (listing) | `/articles/` | `e0000000-0000-0000-0000-000000000002` |
-| Harbour mornings (picks the other two, links to Forest walks in its body) | `/articles/harbour-mornings/` | `e0000000-0000-0000-0000-000000000003` |
-| Forest walks (picks Harbour mornings) | `/articles/forest-walks/` | `e0000000-0000-0000-0000-000000000004` |
-| Evenings at dusk (picks the other two, links to Harbour mornings) | `/articles/evenings-at-dusk/` | `e0000000-0000-0000-0000-000000000005` |
-| About, culture variant | `/about/` (en-US), `/om-os/` (da-DK) | `e0000000-0000-0000-0000-000000000006` |
-| Images Harbour, Forest, Dusk | | `e1000000-0000-0000-0000-00000000000{1,2,3}` |
+| Home (hero image, featured article, a block list of two teasers) | `/` | `000000000001` |
+| Articles (listing) | `/articles/` | `000000000002` |
+| Harbour mornings (picks the other two, links to Forest walks in its body) | `/articles/harbour-mornings/` | `000000000003` |
+| Forest walks (picks Harbour mornings) | `/articles/forest-walks/` | `000000000004` |
+| Evenings at dusk (picks the other two, links to Harbour mornings) | `/articles/evenings-at-dusk/` | `000000000005` |
+| About, culture variant | `/about/` (en-US), `/om-os/` (da-DK) | `000000000006` |
+| Guides (section: image, picks By ferry and Breakfast) | `/guides/` | `000000000010` |
+| Getting around (category, picks By ferry) | `/guides/getting-around/` | `000000000011` |
+| By bike (links to Bike parking in its body) | `/guides/getting-around/by-bike/` | `000000000012` |
+| Bike parking, a guide under a guide, five levels from the root | `/guides/getting-around/by-bike/bike-parking/` | `000000000013` |
+| By ferry (rich text with a block and a PDF link, attachments, links of every kind, picks Harbour mornings) | `/guides/getting-around/by-ferry/` | `000000000014` |
+| On foot (the only link to Hidden courtyard, in its body) | `/guides/getting-around/on-foot/` | `000000000015` |
+| Eating out (category, picks Street food and Late dinners) | `/guides/eating-out/` | `000000000016` |
+| Breakfast by the water | `/guides/eating-out/breakfast-by-the-water/` | `000000000017` |
+| Late dinners (picks Street food) | `/guides/eating-out/late-dinners/` | `000000000018` |
+| Street food, **saved but never published** | `/guides/eating-out/street-food/` | `000000000019` |
+| Hidden courtyard, reachable only through On foot's rich text | `/hidden-courtyard/` | `000000000020` |
+| Blocks (block grid with nested areas, block list with a block list inside, links) | `/blocks/` | `000000000021` |
+| Photo essay (gallery with crops, a PDF, inline image) | `/photo-essay/` | `000000000022` |
+| Events (invariant listing) | `/events/` | `000000000023` |
+| Midsummer night / Sankthans, culture variant | `/events/midsummer-night/`, `/events/sankthans/` | `000000000024` |
+| Harbour festival / Havnefest, culture variant | `/events/harbour-festival/`, `/events/havnefest/` | `000000000025` |
+| Winter market, **published in en-US only** | `/events/winter-market/` | `000000000026` |
 
-The home page's teasers link to the listing and the about page, so the block list's nested pickers
-are covered. Dusk is used by both the home page and the third article.
+Media (key `e1000000-0000-0000-0000-<last part>`):
+
+| Item | Path | Last part of key |
+|---|---|---|
+| Images Harbour, Forest, Dusk | `/harbour/`, `/forest/`, `/dusk/` | `000000000001` to `000000000003` |
+| Folders Photos, Photos/City, Photos/City/Night, Photos/Nature, Documents | `/photos/`, `/photos/city/`, ... | `000000000010` to `000000000014` |
+| Images Bridge, Market, Rooftops (City), Lanterns (Night), Lake, Meadow (Nature) | `/photos/city/bridge/`, ... | `000000000020` to `000000000025` |
+| Image Courtyard, never picked, only inline in rich text | `/photos/courtyard/` | `000000000026` |
+| Ferry timetable, a PDF | `/documents/ferry-timetable/` | `000000000030` |
+
+The cases worth checking a purge against, and where they are:
+
+- **Many pickers point at one item.** By ferry is picked by Guides, Getting around, Bike parking,
+  Breakfast and the Harbour festival event, by two blocks and a link on the Blocks page, and linked
+  from the Photo essay's rich text. Bridge is used by Guides, By ferry, the Blocks page, the Photo essay and an event.
+  Harbour (from the first seed) is also picked by Breakfast, By ferry and an event.
+- **Routes that depend on a parent.** Renaming Guides or Getting around changes the route of every
+  page under it, down to Bike parking, and the breadcrumbs (`fetch=ancestors:`) on each.
+- **Blocks.** The Blocks page has a block grid with a row inside a row's area, a block list inside a
+  block, and a callout and a nested teaser that link back to the page itself. By ferry's rich text has
+  a callout block that picks Breakfast. Home's teasers come from the first seed.
+- **Unpublished pick.** Street food is picked by Eating out, Late dinners and a nested teaser on the
+  Blocks page. The Delivery API leaves it out (or returns `null`) until it is published, and the
+  responses that picked it should then refresh.
+- **Only rich text reaches it.** Hidden courtyard is linked only from On foot's body; Courtyard is
+  only an inline image (Hidden courtyard and the Photo essay).
+- **Media.** Nested folders, crops set per pick on the Photo essay and the gallery block, a PDF picked
+  as an attachment and linked from rich text and a multi URL picker, and a folder listing through the
+  Media Delivery API.
+- **Culture variants.** Events have a culture-variant title and description but a shared date, image
+  and venue, so changing a shared value changes both cultures. Winter market has no da-DK version.
+- **Listings.** Children (`fetch=children:/guides/`, `/events/`), one content type
+  (`filter=contentType:guidePage` under Guides), a sort that only `updateDate` decides
+  (`sort=updateDate:desc&take=3`: editing any guide can move it in), and ancestors.
+- **Property editors.** Block list, block grid, rich text with blocks, links and images, multi URL
+  picker (document with a query string, media, external), multinode tree picker, content picker,
+  media picker with crops, tags, dropdown, date.
 
 ## Run Next.js
 
@@ -106,6 +165,13 @@ Settings are in `samples/nextjs/.env` (local values only). Put your own in `.env
 | `/articles` | `content/item/articles/`, `content?fetch=children:/articles/` |
 | `/articles/<slug>` | `content/item/articles/<slug>/` |
 | `/en-us/about`, `/da-dk/om-os` | `content/item/<slug>/` with `Accept-Language` |
+| `/guides` | `content/item/guides/`, `content?fetch=children:/guides/`, `content?fetch=descendants:/guides/&filter=contentType:guidePage`, `content?fetch=descendants:/guides/&sort=updateDate:desc&take=3` |
+| `/guides/<path>` (category or guide, any depth) | `content/item/guides/<path>/`, `content?fetch=ancestors:/guides/<path>/`, `content?fetch=children:/guides/<path>/` |
+| `/hidden-courtyard` | `content/item/hidden-courtyard/` |
+| `/blocks` | `content/item/blocks/` |
+| `/photo-essay` | `content/item/photo-essay/`, `media?fetch=children:/photos/city/` |
+| `/en-us/events`, `/da-dk/events` | `content/item/events/`, `content?fetch=children:/events/`, with `Accept-Language` |
+| `/en-us/events/<slug>`, `/da-dk/events/<slug>` | `content/item/events/<slug>/` with `Accept-Language` |
 
 Every call goes through `deliveryApi()` in `lib/umbraco.ts`. It caches the response with `'use cache'`,
 tags it with each key in `X-Umbraco-Cache-Keys`, and keeps it for an hour at most as a safety net.
