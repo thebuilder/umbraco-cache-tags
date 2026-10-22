@@ -8,6 +8,10 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
     <PackageReference Include="Umbraco.Cms.Persistence.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <!-- Umbraco's own Delivery API request services. Aliased, because the tests' stand-ins for its
+         controllers (DeliveryControllers.cs) have the same names. -->
+    <PackageReference Include="Umbraco.Cms.Api.Delivery" Aliases="UmbracoDelivery" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
   </ItemGroup>

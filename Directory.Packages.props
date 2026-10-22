@@ -26,6 +26,8 @@
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <!-- The tests only: the mapping store's SQL runs against an in-memory SQLite database. -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <!-- The tests only: the result filter runs in a real ASP.NET pipeline. -->
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
     <!-- The sample and the tests only, which run SQLite. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
     <PackageVersion Include="Umbraco.Cms" Version="$(SampleUmbracoVersion)" />
