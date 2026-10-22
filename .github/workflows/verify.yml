@@ -26,7 +26,7 @@ env:
 jobs:
   # The package and its tests across the Umbraco range: the lowest release it allows and the
   # newest of each major, so a dependency floor or an API that moved shows up before a site meets it.
-  # Only the tests project, because the sample and the spike pin their own Umbraco release
+  # Only the tests project, because the sample pins its own Umbraco release
   # (SampleUmbracoVersion) and would conflict with an overridden range.
   dotnet:
     name: .NET (Umbraco ${{ matrix.umbraco-version }})
@@ -166,7 +166,7 @@ jobs:
           key: nuget-${{ runner.os }}-default-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-default-
 
-      # The package, the sample site, the tests and the spike, on the versions the repository
+      # The package, the sample site and the tests, on the versions the repository
       # declares. Never with an UmbracoVersion override: the package's dependency range comes from it.
       - name: Build solution
         run: dotnet build TheBuilder.CacheTags.slnx -c Release

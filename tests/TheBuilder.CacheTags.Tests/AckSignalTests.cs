@@ -4,7 +4,7 @@ using Umbraco.Cms.Core.Services.Changes;
 
 namespace TheBuilder.CacheTags.Tests;
 
-/// <summary>Which cache refreshes acknowledge which changes. Payload shapes are the ones the spike recorded (spike/FINDINGS.md, section 4).</summary>
+/// <summary>Which cache refreshes acknowledge which changes. Payload shapes are the ones the spike recorded (docs/findings.md, section 4).</summary>
 public sealed class AckSignalTests
 {
     private static readonly Guid A = new("10000000-0000-0000-0000-00000000000a");

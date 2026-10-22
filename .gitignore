@@ -13,12 +13,6 @@ samples/nextjs/.next/
 samples/nextjs/next-env.d.ts
 samples/nextjs/*.tsbuildinfo
 samples/nextjs/.env*.local
-spike/**/umbraco/Data/
-spike/**/umbraco/Logs/
-spike/**/umbraco/models/
-spike/**/appsettings-schema*.json
-spike/**/umbraco-package-schema.json
-spike/results/raw/
 /artifacts/
 .DS_Store
 # The backoffice client's build output; `dotnet pack` builds it.

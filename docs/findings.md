@@ -1,8 +1,9 @@
 # Milestone 1 spike: findings
 
 Run on 2026-10-21 against Umbraco 17.7.1 (source read at tag `release-17.7.1`), SQLite, one server.
-The probe is `spike/TheBuilder.CacheTags.Spike`. The driver is `spike/drive.py`, and
-`spike/run-all.sh` runs it against three site configurations. Results are in `spike/results/`.
+The probe was a throwaway Umbraco site with a Python driver, run against three site configurations.
+It has since been removed; the probe, the driver and the raw results are in the git history, under
+`spike/`, before the commit that removed them.
 Four independent reviews checked this document: the Umbraco claims against source, the probe for
 measurement bugs, the design consequences, and the repository conventions. Their corrections are
 folded in.
@@ -66,7 +67,7 @@ Cells show keys missing from the expected set, then `+n` extra keys where the ex
 
 Every cold request was complete for `render`. Rich text as JSON (`RichTextOutputAsJson: true`,
 confirmed by the `#root` element in the body) gave the same table. Full tables:
-`results/markup-nocache.md`, `results/json-nocache.md`, `results/markup-outputcache.md`.
+The raw results were `results/markup-nocache.md`, `results/json-nocache.md` and `results/markup-outputcache.md`, in the git history.
 
 ### Why `render` fails
 
@@ -283,12 +284,3 @@ Test, by turning the spike fixture into an integration suite:
   the hash; listings get selector rows.
 - **Load:** rows and write throughput at about 10,000 cold renders.
 - **One-server ordering:** the ack handler runs after the memory cache refresh.
-
-## Rerun
-
-```bash
-cd spike && dotnet build TheBuilder.CacheTags.Spike && ./run-all.sh
-```
-
-The first boot seeds the fixture; wait for the Delivery API index (about a minute) before trusting
-the `query` rows. Each run resets the fixture first.

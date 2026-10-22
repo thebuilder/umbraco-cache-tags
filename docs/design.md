@@ -2,7 +2,8 @@
 
 `TheBuilder.CacheTags` lets a headless frontend cache Umbraco Delivery API responses and purges
 exactly the right ones once every delivery server has applied a change. This is the contract the
-package, its samples and its docs are held to. Evidence for the decisions is in `spike/FINDINGS.md`.
+package, its samples and its docs are held to. Evidence for the decisions is in `docs/findings.md`,
+from the Milestone 1 spike.
 
 ## Keys
 
@@ -287,7 +288,7 @@ fetch times.
 
 ## Milestones
 
-1. Spike (done, `spike/FINDINGS.md`).
+1. Spike (done, `docs/findings.md`; the probe itself is removed).
 2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
    purge planner, the lookup API.
 3. Outbox, ack barrier, webhook target, signing (done; the listing purge was pulled forward from 4

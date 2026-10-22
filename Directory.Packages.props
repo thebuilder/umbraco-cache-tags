@@ -4,10 +4,10 @@
     <!-- Floating versions, so CI can build against the newest release of each major. -->
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
     <!-- The Umbraco versions the package supports. 17.4.0 is the floor: it added the Delivery API
-         output cache eviction and the resolved-items stash the package relies on (spike/FINDINGS.md).
+         output cache eviction and the resolved-items stash the package relies on (docs/findings.md).
          CI overrides it to test the lowest release and the newest of each major. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
-    <!-- The sample site and the spike run a fixed, patched release rather than the lowest the range allows. -->
+    <!-- The sample site runs a fixed, patched release rather than the lowest the range allows. -->
     <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.7.1</SampleUmbracoVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -26,7 +26,7 @@
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <!-- The tests only: the mapping store's SQL runs against an in-memory SQLite database. -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <!-- The sample, the spike and the tests only, which run SQLite. -->
+    <!-- The sample and the tests only, which run SQLite. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
     <PackageVersion Include="Umbraco.Cms" Version="$(SampleUmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Api.Common" Version="$(UmbracoVersion)" />

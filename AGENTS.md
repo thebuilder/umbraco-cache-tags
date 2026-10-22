@@ -7,8 +7,6 @@ applied a change.
 - Stay generic: no search vendor and no frontend framework built in. Frontend integration is
   documented as examples.
 - No Claude co-author trailers in commits, and no "Generated with Claude Code" lines in pull requests.
-- `spike/` is the throwaway Milestone 1 probe. Its findings are in `spike/FINDINGS.md`. Nothing in
-  `src/` may reference it.
 
 ## Layout
 
@@ -17,11 +15,12 @@ applied a change.
   that makes it, `ManagementApi/` is the admin lookup.
 - `tests/TheBuilder.CacheTags.Tests`: unit tests, including the store's SQL against SQLite.
 - `docs/design.md`: the key scheme, the header and webhook contract, and the decisions. Keep it true.
+- `docs/findings.md`: what the Milestone 1 spike measured in Umbraco, the evidence for the design.
+  The probe itself was removed; it is in the git history under `spike/`.
+- `apps/docs`: the documentation site.
 - `samples/TheBuilder.CacheTags.Example`: an Umbraco site with seeded content, on http://localhost:5320.
 - `samples/nextjs`: a Next.js site that renders it and receives purge webhooks. `samples/README.md`
   defines the webhook format the package must send.
-- `spike/`: the Milestone 1 probe and `spike/FINDINGS.md`. The spike site also references the
-  package, and `spike/check-package.py` checks the package against the spike's fixture.
 
 ## Commands
 
@@ -32,9 +31,7 @@ dotnet run --project samples/TheBuilder.CacheTags.Example
 cd samples/nextjs && pnpm install && pnpm dev
 ```
 
-See `samples/README.md` for checking a purge end to end, and `spike/FINDINGS.md` for rerunning the spike.
-To check the package against the spike fixture, run the spike site on port 5330 and then
-`python3 spike/check-package.py` (needs the `sqlite3` CLI).
+See `samples/README.md` for checking a purge end to end.
 
 ## Public C# API
 

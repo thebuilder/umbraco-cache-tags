@@ -22,7 +22,7 @@ public sealed class PurgePlannerTests
     [Fact]
     public void A_publish_reaches_the_item_its_parents_listings_its_type_and_the_index()
     {
-        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "spikePage", Site), cultures: ["da-DK"]);
+        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "newsPage", Site), cultures: ["da-DK"]);
 
         Assert.False(plan.Everything);
         Assert.Equal(["da-DK"], plan.Cultures);
@@ -31,7 +31,7 @@ public sealed class PurgePlannerTests
                 "children-10000000-0000-0000-0000-000000000001",
                 "content-10000000-0000-0000-0000-00000000000c",
                 "search-deliveryapicontentindex",
-                "type-spikepage",
+                "type-newspage",
             ],
             plan.Keys);
     }
@@ -39,7 +39,7 @@ public sealed class PurgePlannerTests
     [Fact]
     public void A_publish_that_changes_the_route_reaches_every_descendant()
     {
-        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "spikePage", Site, RouteChanged: true));
+        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "newsPage", Site, RouteChanged: true));
 
         Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
         Assert.Contains("content-10000000-0000-0000-0000-000000000014", plan.Keys);
@@ -51,7 +51,7 @@ public sealed class PurgePlannerTests
     [InlineData(nameof(ChangeKind.Moved))]
     public void Unpublishing_trashing_and_moving_always_reach_the_descendants(string kind)
     {
-        PurgePlan plan = Plan(Enum.Parse<ChangeKind>(kind), new ChangedItem(C, "spikePage", Site));
+        PurgePlan plan = Plan(Enum.Parse<ChangeKind>(kind), new ChangedItem(C, "newsPage", Site));
 
         Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
     }
@@ -59,7 +59,7 @@ public sealed class PurgePlannerTests
     [Fact]
     public void A_move_reaches_the_listings_of_both_parents()
     {
-        PurgePlan plan = Plan(ChangeKind.Moved, new ChangedItem(Child, "spikePage", C, OldParentKey: Site));
+        PurgePlan plan = Plan(ChangeKind.Moved, new ChangedItem(Child, "newsPage", C, OldParentKey: Site));
 
         Assert.Contains("children-10000000-0000-0000-0000-00000000000c", plan.Keys);
         Assert.Contains("children-10000000-0000-0000-0000-000000000001", plan.Keys);
@@ -68,7 +68,7 @@ public sealed class PurgePlannerTests
     [Fact]
     public void Too_many_descendants_purge_everything()
     {
-        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "spikePage", Site), budget: 1);
+        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "newsPage", Site), budget: 1);
 
         Assert.True(plan.Everything);
         Assert.Empty(plan.Keys);
@@ -77,7 +77,7 @@ public sealed class PurgePlannerTests
     [Fact]
     public void A_sort_reaches_only_the_parents_listings()
     {
-        PurgePlan plan = Plan(ChangeKind.Sorted, new ChangedItem(Child, "spikePage", C));
+        PurgePlan plan = Plan(ChangeKind.Sorted, new ChangedItem(Child, "newsPage", C));
 
         Assert.Equal(["children-10000000-0000-0000-0000-00000000000c"], plan.Keys);
     }
