@@ -11,7 +11,7 @@ Cache Tags lets a headless frontend cache Umbraco Delivery API responses for as 
 
 Every cacheable response carries its cache keys in a header. The frontend tags its cache entries with them. When content changes, the package works out which responses showed it, waits until every Umbraco server has applied the change, and sends those keys to the frontend or CDN to purge.
 
-- **Exact purges.** Publishing an article purges the responses that showed it: its page, the listings it appears in, the pages that pick it. Nothing else.
+- **Exact purges.** Publishing an article purges only the responses that showed it, such as its page, the listings it appears in and the pages that pick it.
 - **No stale refetch.** A purge goes out only once every delivery server serves the new content, and listings only once every server's index has it. A frontend that refetches at once gets the new version, not the old one again.
 - **Your frontend decides how to cache.** The keys work with Next.js `cacheTag` and `revalidateTag`, with a CDN that purges by tag such as Cloudflare, or with anything that can receive a signed webhook.
 
@@ -24,7 +24,7 @@ Every cacheable response carries its cache keys in a header. The frontend tags i
 5. The package sends the keys to each purge target: a signed webhook to your frontend, or Cloudflare's purge API.
 6. The frontend expires the tagged entries, and the next request renders the new content.
 
-Listings, such as an article list or a search, come from each server's Delivery API index, which Umbraco updates a moment after the change. They are purged a second time once every server's index has it. See [How a purge is timed](/timing).
+Listings, such as an article list or a search, come from each server's Delivery API index, which Umbraco updates a moment after the change. The package purges them a second time once every server's index has it. See [How a purge is timed](/timing).
 
 ## Requirements
 

@@ -5,7 +5,7 @@ seo:
   image: /og/your-apis.png
 ---
 
-A site's own API, anything outside the Delivery API whose responses a frontend caches, can join in. The repository's sample does this for a dictionary endpoint that serves Umbraco's dictionary items.
+Your site's own API endpoints can carry cache keys too, so a frontend can cache their responses and the package purges them. The repository's sample does this for an endpoint that serves Umbraco's dictionary items.
 
 ## Tag the responses
 
@@ -33,11 +33,15 @@ public sealed class DictionaryController(ILanguageService languages, ICacheTagsR
 }
 ```
 
-The response gets a `response-` key and `umbraco`, like a Delivery API response, and the package records the keys it covers. Delivery API items in the result are found on their own.
+Like a Delivery API response, the response gets a `response-` key and `umbraco`, and the package records the keys it covers. It finds Delivery API items in the result by itself.
 
 - **Custom keys** start with `x-` and use lowercase letters, digits and hyphens, at most 200 characters. An item's `content-` or `media-` key works too.
-- **`QueryParameters`** lists the parameters that select what a response covers, and only those are part of its key. None by default. Listing a parameter that takes any value makes a key per value.
-- **`Recorded = false`** makes each response carry its keys in the header instead of being recorded, for an action whose input varies without end, such as a search.
+- **`QueryParameters`** lists the parameters that select what a response covers. Only those are part of its key, and there are none by default.
+- **`Recorded = false`** puts the keys in each response's header instead of recording them. Use it for an action whose input varies without end, such as a search.
+
+:::caution
+Every value of a listed query parameter makes a new key and a new recorded response. List only parameters with a known, small set of values, such as a locale.
+:::
 
 ## Record changes
 
@@ -67,14 +71,14 @@ builder.AddNotificationAsyncHandler<DictionaryItemSavedNotification, DictionaryC
 builder.AddNotificationHandler<DictionaryCacheRefresherNotification, DictionaryCacheTags>();
 ```
 
-- **`waitFor`** names a signal. The purge waits until every server has reported it with `Applied(signal)`, which your site calls wherever that server refreshes its copy of the data, usually in a cache refresher's notification handler. Signals are lowercase letters, digits, dots and hyphens.
-- **Without `waitFor`**, the purge goes at once. Use that for data every server reads straight from the database.
-- **`cultures`** limits the purge to responses in those cultures, and to responses without one.
+- **`waitFor`** names a signal. The package sends the purge once every server has reported the signal with `Applied(signal)`. Call it wherever a server refreshes its copy of the data, usually in a cache refresher's notification handler. Signals use lowercase letters, digits, dots and hyphens.
+- **Without `waitFor`**, the package sends the purge at once. Use that for data that every server reads straight from the database.
+- **`cultures`** limits the purge to responses in those cultures, and to responses without a culture.
 - **`reason`** is shown with the change in the backoffice.
 
 ## Purge by hand
 
-Administrators can purge keys from the backoffice (**Settings > Advanced > Cache tags > Purge**), or through the Management API:
+Administrators can purge keys under **Settings > Advanced > Cache tags > Purge**, or through the Management API:
 
 | Request | Does |
 | --- | --- |

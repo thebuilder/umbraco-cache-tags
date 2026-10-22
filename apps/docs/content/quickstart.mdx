@@ -1,0 +1,80 @@
+---
+title: Quickstart
+description: Install Cache Tags, point it at your frontend, and watch a publish purge exactly the pages that changed.
+seo:
+  image: /og/quickstart.png
+---
+
+<Steps>
+<Step title="Install the package">
+
+```sh
+dotnet add package TheBuilder.CacheTags --prerelease
+```
+
+Start the site. The package creates its tables on the first start. From then on, every cacheable Delivery API response carries its keys in a header:
+
+```http
+GET /umbraco/delivery/api/v2/content/item/articles/harbour-mornings/
+
+X-Umbraco-Cache-Keys: response-2de23a3a68340e675d917313029cab2e, umbraco
+```
+
+Preview requests, signed-in requests and responses other than 200 get no keys.
+
+</Step>
+<Step title="Tag your cache entries">
+
+Tag each cached response with the keys in its header. In Next.js with Cache Components:
+
+```ts lib/umbraco.ts
+import { cacheLife, cacheTag } from "next/cache";
+
+export async function deliveryApi<T>(path: string): Promise<T> {
+  "use cache";
+  const url = `${process.env.UMBRACO_URL}/umbraco/delivery/api/v2/${path}`;
+  const response = await fetch(url);
+  cacheTag(...(response.headers.get("x-umbraco-cache-keys")?.split(", ") ?? []));
+  cacheLife("days");
+  return response.json();
+}
+```
+
+The [Next.js guide](/nextjs) handles errors and cultures too.
+
+</Step>
+<Step title="Add the purge webhook">
+
+Your frontend needs a route that receives purges and expires the keys in them. Copy the route handler from the [Next.js guide](/nextjs#the-purge-webhook). It checks the signature, then calls `revalidateTag` for each key.
+
+</Step>
+<Step title="Point the package at it">
+
+In Umbraco, go to **Settings > Advanced > Cache tags > Targets** and select **Add target**. Enter the webhook's URL and a signing secret, then select **Send test purge** to check it before you save.
+
+You can configure the target in `appsettings.json` instead:
+
+```json appsettings.json
+{
+  "CacheTags": {
+    "Targets": {
+      "nextjs": {
+        "Url": "https://www.example.com/api/cache-tags",
+        "Secret": "<at least 32 random characters>"
+      }
+    }
+  }
+}
+```
+
+Give the frontend the same secret, as `CACHE_TAGS_WEBHOOK_SECRET`. Generate one with `openssl rand -base64 32`, and use a different one for each environment.
+
+</Step>
+<Step title="Publish something">
+
+Publish a page your frontend shows. Within a second or two, **Settings > Advanced > Cache tags > Changes** shows the change, the keys it planned and the purge it sent. The page, and every listing that shows it, renders the new content on its next request.
+
+The page's **Info** tab lists the cached responses that include it, and can purge it by hand. See [Backoffice](/backoffice).
+
+</Step>
+</Steps>
