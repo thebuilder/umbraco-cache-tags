@@ -7,7 +7,7 @@ public sealed class ResponseIdentityTests
     private static KeyValuePair<string, string?> P(string name, string? value) => new(name, value);
 
     [Fact]
-    public void Normalising_sorts_parameters_drops_empty_values_and_defaults_and_encodes_the_rest()
+    public void Normalising_keeps_what_selects_content_sorted_and_encoded_and_drops_empty_values()
     {
         var query = ResponseIdentity.NormaliseQuery([
             P("take", "10"),
@@ -21,15 +21,26 @@ public sealed class ResponseIdentityTests
     }
 
     [Fact]
-    public void Non_default_paging_is_kept()
+    public void Paging_sorting_and_presentation_do_not_change_the_key()
     {
-        Assert.Equal("skip=10&take=5", ResponseIdentity.NormaliseQuery([P("take", "5"), P("skip", "10")]));
+        Assert.Equal(
+            "fetch=children%3A%2Farticles%2F",
+            ResponseIdentity.NormaliseQuery([
+                P("fetch", "children:/articles/"),
+                P("take", "5"),
+                P("skip", "500"),
+                P("sort", "name:desc"),
+                P("expand", "properties[$all]"),
+                P("fields", "properties[random]"),
+            ]));
     }
 
     [Fact]
     public void Parameters_are_ordered_by_name_not_by_value()
     {
-        Assert.Equal("fetch=children%3A%2Fa%2F&take=5", ResponseIdentity.NormaliseQuery([P("take", "5"), P("fetch", "children:/a/")]));
+        Assert.Equal(
+            "fetch=children%3A%2Fa%2F&filter=contentType%3Aarticle",
+            ResponseIdentity.NormaliseQuery([P("filter", "contentType:article"), P("fetch", "children:/a/")]));
     }
 
     [Fact]
@@ -81,7 +92,7 @@ public sealed class ResponseIdentityTests
     [Fact]
     public void Parameters_the_delivery_api_does_not_read_do_not_change_the_key()
     {
-        Assert.Equal("take=5", ResponseIdentity.NormaliseQuery([P("take", "5"), P("utm_source", "mail"), P("x", "8f2c")]));
+        Assert.Equal("id=e0000000-0000-0000-0000-000000000003", ResponseIdentity.NormaliseQuery([P("id", "e0000000-0000-0000-0000-000000000003"), P("utm_source", "mail"), P("x", "8f2c")]));
     }
 
     [Theory]

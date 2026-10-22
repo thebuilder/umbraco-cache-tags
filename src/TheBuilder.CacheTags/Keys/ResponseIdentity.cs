@@ -15,21 +15,14 @@ namespace TheBuilder.CacheTags.Keys;
 internal sealed record ResponseIdentity(string Path, string Query, string Culture, string Segment, string StartItem)
 {
     /// <summary>
-    ///     The query parameters the Delivery API reads. Any other parameter leaves the response as it
-    ///     is, so it is left out of the key: otherwise <c>?x=&lt;random&gt;</c> makes a new key per
-    ///     request, and a mapping row for each.
+    ///     The query parameters that select what a response covers. The Delivery API's others
+    ///     (<c>expand</c>, <c>fields</c>, <c>sort</c>, <c>skip</c>, <c>take</c>) only change how it is
+    ///     presented, and any other parameter is ignored, so they are left out: requests that differ
+    ///     only in them share a key. That is safe because the mapping only ever adds keys: the shared
+    ///     key covers everything any of them showed, so a purge reaches each. It keeps input such as
+    ///     <c>?fields=properties[&lt;random&gt;]</c> or <c>?skip=&lt;n&gt;</c> from making a new key per request.
     /// </summary>
-    private static readonly HashSet<string> Parameters = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "id", "fetch", "filter", "sort", "skip", "take", "expand", "fields",
-    };
-
-    /// <summary>Query parameters whose value, when it is this default, does not change the response.</summary>
-    private static readonly Dictionary<string, string> Defaults = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["skip"] = "0",
-        ["take"] = "10",
-    };
+    private static readonly HashSet<string> Parameters = new(StringComparer.OrdinalIgnoreCase) { "id", "fetch", "filter" };
 
     public static ResponseIdentity Create(string path, IEnumerable<KeyValuePair<string, string?>> query, string? culture, string? segment, string? startItem)
         => new(
@@ -40,8 +33,9 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
             startItem?.ToLowerInvariant() ?? string.Empty);
 
     /// <summary>
-    ///     Keeps the Delivery API's own parameters, sorts them by name, then value (so repeated parameters keep a stable order),
-    ///     drops empty values and defaults, and encodes the rest the same way every time. Parameter
+    ///     Keeps the parameters that select content, sorts them by name, then value (so repeated
+    ///     parameters keep a stable order), drops empty values, and encodes the rest the same way
+    ///     every time. Parameter
     ///     names are lowercased; values keep their case, since filters and paths can depend on it.
     /// </summary>
     public static string NormaliseQuery(IEnumerable<KeyValuePair<string, string?>> query)
@@ -49,7 +43,6 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
         var parameters = query
             .Where(pair => string.IsNullOrEmpty(pair.Value) is false && Parameters.Contains(pair.Key))
             .Select(pair => (Name: pair.Key.ToLowerInvariant(), Value: pair.Value!))
-            .Where(pair => Defaults.TryGetValue(pair.Name, out var standard) is false || standard != pair.Value)
             .OrderBy(pair => pair.Name, StringComparer.Ordinal)
             .ThenBy(pair => pair.Value, StringComparer.Ordinal)
             .Select(pair => Uri.EscapeDataString(pair.Name) + "=" + Uri.EscapeDataString(pair.Value));

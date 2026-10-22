@@ -33,6 +33,11 @@ internal sealed class ResponseCollector(
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         OutputWalker.Collect(result, keys);
+        if (endpoint.Listing is false)
+        {
+            CollectRequestedItems(http.Request.Query["id"], endpoint.Media, keys);
+        }
+
         CollectReferences(http, keys);
         if (endpoint.Listing)
         {
@@ -53,6 +58,26 @@ internal sealed class ResponseCollector(
         }
 
         return keys;
+    }
+
+    /// <summary>
+    ///     Items asked for by id (<c>items?id=…</c>): a later publish of one the response could not show
+    ///     yet must reach it, so it covers every id asked for. A request for an item that does not exist
+    ///     is a catch-all, like a fetch of one, so random ids cannot make a recorded response each.
+    /// </summary>
+    /// <param name="ids">The <c>id</c> parameters.</param>
+    /// <param name="media">Whether the ids are media.</param>
+    /// <param name="keys">The keys collected from what the response shows, added to.</param>
+    public static void CollectRequestedItems(IEnumerable<string?> ids, bool media, ISet<string> keys)
+    {
+        foreach (var value in ids)
+        {
+            // The walk has already added what the response shows; an id not among it does not exist.
+            if (Guid.TryParse(value, out Guid id) && keys.Add(media ? CacheKeys.Media(id) : CacheKeys.Content(id)))
+            {
+                keys.Add(CacheKeys.Search(media ? ListingSelectors.MediaSearch : ListingSelectors.ContentIndex));
+            }
+        }
     }
 
     private void CollectReferences(HttpContext http, HashSet<string> keys)

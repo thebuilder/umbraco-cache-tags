@@ -58,4 +58,23 @@ public sealed class ListingSelectorsTests
 
         Assert.Equal(["type-article"], keys);
     }
+
+    [Fact]
+    public void A_filter_on_anything_but_the_type_makes_a_listing_a_catch_all_whatever_else_selects_it()
+    {
+        Assert.Equal(
+            ["children-e0000000-0000-0000-0000-000000000002", "content-e0000000-0000-0000-0000-000000000002", "search-deliveryapicontentindex"],
+            ListingSelectors.For("children:/articles/", ["name:harbour"], Resolve, media: false));
+        Assert.Equal(
+            ["search-deliveryapicontentindex", "type-article"],
+            ListingSelectors.For(null, ["contentType:article", "search:harbour"], Resolve, media: false));
+    }
+
+    [Theory]
+    [InlineData("ancestors:/missing/")]
+    [InlineData("descendants:/missing/")]
+    public void A_fetch_of_an_item_that_does_not_exist_is_a_catch_all(string fetch)
+    {
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(fetch, ["contentType:article"], Resolve, media: false));
+    }
 }

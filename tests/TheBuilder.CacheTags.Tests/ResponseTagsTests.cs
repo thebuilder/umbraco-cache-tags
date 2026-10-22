@@ -65,3 +65,29 @@ public sealed class ResolvedPurgeTests
         Assert.Equal(["shop-search-deliveryapicontentindex", "shop-type-article"], purge.ListingKeys("shop-"));
     }
 }
+
+public sealed class RequestedItemsTests
+{
+    private const string Shown = "e0000000-0000-0000-0000-000000000003";
+    private const string Missing = "11111111-2222-3333-4444-555555555555";
+
+    [Fact]
+    public void Items_asked_for_by_id_that_all_exist_add_nothing_to_what_the_response_shows()
+    {
+        var keys = new HashSet<string> { $"content-{Shown}" };
+
+        ResponseCollector.CollectRequestedItems([Shown], media: false, keys);
+
+        Assert.Equal([$"content-{Shown}"], keys);
+    }
+
+    [Fact]
+    public void An_item_asked_for_that_does_not_exist_is_covered_and_makes_the_response_a_catch_all()
+    {
+        var keys = new HashSet<string> { $"content-{Shown}" };
+
+        ResponseCollector.CollectRequestedItems([Shown, Missing, "not-a-guid"], media: false, keys);
+
+        Assert.Equal([$"content-{Missing}", $"content-{Shown}", "search-deliveryapicontentindex"], keys.Order(StringComparer.Ordinal));
+    }
+}

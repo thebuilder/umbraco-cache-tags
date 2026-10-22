@@ -40,28 +40,41 @@ X-Umbraco-Cache-Keys: response-3f9a..., umbraco
 ```
 
 The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
-identity is the path, the query string normalised (parameters sorted, empty values and the defaults
-`skip=0` and `take=10` dropped), the request culture, the segment and the start item. The same
-request always gives the same key on every server. Only the Delivery API's own query parameters
-(`id`, `fetch`, `filter`, `sort`, `skip`, `take`, `expand`, `fields`) are part of the key; any other
-parameter leaves it unchanged. A request whose segment or start item is too long to record gets
-`no-store` and no key.
+identity is the path, the query parameters that select content (`id`, `fetch`, `filter`, sorted, empty
+values dropped), the request culture, the segment and the start item. The same request always gives
+the same key on every server. The Delivery API's other parameters (`expand`, `fields`, `sort`,
+`skip`, `take`) only change how a response is presented, and any other parameter is ignored, so
+requests that differ only in them share a key: the mapping only adds keys, so the shared key covers
+everything any of them showed, and a purge reaches each. Input such as `?fields=properties[<random>]`
+or `?skip=<n>` therefore makes no new key. A request whose segment or start item is too long to
+record gets `no-store` and no key.
 
 The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
 their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
 cover them, and sent with both.
 
-A listing only the catch-all `search-` key selects (a search, a name filter, any query that is not by
-parent or type) is not recorded. User input makes such queries endless: each would be another mapping
-row, and every content publish purges every one of them, so a purge would grow with every search ever
-cached. Such a response carries its keys itself instead, as in item keys mode below:
+A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
+other than a content type filter (a search, a name filter, a custom filter), however else it is
+selected; a listing with no parent or type to select it; a `fetch` of an item that does not exist;
+and `items?id=` naming an item that does not exist (it covers each id asked for, so publishing one
+later reaches it). Each of these can vary with input without end: recorded, each would be another
+mapping row, and every content publish would purge every one of them, so a purge would grow with
+every variation ever cached. Such a response carries its keys itself instead, as in item keys mode
+below:
 
 ```http
 X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco
 ```
 
-and the planned `search-` key purges every such response at once, however many are cached.
+and the planned `search-` key purges every such response at once, however many are cached. Being
+unrecorded, these responses lose culture-limited purging (a purge reaches them in every culture, which
+only over-purges) and are not shown by the lookup API.
+
+A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
+characters) and ignores the rest. A header carries at most `MaxItemKeys` (64) item keys, plus schema
+and selector keys and `umbraco`, which stays under that; lowering `MaxItemKeys` makes room for a
+target with a smaller limit.
 
 With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
 itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.
