@@ -31,4 +31,8 @@ These changes reach every response, and purge `umbraco` as stale:
 - A domain, language or public access change
 - A route change with more descendants than `MaxDescendants` (500)
 
-A content type or data type change purges the `schema-` key of every type it alters, which reaches every response that renders such an item.
+A content type or data type change purges the `schema-` key of every type it alters, which reaches every response that renders such an item. Renaming a type's alias purges the old alias's keys as well as the new one's. Umbraco indexes a renamed content type's items under the new alias up to a minute later, so its listings are purged again once every server's index has.
+
+## What a sort purges
+
+A sort changes no item, only the order of listings. It purges the parent's children listings, the listings of the sorted items' types, and every listing the package does not record (searches, filters, listings with no parent or type), and waits for the index like any listing purge.

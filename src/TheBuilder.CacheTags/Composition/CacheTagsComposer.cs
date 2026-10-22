@@ -82,6 +82,8 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationHandler<MediaMovedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaMovedToRecycleBinNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaDeletedNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<ContentTypeSavingNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<MediaTypeSavingNotification, SourceChangeHandlers>()
             .AddNotificationHandler<ContentTypeChangedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaTypeChangedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<DataTypeSavedNotification, SourceChangeHandlers>()

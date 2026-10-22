@@ -170,9 +170,24 @@ caches the responses that carry the package's keys:
 The server where a change happens plans it as keys, in `PurgePlanner`:
 
 - A route change (rename, move, unpublish) also reaches the descendants, whose routes follow. The
-  planner expands them at purge time with `IDocumentNavigationQueryService.TryGetDescendantsKeys`,
-  up to `CacheTags:MaxDescendants`, and plans `type-` or `umbraco` keys past that. The mapping
-  stores no ancestor keys.
+  planner expands them when the change is recorded, with
+  `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to `CacheTags:MaxDescendants`, and
+  plans `umbraco` past that. The mapping stores no ancestor keys.
+- An unpublish (of the item or one of its cultures) also plans the descendants' `type-` keys, read
+  with `IEntityService`: they leave the listings of their types with the item, including pages of a
+  listing that do not show them, which their `content-` keys would not reach. When their types
+  cannot be read, it plans `umbraco`. Umbraco itself lists every descendant of a trashed item and the
+  published descendants of a moved one, and publishes the published descendants of an item published
+  again after an unpublish, so those plan their own `type-` keys. A rename leaves the descendants in
+  the same listings.
+- A sort plans no item keys, since the items did not change, but every listing that can show them
+  in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
+  `search-` key. It waits for the index like any listing.
+- Renaming a content or media type's alias plans the `type-` and `schema-` keys of the old alias as
+  well as the new one: responses rendered before the rename are recorded under the old one. Umbraco's
+  changed notification carries only the new alias, so the old one is read when the type is saving.
+  A content type's rename waits for the index (Delivery, step 4), which moves its documents from
+  one `filter=contentType:` to the other up to a minute later.
 - Unpublishing always purges every culture, because Umbraco raises it only when the whole document
   goes.
 - A sort's re-publish of the sorted items is not recorded as a publish, and items deleted from the
@@ -203,12 +218,13 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    index handler stamps every document with the state of the item it was built from (version,
    published version and cultures, path, sort order). After acknowledging a content change whose
    plan has listing keys, each server compares that stamp with each item's state in the database
-   until they match (or no document is left, for a trashed or deleted item), then evicts the
+   until they match (or no document is left, for a trashed or deleted item; or, for a renamed
+   content type, until no document has the old alias), then evicts the
    change's listing responses from its output cache and records the change as indexed. Once every
    active server that acknowledged the change has, or after `CacheTags:IndexTimeout` (5 minutes), one
    server resolves the listing keys again (a listing first requested in between has a new response
-   key) and queues the listing purge. Media listings walk the media cache, and type and site-wide
-   changes purge as a whole, so those do not wait.
+   key) and queues the listing purge. Media listings walk the media cache, and other type changes
+   and site-wide changes purge as a whole, so those do not wait.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
    `CacheTags:MaxAttempts` (10).
@@ -222,7 +238,9 @@ timeout). A server that restarts after a change was released is a new identity t
 for, and serves Umbraco's listings as its index rebuilds.
 
 Non-200 Delivery API responses (not found, redirects) get `no-store`: no item covers them, so no
-purge would reach them.
+purge would reach them. The package tags a response before its result runs, so a result that sets
+its status only as it runs (a redirect, such as the Delivery API's 301 for an item's old route, a
+challenge or a forbid) counts as not a 200, as does a result type it does not know.
 
 Every package write takes the package's own Umbraco write lock first (`umbracoLock` id -91730).
 On SQLite, two transactions that each read and then write deadlock otherwise.
@@ -260,7 +278,11 @@ public sealed class DictionaryController(ICacheTagsResponse cacheTags, ...) : Co
 
 `QueryParameters` lists the parameters that select what a response covers; none by default, and only
 those are part of its key, so listing an unbounded parameter makes a key per value. `Recorded = false`
-makes each response carry its keys itself instead, for an action whose input varies without end.
+makes each response carry its keys itself instead, for an action whose input varies without end. Only
+a 200 is tagged, read from the result before it runs: an `ObjectResult`, `JsonResult`,
+`ContentResult`, status code result, file or `EmptyResult`, or a typed `IResult` (`TypedResults`,
+`Results<...>`) with a status code. Any other result (a redirect, a challenge, a forbid, a result
+type the package does not know) gets `no-store` and no key.
 
 **Changes.** `ICacheTagsChanges.Record(keys, waitFor, cultures, reason)` records a change that purges
 the keys: custom keys (`x-` and lowercase letters, digits and hyphens), items' `content-` or `media-`

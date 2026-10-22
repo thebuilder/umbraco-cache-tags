@@ -41,6 +41,8 @@ internal sealed class SourceChangeHandlers(
         INotificationHandler<MediaMovedNotification>,
         INotificationHandler<MediaMovedToRecycleBinNotification>,
         INotificationHandler<MediaDeletedNotification>,
+        INotificationHandler<ContentTypeSavingNotification>,
+        INotificationHandler<MediaTypeSavingNotification>,
         INotificationHandler<ContentTypeChangedNotification>,
         INotificationHandler<MediaTypeChangedNotification>,
         INotificationHandler<DataTypeSavedNotification>,
@@ -81,8 +83,8 @@ internal sealed class SourceChangeHandlers(
                     pair.Value is not null && pair.Value != content.GetUrlSegment(shortStringHelper, urlSegmentProviders, Variant(content) ? pair.Key : null));
 
                 // Unpublishing one culture is raised as a publish of the rest; that culture's route is gone.
-                routeChanged |= unpublished?.TryGetValue(content.Key, out var gone) is true && gone.Count > 0;
-                return Item(content, routeChanged: routeChanged);
+                var cultureUnpublished = unpublished?.TryGetValue(content.Key, out var gone) is true && gone.Count > 0;
+                return Item(content, routeChanged: routeChanged || cultureUnpublished, unpublished: cultureUnpublished);
             }).ToList();
 
             Record(ChangeKind.Published, items, Cultures(entities.Select(c => c.Key), published, unpublished));
@@ -94,7 +96,7 @@ internal sealed class SourceChangeHandlers(
     public void Handle(ContentUnpublishedNotification notification)
         => Guard(() => Record(
             ChangeKind.Unpublished,
-            notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true)).ToList()));
+            notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true, unpublished: true)).ToList()));
 
     public void Handle(ContentMovedNotification notification)
         => Guard(() => Record(
@@ -132,11 +134,21 @@ internal sealed class SourceChangeHandlers(
     public void Handle(MediaDeletedNotification notification)
         => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Where(media => media.Trashed is false).Select(media => Item(media)).ToList()));
 
+    // Before a type is saved: its alias as it was, which the changed notification no longer has.
+    // Responses rendered with the old alias are keyed by it.
+    public void Handle(ContentTypeSavingNotification notification)
+        => Guard(() => RememberAliases(notification.SavedEntities, key => contentTypeService.Get(key)));
+
+    public void Handle(MediaTypeSavingNotification notification)
+        => Guard(() => RememberAliases(notification.SavedEntities, key => mediaTypeService.Get(key)));
+
+    // A renamed content type's documents are indexed again under the new alias, which listings
+    // filtered by type wait for. Media listings walk the media cache.
     public void Handle(ContentTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "content types changed"));
+        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item), "content types changed", indexed: true));
 
     public void Handle(MediaTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "media types changed"));
+        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item), "media types changed", indexed: false));
 
     // A data type's configuration changes how every property using it renders.
     public void Handle(DataTypeSavedNotification notification)
@@ -187,12 +199,31 @@ internal sealed class SourceChangeHandlers(
         }
     }
 
-    private void RecordTypes(IEnumerable<string> aliases, string reason)
+    // Each type's alias, and the one it had before a rename: responses rendered before it are keyed by that.
+    private void RecordTypes(IEnumerable<IContentTypeComposition> types, string reason, bool indexed)
+    {
+        var changed = types.Select(type => (type.Alias, Previous: pending.TakeAlias(type.Key))).ToList();
+        var renamed = changed.Where(type => type.Previous is not null).Select(type => type.Previous!).ToList();
+        RecordTypes(changed.Select(type => type.Alias).Concat(renamed), reason, indexed && renamed.Count > 0 ? renamed : null);
+    }
+
+    private void RecordTypes(IEnumerable<string> aliases, string reason, IReadOnlyList<string>? renamed = null)
     {
         var distinct = aliases.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
         if (distinct.Count > 0)
         {
-            recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.TypesChanged, [], distinct, null, reason));
+            recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.TypesChanged, [], distinct, null, reason, RenamedAliases: renamed));
+        }
+    }
+
+    private void RememberAliases(IEnumerable<IContentTypeComposition> types, Func<Guid, IContentTypeComposition?> persisted)
+    {
+        foreach (IContentTypeComposition type in types.Where(type => type.HasIdentity && type.IsPropertyDirty(nameof(IContentTypeComposition.Alias))))
+        {
+            if (persisted(type.Key)?.Alias is { } alias && alias.Equals(type.Alias, StringComparison.OrdinalIgnoreCase) is false)
+            {
+                pending.RememberAlias(type.Key, alias);
+            }
         }
     }
 
@@ -201,7 +232,7 @@ internal sealed class SourceChangeHandlers(
 
     private DateTime Now() => time.GetUtcNow().UtcDateTime;
 
-    private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false)
+    private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false, bool unpublished = false)
     {
         UmbracoObjectTypes type = item is IMedia ? UmbracoObjectTypes.Media : UmbracoObjectTypes.Document;
 
@@ -211,7 +242,7 @@ internal sealed class SourceChangeHandlers(
             .Select(id => int.TryParse(id, out var ancestor) ? KeyOf(ancestor, type) : Guid.Empty)
             .Where(key => key != Guid.Empty)
             .ToList();
-        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors);
+        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors, unpublished);
     }
 
     // A path is "-1,1069,1077": the parent is the next-to-last id.
