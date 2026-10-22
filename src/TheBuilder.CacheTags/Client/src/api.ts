@@ -69,6 +69,8 @@ export interface ChangeLookup {
   kind: string;
   server: string;
   status: "Pending" | "Indexing" | "Released";
+  /** False for a change released without waiting for servers to apply it, such as a manual purge. */
+  waitsForServers: boolean;
   releasedUtc: string | null;
   acknowledgedBy: string[];
   notAcknowledgedBy: string[];

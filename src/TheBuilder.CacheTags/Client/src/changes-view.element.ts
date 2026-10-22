@@ -11,6 +11,14 @@ const STAGES: Record<ChangeLookup["status"], { label: string; color: string; hin
   Released: { label: "Purged", color: "positive", hint: "Every purge for it is queued or sent." },
 };
 
+/** How often the view refreshes while a change or purge is still on its way. */
+const REFRESH_DELAY = 2000;
+
+const stageOf = (change: ChangeLookup) =>
+  change.status === "Pending" && !change.waitsForServers
+    ? { label: "Queued", color: "default", hint: "Released on the next pass; it does not wait for servers." }
+    : STAGES[change.status];
+
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** Recent changes, what each planned and where its purges are, and the purges that failed. */
@@ -23,6 +31,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
   @state() private _error?: string;
 
   #notification?: typeof UMB_NOTIFICATION_CONTEXT.TYPE;
+  #refreshTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     super();
@@ -36,7 +45,13 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     this.#load();
   }
 
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    clearTimeout(this.#refreshTimer);
+  }
+
   async #load(): Promise<void> {
+    clearTimeout(this.#refreshTimer);
     this._loading = true;
     this._error = undefined;
     try {
@@ -45,6 +60,12 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
       this._error = errorMessage(error, "Could not load the changes.");
     } finally {
       this._loading = false;
+    }
+
+    // Follow a change until it is released and its purges are sent.
+    const inProgress = this._changes.some((change) => change.status !== "Released" || change.purges.some((purge) => purge.state === "Pending"));
+    if (inProgress && !this._error && this.isConnected) {
+      this.#refreshTimer = setTimeout(() => this.#load(), REFRESH_DELAY);
     }
   }
 
@@ -85,7 +106,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
   }
 
   #renderChange(change: ChangeLookup) {
-    const stage = STAGES[change.status];
+    const stage = stageOf(change);
     const what = change.change.reason ?? plural(change.change.items.length, "item");
     const planned = change.plan.everything ? ["umbraco"] : change.plan.keys;
     const sent = change.purges.filter((purge) => purge.state === "Sent").length;
@@ -110,7 +131,11 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
             <dd>${plural(change.responses.length, "recorded response")}, and every response carrying a planned key</dd>
             ${change.plan.cultures ? html`<dt>Cultures</dt><dd>${change.plan.cultures.join(", ")}</dd>` : nothing}
             <dt>Applied by</dt>
-            <dd>${change.acknowledgedBy.join(", ") || html`<span class="muted">no server yet</span>`}</dd>
+            <dd>
+              ${change.waitsForServers
+                ? change.acknowledgedBy.join(", ") || html`<span class="muted">no server yet</span>`
+                : html`<span class="muted">purged without waiting for servers</span>`}
+            </dd>
             ${change.notAcknowledgedBy.length > 0 ? html`<dt>Purged without</dt><dd class="error">${change.notAcknowledgedBy.join(", ")}</dd>` : nothing}
             ${change.indexedBy.length > 0 ? html`<dt>Indexed by</dt><dd>${change.indexedBy.join(", ")}</dd>` : nothing}
             ${change.change.waitFor ? html`<dt>Waits for</dt><dd><span class="param">${change.change.waitFor}</span></dd>` : nothing}
