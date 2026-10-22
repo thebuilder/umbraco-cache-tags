@@ -45,6 +45,9 @@ internal sealed class MappingWriter : BackgroundService
     private readonly TimeProvider _time;
     private readonly ILogger<MappingWriter> _logger;
 
+    // 1 from the first write the queue refuses until it has emptied, so a full queue warns once.
+    private int _full;
+
     public MappingWriter(ICacheTagStore store, PackageDatabase database, IOptionsMonitor<CacheTagsOptions> options, TimeProvider time, ILogger<MappingWriter> logger)
     {
         _store = store;
@@ -114,7 +117,11 @@ internal sealed class MappingWriter : BackgroundService
             return true;
         }
 
-        _logger.LogWarning("The cache tag mapping queue is full or stopped; a write was not queued. A response that cannot be recorded carries its item and selector keys instead of its response key.");
+        if (Interlocked.Exchange(ref _full, 1) == 0)
+        {
+            _logger.LogWarning("The cache tag mapping queue is full or stopped; writes are not queued until it has emptied. A response that cannot be recorded carries its item and selector keys instead of its response key.");
+        }
+
         return false;
     }
 
@@ -128,6 +135,10 @@ internal sealed class MappingWriter : BackgroundService
                 Fill(batch, BatchSize);
                 await WriteUntilWrittenAsync(batch, stoppingToken);
                 batch.Clear();
+                if (_queue.Reader.Count == 0)
+                {
+                    Interlocked.Exchange(ref _full, 0);
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

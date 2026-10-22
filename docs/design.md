@@ -63,8 +63,9 @@ key only once its record is queued, so no key goes out that a purge cannot reach
 - A queued record is never given up. A batch whose write fails (the default store retries each
   response once, then fails the batch) is written again after 1, 2, 4 ... seconds, at most a minute
   apart, until it succeeds, while new responses fill the queue and then carry their keys themselves.
-  A stopping server writes what is queued once more. Only a crash loses queued records (the last
-  moment's renders): until a frontend fetches those responses again, only `umbraco` reaches them.
+  A stopping server refuses new records and tries once more to write what is queued. A crash, or a
+  database already gone at shutdown, loses queued records (the last moment's renders): until a
+  frontend fetches those responses again, only `umbraco` reaches them.
 
 The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
