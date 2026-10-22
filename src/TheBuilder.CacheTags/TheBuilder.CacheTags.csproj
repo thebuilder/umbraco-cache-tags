@@ -1,6 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
     <PackageId>TheBuilder.CacheTags</PackageId>
     <Product>Cache Tags for Umbraco</Product>
     <Title>Cache keys and exact purges for the Umbraco Delivery API</Title>
@@ -14,8 +15,14 @@
     <RepositoryUrl>https://github.com/thebuilder/umbraco-cache-tags.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageReleaseNotes>See https://github.com/thebuilder/umbraco-cache-tags/releases for release notes.</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <BackofficeClientDirectory>$(MSBuildProjectDirectory)/Client</BackofficeClientDirectory>
+    <BackofficeAssetsPattern>wwwroot/App_Plugins/TheBuilder.CacheTags/**/*</BackofficeAssetsPattern>
+    <BackofficeAssetsDirectory>$(MSBuildProjectDirectory)/wwwroot/App_Plugins/TheBuilder.CacheTags</BackofficeAssetsDirectory>
+    <BackofficeManifest>$(BackofficeAssetsDirectory)/umbraco-package.json</BackofficeManifest>
+    <BackofficeEntryPoint>$(BackofficeAssetsDirectory)/cache-tags.js</BackofficeEntryPoint>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Umbraco.Cms.Web.Common" />
@@ -28,10 +35,27 @@
     <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Content Remove="Client\**" />
+    <Content Remove="wwwroot/App_Plugins/TheBuilder.CacheTags/**/*" />
+    <None Include="Client\umbraco-package.json" Pack="false" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="wwwroot/App_Plugins/TheBuilder.CacheTags/" />
     <InternalsVisibleTo Include="TheBuilder.CacheTags.Tests" />
   </ItemGroup>
+  <!-- The backoffice dashboard (Client/) is built while packing, with the package's version in the
+       manifest Umbraco reads, and its output packed as static web assets under App_Plugins. -->
+  <Target Name="BuildBackofficeAssetsForPack" Condition="'$(_IsPacking)' == 'true' and '$(NoBuild)' != 'true'">
+    <Exec Command="corepack pnpm build" WorkingDirectory="$(BackofficeClientDirectory)" EnvironmentVariables="PACKAGE_VERSION=$(Version)" />
+  </Target>
+  <Target Name="RefreshBackofficeStaticWebAssets" BeforeTargets="ResolveProjectStaticWebAssets" DependsOnTargets="BuildBackofficeAssetsForPack">
+    <ItemGroup><Content Include="$(BackofficeAssetsPattern)" /></ItemGroup>
+  </Target>
+  <Target Name="ValidateBackofficeAssetsForPack" BeforeTargets="IncludeStaticWebAssetsPackItems" Condition="'$(_IsPacking)' == 'true'">
+    <Error Condition="!Exists('$(BackofficeManifest)')" Text="Cannot pack TheBuilder.CacheTags because the backoffice manifest is missing." />
+    <Error Condition="!Exists('$(BackofficeEntryPoint)')" Text="Cannot pack TheBuilder.CacheTags because the backoffice entry point is missing." />
+  </Target>
 </Project>

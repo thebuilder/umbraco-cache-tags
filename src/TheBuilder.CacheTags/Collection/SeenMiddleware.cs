@@ -19,8 +19,9 @@ internal sealed class SeenMiddleware(RequestDelegate next, MappingWriter writer,
     {
         await next(context);
 
+        // Any path: a site's own tagged actions (CacheTaggedAttribute) answer outside the Delivery API.
         CacheTagsOptions settings = options.CurrentValue;
-        if (settings.Enabled is false || context.Request.Path.StartsWithSegments("/umbraco/delivery/api", StringComparison.OrdinalIgnoreCase) is false)
+        if (settings.Enabled is false || context.Response.Headers.ContainsKey(settings.HeaderName) is false)
         {
             return;
         }

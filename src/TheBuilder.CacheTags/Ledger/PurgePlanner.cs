@@ -6,7 +6,7 @@ namespace TheBuilder.CacheTags.Ledger;
 /// <summary>
 ///     Turns a change into the keys to purge. The planned keys reach every response that showed the
 ///     changed items (item keys) and every listing they could have joined or left (selector keys).
-///     Route changes reach the descendants too, whose routes follow (spike/FINDINGS.md, section 1).
+///     Route changes reach the descendants too, whose routes follow (docs/findings.md, section 1).
 /// </summary>
 internal sealed class PurgePlanner(IDescendants descendants)
 {
@@ -15,6 +15,15 @@ internal sealed class PurgePlanner(IDescendants descendants)
         if (change.Kind == ChangeKind.Everything)
         {
             return new PurgePlan([], Everything: true, Cultures: null);
+        }
+
+        if (change.Kind == ChangeKind.Custom)
+        {
+            // The keys as named; "umbraco" among them purges everything.
+            var named = change.Keys ?? [];
+            return named.Contains(CacheKeys.All)
+                ? new PurgePlan([], Everything: true, Cultures: null)
+                : new PurgePlan(named.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList(), Everything: false, change.Cultures);
         }
 
         var keys = new SortedSet<string>(StringComparer.Ordinal);

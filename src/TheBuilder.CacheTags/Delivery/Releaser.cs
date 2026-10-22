@@ -38,7 +38,9 @@ internal sealed class Releaser(
         {
             // The recording server is not counted until its own refresh acknowledges the change:
             // Umbraco raises some changes (unpublish, delete, sort, media save) before the refresh.
-            StageBarrier barrier = StageBarrier.ForAcks(change.CreatedUtc, now, servers, acks.AcknowledgedBy(change.Id), settings.AckTimeout, settings.ServerTimeout);
+            StageBarrier barrier = change.Signal is { WaitsForServers: false }
+                ? StageBarrier.Opened
+                : StageBarrier.ForAcks(change.CreatedUtc, now, servers, acks.AcknowledgedBy(change.Id), settings.AckTimeout, settings.ServerTimeout);
             if (barrier.Open)
             {
                 await ReleaseAsync(change, barrier, settings, now, cancellationToken);

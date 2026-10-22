@@ -113,12 +113,26 @@ export type Fetched<T> = {
  * `fetchedAt` is set inside the cache, so it shows when the entry was filled, not when the page
  * was served. A purge is visible as a new time.
  */
-export async function deliveryApi<T>(request: string, culture: Culture | null = null): Promise<Fetched<T>> {
+export function deliveryApi<T>(request: string, culture: Culture | null = null): Promise<Fetched<T>> {
+  return cachedUmbraco<T>(`/umbraco/delivery/api/v2/${request.replace(/^\//, "")}`, request, culture);
+}
+
+/**
+ * Every dictionary item in one language, from the Umbraco sample's own API (Dictionary/ in the
+ * sample), outside the Delivery API. TheBuilder.CacheTags tags it like a Delivery API response, and a
+ * dictionary change purges it once every server's dictionary cache has the change.
+ */
+export function dictionary(locale: Culture) {
+  return cachedUmbraco<Record<string, string>>(`/api/dictionary?locale=${locale}`, `dictionary?locale=${locale}`, null);
+}
+
+/** Fetches a path on Umbraco and caches the response under the cache keys it was tagged with. */
+async function cachedUmbraco<T>(path: string, request: string, culture: Culture | null): Promise<Fetched<T>> {
   "use cache";
 
   let response: Response;
   try {
-    response = await fetch(`${umbracoUrl}/umbraco/delivery/api/v2/${request.replace(/^\//, "")}`, {
+    response = await fetch(`${umbracoUrl}${path}`, {
       headers: culture ? { "Accept-Language": culture } : {},
     });
   } catch {

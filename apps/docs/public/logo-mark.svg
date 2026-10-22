@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-hidden="true">
+  <!-- Two cache tags as the family's blue and pink, with the violet arrows as the purge and refresh cycle between them. -->
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10"/></filter>
+    <path id="tag-back" d="M112 28H212Q236 28 236 52V108Q236 132 212 132H112Q101 132 93 124L66 94Q58 80 66 66L93 36Q101 28 112 28Z"/>
+    <path id="tag-front" d="M72 112H172Q196 112 196 136V192Q196 216 172 216H72Q61 216 53 208L26 178Q18 164 26 150L53 120Q61 112 72 112Z"/>
+  </defs>
+  <g opacity=".42" filter="url(#glow)">
+    <use href="#tag-back" fill="#ed63ad"/>
+    <use href="#tag-front" fill="#60a5fa"/>
+  </g>
+  <g opacity=".92">
+    <use href="#tag-back" fill="#ed63ad"/>
+    <use href="#tag-front" fill="#60a5fa"/>
+  </g>
+  <g fill="none" stroke="#9b83ec" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M30 120Q30 50 70 38"/><path d="M56 28L72 38L62 54"/>
+    <path d="M226 146Q226 214 186 226"/><path d="M200 236L184 226L194 210"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="58" cy="164" r="10"/>
+    <path d="M92 146H164"/><path d="M92 182H140"/>
+    <circle cx="98" cy="80" r="9"/>
+    <path d="M130 64H204"/><path d="M130 96H180"/>
+  </g>
+</svg>

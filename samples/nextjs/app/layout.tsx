@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
+import { dictionary } from "@/lib/umbraco";
 import "./globals.css";
 
 // Pages wait on the server for their (cached) Delivery API responses rather than streaming a
@@ -30,7 +32,24 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </nav>
         </header>
         <main>{children}</main>
+        <Footer />
       </body>
     </html>
   );
+}
+
+/** The tagline from Umbraco's dictionary. Left out while Umbraco is unreachable: the layout cannot show an error page. */
+async function Footer() {
+  // Rendered per request, from the cached response, so the build does not need Umbraco.
+  await connection();
+  try {
+    const { data, fetchedAt } = await dictionary("en-US");
+    return data?.["Footer.Tagline"] ? (
+      <footer data-fetched-at={fetchedAt}>
+        <p>{data["Footer.Tagline"]}</p>
+      </footer>
+    ) : null;
+  } catch {
+    return null;
+  }
 }

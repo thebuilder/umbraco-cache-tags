@@ -1,0 +1,13 @@
+{
+  "id": "TheBuilder.CacheTags",
+  "name": "Cache Tags",
+  "allowTelemetry": false,
+  "extensions": [
+    {
+      "name": "Cache Tags Bundle",
+      "alias": "TheBuilder.CacheTags.Bundle",
+      "type": "bundle",
+      "js": "/App_Plugins/TheBuilder.CacheTags/cache-tags.js"
+    }
+  ]
+}

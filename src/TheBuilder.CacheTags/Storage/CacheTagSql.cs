@@ -80,6 +80,31 @@ internal static class CacheTagSql
         return found;
     }
 
+    /// <summary>Keys and responses containing the text, for the backoffice's search (see ICacheTagStore.SearchAsync).</summary>
+    public static CacheSearchResult Search(IDatabase database, string text, int take)
+    {
+        // LIKE ignores case on SQLite and SQL Server's default collations. A query is stored with its
+        // values escaped (ResponseIdentity.NormaliseQuery), so it is matched as typed and escaped.
+        var plain = Like(text);
+        var encoded = Like(Uri.EscapeDataString(text));
+        var keys = database.SkipTake<string>(0, take, new Sql(
+            $"SELECT DISTINCT CacheKey FROM {Constants.Tables.ResponseKeys} WHERE CacheKey LIKE @0 ESCAPE '\\' ORDER BY CacheKey",
+            plain));
+        var responses = database.SkipTake<ResponseRow>(0, take, new Sql(
+            $"SELECT * FROM {Constants.Tables.Responses} WHERE ResponseKey LIKE @0 ESCAPE '\\' OR Path LIKE @0 ESCAPE '\\' OR Query LIKE @0 ESCAPE '\\' OR Query LIKE @1 ESCAPE '\\' ORDER BY SeenUtc DESC",
+            plain,
+            encoded));
+        return new CacheSearchResult
+        {
+            Keys = keys,
+            Responses = responses.Select(row => Response(row, [])).ToList(),
+        };
+    }
+
+    // A LIKE pattern that matches the text anywhere, with the wildcards in it taken literally.
+    private static string Like(string text)
+        => "%" + text.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[") + "%"; // [ is a wildcard on SQL Server
+
     public static CachedResponse? Get(IDatabase database, string responseKey)
     {
         ResponseRow? row = database.SingleOrDefault<ResponseRow>(
@@ -94,18 +119,7 @@ internal static class CacheTagSql
             $"SELECT CacheKey FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey = @0 AND RenderedUtc = @1 ORDER BY CacheKey",
             responseKey,
             row.RenderedUtc);
-        return new CachedResponse
-        {
-            ResponseKey = row.ResponseKey,
-            Path = row.Path,
-            Query = row.Query,
-            Culture = row.Culture,
-            Segment = row.Segment,
-            StartItem = row.StartItem,
-            Keys = keys,
-            RenderedUtc = row.RenderedUtc,
-            SeenUtc = row.SeenUtc,
-        };
+        return Response(row, keys);
     }
 
     public static int Prune(IDatabase database, DateTime cutoffUtc)
@@ -126,4 +140,17 @@ internal static class CacheTagSql
     /// <summary>Responses nobody has asked for since the cutoff; their keys go first.</summary>
     public static int PruneUnseenResponses(IDatabase database, DateTime cutoffUtc)
         => database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
+
+    private static CachedResponse Response(ResponseRow row, IReadOnlyCollection<string> keys) => new()
+    {
+        ResponseKey = row.ResponseKey,
+        Path = row.Path,
+        Query = row.Query,
+        Culture = row.Culture,
+        Segment = row.Segment,
+        StartItem = row.StartItem,
+        Keys = keys,
+        RenderedUtc = row.RenderedUtc,
+        SeenUtc = row.SeenUtc,
+    };
 }

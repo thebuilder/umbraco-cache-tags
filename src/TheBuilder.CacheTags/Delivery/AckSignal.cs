@@ -22,6 +22,12 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
     public const string Types = "types";
     public const string Everything = "everything";
 
+    /// <summary>A custom change that waits for nothing: it is released at once.</summary>
+    public const string None = "none";
+
+    /// <summary>The kind of a custom change's signal: this, then the signal's name.</summary>
+    public const string CustomPrefix = "custom:";
+
     public const string Publish = "publish";
     public const string Unpublish = "unpublish";
     public const string Branch = "branch";
@@ -41,9 +47,14 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
             ChangeKind.Sorted => new(Content, keys, Any),
             ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted => new(Media, keys, Any, ancestors),
             ChangeKind.TypesChanged => new(Types, [], Any),
-            _ => new(Everything, [], Any),
+            ChangeKind.Everything => new(Everything, [], Any),
+            ChangeKind.Custom => new(change.WaitFor is null ? None : CustomPrefix + change.WaitFor, [], Any),
+            _ => throw new ArgumentOutOfRangeException(nameof(change), change.Kind, "A change kind needs an ack signal."),
         };
     }
+
+    /// <summary>Whether servers must acknowledge the change before it is released.</summary>
+    public bool WaitsForServers => Kind != None;
 
     /// <summary>Whether a refresh this server just applied acknowledges the change.</summary>
     public bool IsMetBy(ObservedRefresh refresh)

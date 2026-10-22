@@ -37,6 +37,7 @@ public sealed class CacheTagsComposer : IComposer
             .Validate(options => options.IndexTimeout > TimeSpan.Zero, "CacheTags:IndexTimeout must be above zero.")
             .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
             .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)
+            .Validate(options => options.Targets.Values.All(CloudflareTarget.IsValid), CloudflareTarget.ValidationMessage)
             .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
             .ValidateOnStart();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -44,6 +45,8 @@ public sealed class CacheTagsComposer : IComposer
         // Collecting.
         builder.Services.AddSingleton<ReferenceReader>();
         builder.Services.AddScoped<ResponseCollector>();
+        builder.Services.AddScoped<CacheTagsResponse>();
+        builder.Services.AddScoped<ICacheTagsResponse>(services => services.GetRequiredService<CacheTagsResponse>());
         builder.Services.AddScoped<CacheKeyResultFilter>();
         builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
         builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, OutputCacheTags>();
@@ -61,6 +64,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<PurgePlanner>();
         builder.Services.AddSingleton<LedgerStore>();
         builder.Services.AddSingleton<ChangeRecorder>();
+        builder.Services.AddSingleton<ICacheTagsChanges, CacheTagsChanges>();
         builder.Services.AddSingleton<PendingOperations>();
         builder
             .AddNotificationHandler<ContentPublishingNotification, SourceChangeHandlers>()
@@ -100,6 +104,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddHostedService<Heartbeat>();
         builder.Services.AddHostedService<DeliveryWorker>();
         builder.Services.AddSingleton<IPurgeTarget, WebhookTarget>();
+        builder.Services.AddSingleton<IPurgeTarget, CloudflareTarget>();
         builder.Services.AddHttpClient(WebhookTarget.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
             // A redirect would carry the signed purge to another host; a target must answer itself.
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
@@ -114,6 +119,7 @@ public sealed class CacheTagsComposer : IComposer
 
         // The lookup API.
         builder.Services.AddSingleton<ICacheTagsLookup, CacheTagsLookup>();
+        builder.Services.AddSingleton<ICacheTagsOutbox, CacheTagsOutbox>();
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();
         builder.Services.AddAuthorization(options => options.AddPolicy(
             AdministratorRequirement.Policy,

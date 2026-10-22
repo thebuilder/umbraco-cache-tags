@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -12,10 +13,11 @@ using Umbraco.Cms.Core.Models.PublishedContent;
 namespace TheBuilder.CacheTags.Collection;
 
 /// <summary>
-///     Runs after every Delivery API action: gives a cacheable response its key in the response
-///     header and queues the record of what it covers. Preview responses get <c>no-store</c> and
-///     member responses <c>private</c>, and neither gets a key. Nor does a response other than a 200 with a
-///     body, or one whose request headers are too long to record: both get <c>no-store</c>.
+///     Runs after every Delivery API action, and every action with <see cref="CacheTaggedAttribute" />:
+///     gives a cacheable response its keys in the response header and queues the record of what it
+///     covers. Preview responses get <c>no-store</c> and member responses <c>private</c>, and neither
+///     gets a key. Nor does a response other than a 200, or one whose request headers are too long to
+///     record: both get <c>no-store</c>.
 /// </summary>
 internal sealed class CacheKeyResultFilter(
     IOptionsMonitor<CacheTagsOptions> options,
@@ -25,6 +27,7 @@ internal sealed class CacheKeyResultFilter(
     IRequestStartItemProvider startItem,
     IVariationContextAccessor variationContext,
     ResponseCollector collector,
+    CacheTagsResponse named,
     MappingWriter writer,
     TimeProvider time) : IAsyncResultFilter
 {
@@ -34,15 +37,30 @@ internal sealed class CacheKeyResultFilter(
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         CacheTagsOptions settings = options.CurrentValue;
-        if (settings.Enabled && context.ActionDescriptor is ControllerActionDescriptor action && DeliveryEndpoint.Of(action.ControllerTypeInfo) is { } endpoint)
+        if (settings.Enabled && context.ActionDescriptor is ControllerActionDescriptor action)
         {
-            Tag(context, endpoint, settings);
+            if (DeliveryEndpoint.Of(action.ControllerTypeInfo) is { } endpoint)
+            {
+                Tag(context, settings, value => collector.Collect(value, context.HttpContext, endpoint), ResponseIdentity.DeliveryParameters, recordable: true);
+            }
+            else if ((action.MethodInfo.GetCustomAttribute<CacheTaggedAttribute>() ?? action.ControllerTypeInfo.GetCustomAttribute<CacheTaggedAttribute>()) is { } tagged)
+            {
+                Tag(context, settings, Custom, new HashSet<string>(tagged.QueryParameters, StringComparer.OrdinalIgnoreCase), tagged.Recorded);
+            }
         }
 
         await next();
     }
 
-    private void Tag(ResultExecutingContext context, DeliveryEndpoint endpoint, CacheTagsOptions settings)
+    // A site's own action: the keys it named, and the Delivery API items in its result.
+    private IReadOnlySet<string> Custom(object? value)
+    {
+        var keys = new HashSet<string>(named.Keys, StringComparer.Ordinal);
+        OutputWalker.Collect(value, keys);
+        return keys;
+    }
+
+    private void Tag(ResultExecutingContext context, CacheTagsOptions settings, Func<object?, IReadOnlySet<string>> collect, IReadOnlySet<string> parameters, bool recordable)
     {
         HttpContext http = context.HttpContext;
         if (preview.IsPreview())
@@ -59,7 +77,8 @@ internal sealed class CacheKeyResultFilter(
             return;
         }
 
-        if (context.Result is not ObjectResult { Value: { } value } result || (result.StatusCode ?? 200) != 200)
+        (var status, var value) = Outcome(context.Result, http.Response);
+        if (status != 200)
         {
             // A not found or a redirect covers no item, so no purge would reach it: publishing at
             // that path later must not leave it cached.
@@ -72,7 +91,8 @@ internal sealed class CacheKeyResultFilter(
             http.Request.Query.SelectMany(pair => pair.Value.Select(v => new KeyValuePair<string, string?>(pair.Key, v))),
             requestCulture.GetRequestedCulture(),
             requestSegment.GetRequestedSegment(),
-            startItem.RequestedStartItem());
+            startItem.RequestedStartItem(),
+            parameters);
         if (identity.Fits is false)
         {
             // Headers too long to record: the response could not be purged, so it must not be cached.
@@ -81,9 +101,9 @@ internal sealed class CacheKeyResultFilter(
         }
 
         var responseKey = identity.ToKey();
-        IReadOnlySet<string> keys = collector.Collect(value, http, endpoint);
+        IReadOnlySet<string> keys = collect(value);
 
-        ResponseTags tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, responseKey, keys, collector.TypeKeys);
+        ResponseTags tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, responseKey, keys, collector.TypeKeys, recordable);
         http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Keys.Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
 
         // Umbraco's output cache is evicted by the same keys a purge names: the response key, or the
@@ -112,4 +132,14 @@ internal sealed class CacheKeyResultFilter(
             SeenUtc = now,
         });
     }
+
+    /// <summary>The status a result answers with, and its body for results that carry one.</summary>
+    private static (int Status, object? Value) Outcome(IActionResult result, HttpResponse response) => result switch
+    {
+        ObjectResult objectResult => (objectResult.StatusCode ?? 200, objectResult.Value),
+        JsonResult json => (json.StatusCode ?? 200, json.Value),
+        ContentResult content => (content.StatusCode ?? 200, null),
+        StatusCodeResult statusCode => (statusCode.StatusCode, null),
+        _ => (response.StatusCode, null),
+    };
 }

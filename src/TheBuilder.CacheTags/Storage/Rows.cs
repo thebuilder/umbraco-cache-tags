@@ -84,7 +84,7 @@ internal sealed class OutboxRow
     /// <summary>The keys this request purges, as JSON.</summary>
     [Column(nameof(Keys)), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Keys { get; set; } = "[]";
 
-    /// <summary>Pending, Sent or Dead.</summary>
+    /// <summary>Pending, Sent, Dead or Discarded.</summary>
     [Column(nameof(State)), Length(20)] public string State { get; set; } = OutboxStates.Pending;
     [Column(nameof(Attempts))] public int Attempts { get; set; }
     [Column(nameof(CreatedUtc))] public DateTime CreatedUtc { get; set; }
@@ -99,5 +99,8 @@ internal static class OutboxStates
 {
     public const string Pending = "Pending";
     public const string Sent = "Sent";
+
+    /// <summary>Set aside by a person: not sent, kept for the lookup until it ages out.</summary>
+    public const string Discarded = "Discarded";
     public const string Dead = "Dead";
 }

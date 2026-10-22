@@ -48,6 +48,9 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
     public Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default)
         => Task.FromResult(database.Read(db => CacheTagSql.Get(db, responseKey)));
 
+    public Task<CacheSearchResult> SearchAsync(string text, int take, CancellationToken cancellationToken = default)
+        => Task.FromResult(database.Read(db => CacheTagSql.Search(db, text, take)));
+
     // Each step in its own short transaction, so a publish waiting for the write lock is not held up
     // by one long delete. A render can skip rewriting keys written within the writer's touch interval,
     // so a dropped key gets that much longer.

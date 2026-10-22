@@ -15,6 +15,9 @@ internal enum ChangeKind
     MediaDeleted,
     TypesChanged,
     Everything,
+
+    /// <summary>Keys a site or a person named (<c>ICacheTagsChanges</c>): custom output, or a manual purge.</summary>
+    Custom,
 }
 
 /// <summary>Where a recorded change is on its way to the frontends.</summary>
@@ -41,6 +44,11 @@ internal enum ChangeStage
 /// <param name="TypeAliases">For <see cref="ChangeKind.TypesChanged" />: the content and media types whose output changed.</param>
 /// <param name="Cultures">The cultures that changed, or <c>null</c> for all.</param>
 /// <param name="Reason">Why, for the log and the lookup API (for example "language da-DK saved").</param>
+/// <param name="Keys">For <see cref="ChangeKind.Custom" />: the keys to purge.</param>
+/// <param name="WaitFor">
+///     For <see cref="ChangeKind.Custom" />: the signal every server reports once it has applied the
+///     change (<c>ICacheTagsChanges.Applied</c>), or <c>null</c> to purge at once.
+/// </param>
 internal sealed record Change(
     Guid Id,
     DateTime CreatedUtc,
@@ -48,7 +56,9 @@ internal sealed record Change(
     IReadOnlyList<ChangedItem> Items,
     IReadOnlyList<string> TypeAliases,
     IReadOnlyList<string>? Cultures,
-    string? Reason = null);
+    string? Reason = null,
+    IReadOnlyList<string>? Keys = null,
+    string? WaitFor = null);
 
 /// <param name="Key">The document or media key.</param>
 /// <param name="TypeAlias">Its content or media type alias.</param>

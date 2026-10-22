@@ -8,6 +8,9 @@ namespace TheBuilder.CacheTags.Delivery;
 /// </summary>
 internal sealed record StageBarrier(bool Open, bool TimedOut, IReadOnlyList<string> Waiting)
 {
+    /// <summary>A stage that waits for nothing.</summary>
+    public static readonly StageBarrier Opened = new(true, false, []);
+
     /// <summary>
     ///     A change is released once every active server that was already running when it was made
     ///     has acknowledged it; one that started later built its caches after the change.
@@ -54,7 +57,7 @@ internal sealed record StageBarrier(bool Open, bool TimedOut, IReadOnlyList<stri
             .ToList();
         if (waiting.Count == 0)
         {
-            return new StageBarrier(true, false, []);
+            return Opened;
         }
 
         var timedOut = nowUtc - sinceUtc >= timeout;

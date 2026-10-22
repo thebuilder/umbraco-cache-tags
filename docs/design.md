@@ -2,7 +2,8 @@
 
 `TheBuilder.CacheTags` lets a headless frontend cache Umbraco Delivery API responses and purges
 exactly the right ones once every delivery server has applied a change. This is the contract the
-package, its samples and its docs are held to. Evidence for the decisions is in `spike/FINDINGS.md`.
+package, its samples and its docs are held to. Evidence for the decisions is in `docs/findings.md`,
+from the Milestone 1 spike.
 
 ## Keys
 
@@ -124,6 +125,32 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, and are configured with
 `"Type": "<their type>"` and their own `Settings`.
 
+## Cloudflare
+
+The built-in `cloudflare` target purges a Cloudflare zone by cache tag, for a site where Cloudflare
+caches the responses that carry the package's keys:
+
+```json
+"CacheTags": {
+  "Targets": {
+    "cdn": {
+      "Type": "cloudflare",
+      "Settings": { "ZoneId": "<zone id>", "ApiToken": "<token with Zone > Cache Purge>" }
+    }
+  }
+}
+```
+
+- Cloudflare reads tags from a `Cache-Tag` response header. Where it caches Umbraco's Delivery API
+  directly, set `CacheTags:HeaderName` to `Cache-Tag`; where it caches a frontend, the frontend must
+  pass the keys on in its own `Cache-Tag` header.
+- Each purge posts the keys as `tags` to `POST /client/v4/zones/{zone}/purge_cache`, at most 100 per
+  call (Cloudflare's limit). Cloudflare has no "serve stale" purge, so `stale` keys are purged too.
+- Tags are case-insensitive at Cloudflare; the package's keys are lowercase already. A `Cache-Tag`
+  header holds about 16 KB, far more than a response's keys.
+- A failed call (a bad token, a rate limit) is retried like any purge, and its error is kept with the
+  purge for the lookup API.
+
 ## Delivery
 
 1. **Ledger.** The server making a change records it (with its plan and an ack signal) as pending.
@@ -177,6 +204,55 @@ On SQLite, two transactions that each read and then write deadlock otherwise.
 }
 ```
 
+## Your own APIs
+
+A site's own API (anything outside the Delivery API whose responses a frontend caches) joins in
+through two public pieces.
+
+**Tagging.** `[CacheTagged]` on an action or controller tags its responses the way the package tags
+Delivery API responses: a `response-` key and `umbraco` in the header, recorded with what the response
+covers. The action names its keys with the scoped `ICacheTagsResponse`; any Delivery API items in its
+result are found on their own.
+
+```csharp
+[ApiController, Route("api/dictionary"), CacheTagged(QueryParameters = ["locale"])]
+public sealed class DictionaryController(ICacheTagsResponse cacheTags, ...) : ControllerBase
+{
+    [HttpGet]
+    public async Task<IActionResult> Get(string locale)
+    {
+        cacheTags.Add($"x-dictionary-{locale.ToLowerInvariant()}");
+        ...
+    }
+}
+```
+
+`QueryParameters` lists the parameters that select what a response covers; none by default, and only
+those are part of its key, so listing an unbounded parameter makes a key per value. `Recorded = false`
+makes each response carry its keys itself instead, for an action whose input varies without end.
+
+**Changes.** `ICacheTagsChanges.Record(keys, waitFor, cultures, reason)` records a change that purges
+the keys: custom keys (`x-` and lowercase letters, digits and hyphens), items' `content-` or `media-`
+keys, or `umbraco`. With `waitFor`, the purge waits until every server has reported that signal with
+`ICacheTagsChanges.Applied(signal)`, which a site calls on every server where its data is refreshed,
+usually its cache refresher's notification handler. Without it, the purge goes at once, for data each
+server reads straight from the database.
+
+```csharp
+public Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken token)
+    => changes.Record(languages.Select(l => $"x-dictionary-{l.IsoCode.ToLowerInvariant()}"), "dictionary");
+
+public void Handle(DictionaryCacheRefresherNotification notification) => changes.Applied("dictionary");
+```
+
+Custom keys go in the webhook's `expire` list: each names specific output. The samples use this for
+the dictionary (`samples/TheBuilder.CacheTags.Example/Dictionary`).
+
+**By hand.** The Management API purges keys at once (`POST .../cache-tags/purge` with a JSON array of
+keys, `["umbraco"]` for everything), lists purges by state (`GET .../purges?state=Dead`), sends a dead
+or discarded purge again (`POST .../purges/{id}/retry`), and sets a pending or dead one aside
+(`POST .../purges/{id}/discard`). All of it is for administrators.
+
 ## Decisions
 
 | Date | Decision |
@@ -189,6 +265,7 @@ On SQLite, two transactions that each read and then write deadlock otherwise.
 | 2026-10-22 | Purge targets are a seam (`IPurgeTarget`), configured by name with a `Type`; the webhook is the built-in type. The webhook body is versioned and says which keys to expire and which to mark stale, so receivers need no knowledge of key names. |
 | 2026-10-22 | `schema-<alias>` keys: a content, media or element type change (or a data type used by it) purges every response that renders an item of that type, not only listings filtered by it. |
 | 2026-10-22 | Listings are purged a second time once every server's Delivery API index has the change, checked by comparing a stamp of the item's state written into each index document with its state in the database, replacing fixed re-purge delays. A time stamp was tried first and accepted a draft's document built just before the publish. |
+| 2026-10-22 | Sites extend the package through `[CacheTagged]`, `ICacheTagsResponse` and `ICacheTagsChanges`, with `x-` keys, and a change waits for a named signal each server reports rather than for a cache refresher the package would have to know. A manual purge is the same kind of change. |
 | 2026-10-22 | Catch-all listings (search, name filters, other queries) carry their own keys and are not recorded, so user input cannot grow the mapping or the purges. Every response carries `umbraco`, so a change to everything reaches it. |
 | 2026-10-22 | Unpublishing always purges every culture: Umbraco raises it only when the whole document goes. A sort's re-publish of the sorted items is not recorded as a publish. Items deleted from the recycle bin are not recorded again. Public access changes purge everything. |
 
@@ -205,11 +282,13 @@ An admin-only Management API lookup:
 `GET /umbraco/management/api/v1/cache-tags/changes?take=20`, for administrators. Each change is also
 logged: `Cache tags change <id> (<kind>) plans <keys>`.
 
-Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's keys and fetch times.
+The backoffice shows the same under **Settings > Advanced > Cache tags**, with a search, and a Cache
+box on each document's and media item's Info tab. The Next.js sample shows each page's keys and
+fetch times.
 
 ## Milestones
 
-1. Spike (done, `spike/FINDINGS.md`).
+1. Spike (done, `docs/findings.md`; the probe itself is removed).
 2. Keys and mapping: the collector, the response key, the mapping store, the source-side ledger and
    purge planner, the lookup API.
 3. Outbox, ack barrier, webhook target, signing (done; the listing purge was pulled forward from 4
@@ -219,4 +298,4 @@ Milestone 5 puts a backoffice UI on it. The Next.js sample shows each page's key
    (`type-`, `children-`, `search-`) must be purged once the Delivery API index has the change:
    purged earlier, the frontend refetches the old listing and keeps it until its safety revalidate.
    On a fresh boot the samples measured the index taking over half a minute.
-5. Backoffice, Cloudflare target, docs, NuGet preview.
+5. Backoffice, Cloudflare target, sites' own APIs, docs (`apps/docs`), NuGet preview (`RELEASE.md`).

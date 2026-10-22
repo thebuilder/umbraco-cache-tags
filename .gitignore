@@ -13,11 +13,12 @@ samples/nextjs/.next/
 samples/nextjs/next-env.d.ts
 samples/nextjs/*.tsbuildinfo
 samples/nextjs/.env*.local
-spike/**/umbraco/Data/
-spike/**/umbraco/Logs/
-spike/**/umbraco/models/
-spike/**/appsettings-schema*.json
-spike/**/umbraco-package-schema.json
-spike/results/raw/
 /artifacts/
 .DS_Store
+# The backoffice client's build output; `dotnet pack` builds it.
+src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/
+
+# The docs site: Blume's build output, and the Open Graph cards it draws on every build.
+apps/docs/.blume/
+apps/docs/public/og/
+apps/docs/public/opengraph-image.png

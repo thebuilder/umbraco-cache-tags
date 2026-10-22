@@ -15,19 +15,20 @@ namespace TheBuilder.CacheTags.Keys;
 internal sealed record ResponseIdentity(string Path, string Query, string Culture, string Segment, string StartItem)
 {
     /// <summary>
-    ///     The query parameters that select what a response covers. The Delivery API's others
+    ///     The Delivery API's query parameters that select what a response covers. Its others
     ///     (<c>expand</c>, <c>fields</c>, <c>sort</c>, <c>skip</c>, <c>take</c>) only change how it is
     ///     presented, and any other parameter is ignored, so they are left out: requests that differ
     ///     only in them share a key. That is safe because the mapping only ever adds keys: the shared
     ///     key covers everything any of them showed, so a purge reaches each. It keeps input such as
     ///     <c>?fields=properties[&lt;random&gt;]</c> or <c>?skip=&lt;n&gt;</c> from making a new key per request.
     /// </summary>
-    private static readonly HashSet<string> Parameters = new(StringComparer.OrdinalIgnoreCase) { "id", "fetch", "filter" };
+    public static readonly IReadOnlySet<string> DeliveryParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "id", "fetch", "filter" };
 
-    public static ResponseIdentity Create(string path, IEnumerable<KeyValuePair<string, string?>> query, string? culture, string? segment, string? startItem)
+    /// <summary>The identity of a request; <paramref name="parameters" /> are the query parameters that select content, the Delivery API's by default.</summary>
+    public static ResponseIdentity Create(string path, IEnumerable<KeyValuePair<string, string?>> query, string? culture, string? segment, string? startItem, IReadOnlySet<string>? parameters = null)
         => new(
             path.ToLowerInvariant(),
-            NormaliseQuery(query),
+            NormaliseQuery(query, parameters),
             culture?.ToLowerInvariant() ?? string.Empty,
             segment ?? string.Empty,
             startItem?.ToLowerInvariant() ?? string.Empty);
@@ -38,15 +39,16 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
     ///     every time. Parameter
     ///     names are lowercased; values keep their case, since filters and paths can depend on it.
     /// </summary>
-    public static string NormaliseQuery(IEnumerable<KeyValuePair<string, string?>> query)
+    public static string NormaliseQuery(IEnumerable<KeyValuePair<string, string?>> query, IReadOnlySet<string>? parameters = null)
     {
-        var parameters = query
-            .Where(pair => string.IsNullOrEmpty(pair.Value) is false && Parameters.Contains(pair.Key))
+        IReadOnlySet<string> selecting = parameters ?? DeliveryParameters;
+        var normalised = query
+            .Where(pair => string.IsNullOrEmpty(pair.Value) is false && selecting.Contains(pair.Key))
             .Select(pair => (Name: pair.Key.ToLowerInvariant(), Value: pair.Value!))
             .OrderBy(pair => pair.Name, StringComparer.Ordinal)
             .ThenBy(pair => pair.Value, StringComparer.Ordinal)
             .Select(pair => Uri.EscapeDataString(pair.Name) + "=" + Uri.EscapeDataString(pair.Value));
-        return string.Join("&", parameters);
+        return string.Join("&", normalised);
     }
 
     /// <summary>

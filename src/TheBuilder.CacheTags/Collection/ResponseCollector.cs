@@ -11,7 +11,7 @@ namespace TheBuilder.CacheTags.Collection;
 ///     resolved items' published values reference (in the request culture, one level further for
 ///     expanded properties), and, for listings, which selectors a new item would have to match.
 ///     Reading published source values rather than hooking Umbraco's builders is what keeps this
-///     complete on warm requests (spike/FINDINGS.md, section 1).
+///     complete on warm requests (docs/findings.md, section 1).
 /// </summary>
 internal sealed class ResponseCollector(
     ReferenceReader reader,
@@ -29,7 +29,7 @@ internal sealed class ResponseCollector(
     /// <summary>The most keys one response is recorded with.</summary>
     public const int MaxKeys = 1000;
 
-    public IReadOnlySet<string> Collect(object result, HttpContext http, DeliveryEndpoint endpoint)
+    public IReadOnlySet<string> Collect(object? result, HttpContext http, DeliveryEndpoint endpoint)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         OutputWalker.Collect(result, keys);
