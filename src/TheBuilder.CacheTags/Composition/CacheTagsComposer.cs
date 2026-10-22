@@ -37,6 +37,7 @@ public sealed class CacheTagsComposer : IComposer
             .Validate(options => options.IndexTimeout > TimeSpan.Zero, "CacheTags:IndexTimeout must be above zero.")
             .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
             .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)
+            .Validate(options => options.Targets.Values.All(CloudflareTarget.IsValid), CloudflareTarget.ValidationMessage)
             .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
             .ValidateOnStart();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -103,6 +104,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddHostedService<Heartbeat>();
         builder.Services.AddHostedService<DeliveryWorker>();
         builder.Services.AddSingleton<IPurgeTarget, WebhookTarget>();
+        builder.Services.AddSingleton<IPurgeTarget, CloudflareTarget>();
         builder.Services.AddHttpClient(WebhookTarget.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
             // A redirect would carry the signed purge to another host; a target must answer itself.
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });

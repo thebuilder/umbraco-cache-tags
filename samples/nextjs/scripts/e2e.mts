@@ -13,7 +13,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 /** One Delivery API response in a page's Cache box. */
 type Fetched = { request: string; fetchedAt: string; tags: string };
-type Page = { path: string; html: string; fetches: Fetched[] };
+type Page = { path: string; html: string; fetches: Fetched[]; footerFetchedAt: string | null };
 type Check = { path: string; label: string; test: (current: Page) => boolean };
 type Result = { check: Check; ok: boolean; seconds?: number; current: Page };
 type Report = { checks: (results: Result[]) => void; note: (text: string) => void };
@@ -45,6 +45,8 @@ const keys = {
   about: "e0000000-0000-0000-0000-000000000006",
   harbourImage: "e1000000-0000-0000-0000-000000000001",
   articleType: "e3000000-0000-0000-0000-000000000003",
+  // The dictionary item the footer shows (Dictionary/DictionarySeeder.cs in the Umbraco sample).
+  footerTagline: "e7000000-0000-0000-0000-000000000001",
   // Not seeded: the article case 2 creates, and deletes again. e9 keys are kept for this script.
   newArticle: "e9000000-0000-0000-0000-000000000001",
 };
@@ -83,6 +85,20 @@ async function management<T = unknown>(method: string, path: string, body?: unkn
   }
   const text = await response.text();
   return (text ? JSON.parse(text) : null) as T;
+}
+
+type DictionaryItem = { name: string; translations: { isoCode: string; translation: string }[] };
+
+/** Changes the English text of a dictionary item through the Management API. */
+async function updateDictionary(id: string, change: (text: string) => string) {
+  const { name, translations } = await management<DictionaryItem>("GET", `dictionary/${id}`);
+  await management("PUT", `dictionary/${id}`, {
+    name,
+    translations: translations.map(({ isoCode, translation }) => ({
+      isoCode,
+      translation: isoCode === "en-US" ? change(translation) : translation,
+    })),
+  });
 }
 
 /** The GET shape carries read-only fields the PUT rejects, so keep only what an update takes. */
@@ -133,7 +149,9 @@ async function page(path: string): Promise<Page> {
   if (fetches.length === 0) {
     throw new Error(`${path} has no Cache box. Is it this sample, served with pnpm start?`);
   }
-  return { path, html, fetches };
+  // The footer's dictionary response (app/layout.tsx), cached apart from the page's own.
+  const footerFetchedAt = html.match(/<footer data-fetched-at="([^"]+)"/)?.[1] ?? null;
+  return { path, html, fetches, footerFetchedAt };
 }
 
 function text(html: string) {
@@ -156,7 +174,8 @@ function describe(fetched: Fetched) {
  * previous case's undo, say) would be filled with fresh content whether or not anything was purged.
  */
 async function settle(paths: string[]) {
-  const fingerprint = (pages: Page[]) => pages.map((p) => p.fetches.map((f) => f.fetchedAt).join()).join("|");
+  const fingerprint = (pages: Page[]) =>
+    pages.map((p) => [...p.fetches.map((f) => f.fetchedAt), p.footerFetchedAt].join()).join("|");
   let previous = await Promise.all(paths.map(page));
   for (let tries = 0; tries < 15; tries++) {
     await sleep(1000);
@@ -187,6 +206,13 @@ const refetched = (before: Page, request: string, why: string): Check => ({
     const now = current.fetches.find((f) => f.request === request);
     return Boolean(then && now && now.fetchedAt !== then.fetchedAt);
   },
+});
+
+/** The footer's dictionary response was fetched again since `before`. */
+const footerRefetched = (before: Page): Check => ({
+  path: before.path,
+  label: `${before.path} refetched its footer (cached at ${before.footerFetchedAt})`,
+  test: (current) => Boolean(before.footerFetchedAt && current.footerFetchedAt && current.footerFetchedAt !== before.footerFetchedAt),
 });
 
 /** Every response on the page is still the one cached at `before`. */
@@ -348,6 +374,30 @@ const cases: Case[] = [
       const update = forUpdate(await management<Item>("GET", `media/${keys.harbourImage}`));
       update.variants[0].name = original(update.variants[0].name);
       await management("PUT", `media/${keys.harbourImage}`, update);
+    },
+  },
+  {
+    name: "Editing a dictionary item refreshes the pages that show it, through the site's own API",
+    async run(report) {
+      // The footer comes from /api/dictionary, which the package tags only because the sample's
+      // controller asks it to (CacheTaggedAttribute), and which a dictionary save purges.
+      const [articles] = await settle(["/articles", "/en-us/about"]);
+      let tagline = "";
+      await updateDictionary(keys.footerTagline, (text) => {
+        tagline = original(text) + marker;
+        return tagline;
+      });
+
+      report.checks(
+        await waitFor([
+          shows("/articles", tagline, "the new footer text"),
+          footerRefetched(articles),
+          shows("/en-us/about", tagline, "the new footer text"),
+        ]),
+      );
+    },
+    async undo() {
+      await updateDictionary(keys.footerTagline, original);
     },
   },
 ];

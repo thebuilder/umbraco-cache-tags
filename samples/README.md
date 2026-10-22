@@ -342,6 +342,21 @@ does not record them: each carries its own keys (its items, `search-deliveryapic
 entry. Searching Examine directly from a custom endpoint gives relevance ranking, but those responses
 are not Delivery API responses: the package does not tag them, and nothing purges them.
 
+## The site's own API: the dictionary
+
+The Umbraco sample has an API of its own, outside the Delivery API: `GET /api/dictionary?locale=en-US`
+returns every dictionary item in that language (`TheBuilder.CacheTags.Example/Dictionary`). It shows
+how a site's own output joins in:
+
+- `[CacheTagged(QueryParameters = ["locale"])]` tags its responses, keyed by `locale` only, and the
+  action names `x-dictionary-<locale>` with `ICacheTagsResponse`.
+- Saving or deleting a dictionary item records a change for every language's key with
+  `ICacheTagsChanges.Record(..., "dictionary")`, and every server reports `Applied("dictionary")` when
+  its dictionary cache is refreshed, so the purge waits for all of them.
+
+The Next.js footer shows `Footer.Tagline` from it (seeded by `Dictionary/DictionarySeeder.cs`), and e2e
+case 5 edits it.
+
 ## Check it on two servers
 
 `two-servers/run.sh` runs the Umbraco sample as two servers on one SQL Server database, the way a

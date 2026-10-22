@@ -4,7 +4,7 @@ namespace TheBuilder.CacheTags.Example.Seeding;
 ///     Fixed keys for everything the seeders create, so cache keys (<c>content-&lt;guid&gt;</c>,
 ///     <c>media-&lt;guid&gt;</c>) are the same on every machine and can be written into the README.
 ///     <c>e0</c> documents, <c>e1</c> media, <c>e2</c> blocks, <c>e3</c> content types, <c>e4</c> the
-///     API user, <c>e5</c> data types, <c>e6</c> block grid areas, and <c>e9</c> what
+///     API user, <c>e5</c> data types, <c>e6</c> block grid areas, <c>e7</c> dictionary items, and <c>e9</c> what
 ///     <c>samples/nextjs/scripts/e2e.mts</c> creates. Never change a key that has been seeded.
 /// </summary>
 public static class ExampleContent

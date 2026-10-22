@@ -78,8 +78,9 @@ public sealed class CacheTagsOptions
 }
 
 /// <summary>
-///     One place purges are sent. The built-in type is <c>webhook</c>: the signed purge webhook
-///     (docs/design.md). A site adds other types by registering an <see cref="Delivery.IPurgeTarget" />.
+///     One place purges are sent. The built-in types are <c>webhook</c>, the signed purge webhook, and
+///     <c>cloudflare</c>, purging a Cloudflare zone by cache tag (docs/design.md). A site adds other
+///     types by registering an <see cref="Delivery.IPurgeTarget" />.
 /// </summary>
 public sealed class CacheTagsTargetOptions
 {
