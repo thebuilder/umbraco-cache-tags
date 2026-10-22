@@ -24,7 +24,8 @@ internal sealed class PurgeTargets(
     public static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
 
     private readonly HashSet<string> _warnedClashes = new(StringComparer.OrdinalIgnoreCase);
-    private (DateTimeOffset ReadAt, IReadOnlyList<TargetDefinition> Targets)? _stored;
+    // Read by the delivery worker and API requests at once, so swapped whole, never changed in place.
+    private volatile Snapshot? _stored;
 
     /// <summary>The registered target types.</summary>
     public IReadOnlyList<string> Types => senders.Select(sender => sender.Type).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -96,7 +97,9 @@ internal sealed class PurgeTargets(
         }
 
         IReadOnlyList<TargetDefinition> targets = store.All();
-        _stored = (now, targets);
+        _stored = new Snapshot(now, targets);
         return targets;
     }
+
+    private sealed record Snapshot(DateTimeOffset ReadAt, IReadOnlyList<TargetDefinition> Targets);
 }

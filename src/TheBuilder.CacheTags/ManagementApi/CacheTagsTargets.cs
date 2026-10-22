@@ -142,6 +142,12 @@ internal sealed class CacheTagsTargets(
     public async Task<TargetTestResult> TestAsync(TargetDefinition target, CancellationToken cancellationToken)
     {
         target = Normalise(target);
+        if (target.Name.Length == 0)
+        {
+            // A draft can be tested before it is named.
+            target = target with { Name = "test" };
+        }
+
         if (TargetValidator.Validate(target, targets.Types) is { } invalid)
         {
             return new TargetTestResult(false, invalid);
