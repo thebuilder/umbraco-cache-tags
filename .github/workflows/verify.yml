@@ -139,8 +139,11 @@ jobs:
   # The whole loop on one server: the sample Umbraco with the package, the Next.js sample, and
   # `pnpm e2e` publishing changes through the Management API and waiting for the pages to refresh.
   # On the sample's own Umbraco release (SampleUmbracoVersion), with a fresh SQLite database.
+  # Not for a release: it runs the package's project, not the packed file a release publishes, and a
+  # flaky run should not hold a release back.
   e2e:
     name: End to end
+    if: inputs.package-version == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -182,26 +185,42 @@ jobs:
 
       # It installs itself into a new SQLite database and seeds the content on the first start.
       # Development, for the settings the sample runs with locally (its application URL).
+      # The built app itself rather than `dotnet run`, so the process id is Umbraco's.
       - name: Start Umbraco
+        working-directory: samples/TheBuilder.CacheTags.Example
         env:
           ASPNETCORE_ENVIRONMENT: Development
           ASPNETCORE_URLS: http://localhost:5320
         run: |
-          nohup dotnet run --project samples/TheBuilder.CacheTags.Example -c Release --no-build --no-launch-profile > "$RUNNER_TEMP/umbraco.log" 2>&1 &
+          nohup dotnet bin/Release/net10.0/TheBuilder.CacheTags.Example.dll > "$RUNNER_TEMP/umbraco.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/umbraco.pid"
 
-      # The Next.js listing pages cache an empty listing for an hour, so nothing fetches them
-      # before Umbraco's Delivery API index has the seeded articles (about a minute on a first start).
-      - name: Wait for the Delivery API index
+      # The Next.js listing pages cache an empty listing for an hour, so nothing fetches them before
+      # the seeding has finished (Winter market is the last item it publishes) and Umbraco's Delivery
+      # API index has the three seeded articles (about a minute on a first start). Fails as soon as
+      # Umbraco stops or reports a failed boot, and after five minutes in any case.
+      - name: Wait for the seeded site and the Delivery API index
         run: |
-          for attempt in $(seq 1 60); do
-            total="$(curl -sf "$UMBRACO_URL/umbraco/delivery/api/v2/content?fetch=children:/articles/" | jq -r '.total' || true)"
-            if [[ "$total" =~ ^[0-9]+$ ]] && (( total > 0 )); then
-              echo "The index has $total articles."
+          deadline=$((SECONDS + 300))
+          while (( SECONDS < deadline )); do
+            if ! kill -0 "$(cat "$RUNNER_TEMP/umbraco.pid")" 2>/dev/null; then
+              echo "Umbraco stopped." >&2
+              exit 1
+            fi
+            if grep -qE "post-migration initialization failed|BootFailedException|stalled on a hung database connection" "$RUNNER_TEMP/umbraco.log"; then
+              echo "Umbraco's boot failed or its database stalled; see the logs." >&2
+              exit 1
+            fi
+            winter="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'Accept-Language: en-US' \
+              "$UMBRACO_URL/umbraco/delivery/api/v2/content/item/e0000000-0000-0000-0000-000000000026" || true)"
+            articles="$(curl -sf --max-time 5 "$UMBRACO_URL/umbraco/delivery/api/v2/content?fetch=children:/articles/" | jq -r '.total' || true)"
+            if [[ "$winter" == 200 && "$articles" == 3 ]]; then
+              echo "Seeded, and the index has the 3 articles after ${SECONDS}s."
               exit 0
             fi
             sleep 5
           done
-          echo "Umbraco's Delivery API index had no articles after 5 minutes." >&2
+          echo "Umbraco was not seeded and indexed within 5 minutes." >&2
           exit 1
 
       - name: Build and start the Next.js sample
@@ -219,6 +238,13 @@ jobs:
       - name: End to end
         working-directory: samples/nextjs
         run: pnpm e2e
+
+      # Where every thread in Umbraco is, for a boot that stalls on the database.
+      - name: Umbraco's threads
+        if: failure()
+        run: |
+          dotnet tool install --global dotnet-stack
+          dotnet-stack report --process-id "$(cat "$RUNNER_TEMP/umbraco.pid")" || true
 
       - name: Logs
         if: failure()

@@ -258,13 +258,6 @@ const showsInOrder = (path: string, texts: string[], what: string): Check => ({
   },
 });
 
-/** Throws unless the baseline shows what a check is about to wait for it to stop showing. */
-function expectBefore(before: Page, text: string) {
-  if (before.status !== 200 || !before.html.includes(text)) {
-    throw new Error(`${before.path} did not show ${text} before the change, so the check would say nothing.`);
-  }
-}
-
 /** The response that renders the change was fetched again since `before`. */
 const refetched = (before: Page, request: string, why: string): Check => ({
   path: before.path,
@@ -312,6 +305,17 @@ async function waitFor(checks: Check[], ms = timeoutMs): Promise<Result[]> {
       return [...results.values()];
     }
     await sleep(1000);
+  }
+}
+
+/**
+ * Waits for the state a case starts from, which the previous case's undo may still be bringing back
+ * (a listing waits for the Delivery API index), and throws if it does not come.
+ */
+async function ready(checks: Check[]) {
+  const missing = (await waitFor(checks, timeoutMs * 2)).filter((result) => !result.ok);
+  if (missing.length > 0) {
+    throw new Error(`Not in the starting state: ${missing.map((result) => result.check.label).join("; ")}.`);
   }
 }
 
@@ -471,10 +475,12 @@ const cases: Case[] = [
   {
     name: "Unpublishing an article takes it off the listing and the pages that pick it, and its page is not found",
     async run(report) {
-      const [listing, harbour, dusk] = await settle(["/articles", "/articles/harbour-mornings", "/articles/evenings-at-dusk"]);
-      for (const before of [listing, harbour, dusk]) {
-        expectBefore(before, "Evenings at dusk");
-      }
+      await ready([
+        shows("/articles", "Evenings at dusk", "it"),
+        shows("/articles/harbour-mornings", "Evenings at dusk", "it among its related articles"),
+        shows("/articles/evenings-at-dusk", "Evenings at dusk", "its title"),
+      ]);
+      await settle(["/articles", "/articles/harbour-mornings", "/articles/evenings-at-dusk"]);
 
       await unpublish(keys.dusk);
 
@@ -497,11 +503,9 @@ const cases: Case[] = [
   {
     name: "Sorting the articles reorders the listing",
     async run(report) {
-      const [listing] = await settle(["/articles"]);
       const seeded = ["Harbour mornings", "Forest walks", "Evenings at dusk"];
-      if (!showsInOrder("/articles", seeded, "").test(listing)) {
-        throw new Error("/articles did not list the articles in their seeded order before the sort.");
-      }
+      await ready([showsInOrder("/articles", seeded, "the articles in their seeded order")]);
+      await settle(["/articles"]);
 
       await sortChildren(keys.articles, [...seededArticles].reverse());
 
