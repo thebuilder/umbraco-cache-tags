@@ -28,8 +28,8 @@ internal sealed class CacheKeyResultFilter(
     MappingWriter writer,
     TimeProvider time) : IAsyncResultFilter
 {
-    /// <summary>Where the response key is kept for the rest of the request.</summary>
-    public const string ResponseKeyItem = "TheBuilder.CacheTags.ResponseKey";
+    /// <summary>Where the response's keys for Umbraco's output cache are kept for the rest of the request.</summary>
+    public const string OutputCacheTagsItem = "TheBuilder.CacheTags.OutputCacheTags";
 
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
@@ -83,8 +83,16 @@ internal sealed class CacheKeyResultFilter(
         var responseKey = identity.ToKey();
         IReadOnlySet<string> keys = collector.Collect(value, http, endpoint);
 
-        http.Items[ResponseKeyItem] = responseKey;
-        http.Response.Headers[settings.HeaderName] = collector.Header(settings, responseKey, keys);
+        ResponseTags tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, responseKey, keys, collector.TypeKeys);
+        http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Keys.Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
+
+        // Umbraco's output cache is evicted by the same keys a purge names: the response key, or the
+        // keys a response that is not recorded carries itself.
+        http.Items[OutputCacheTagsItem] = tags.Recorded ? new[] { responseKey } : tags.Keys;
+        if (tags.Recorded is false)
+        {
+            return;
+        }
 
         // The key hashes the culture as requested; the mapping stores the culture actually served
         // (Accept-Language: da resolves to da-DK, no header to the default), which a culture-limited

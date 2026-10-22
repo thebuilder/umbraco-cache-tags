@@ -55,23 +55,6 @@ internal sealed class ResponseCollector(
         return keys;
     }
 
-    /// <summary>The header value: the response key, or in direct mode the item keys (or their types, past the budget) and selectors.</summary>
-    public string Header(CacheTagsOptions options, string responseKey, IReadOnlySet<string> keys)
-    {
-        if (options.KeyMode == CacheKeyMode.ResponseKey)
-        {
-            return CacheKeys.WithPrefix(options.KeyPrefix, responseKey);
-        }
-
-        var items = keys.Where(CacheKeys.IsItem).Order(StringComparer.Ordinal).ToList();
-        IEnumerable<string> shown = items.Count <= options.MaxItemKeys ? items : TypeKeys(items);
-        return string.Join(", ", new[] { responseKey }
-            .Concat(shown)
-            .Concat(keys.Where(key => CacheKeys.IsSelector(key) || CacheKeys.IsSchema(key)).Order(StringComparer.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .Select(key => CacheKeys.WithPrefix(options.KeyPrefix, key)));
-    }
-
     private void CollectReferences(HttpContext http, HashSet<string> keys)
     {
         IPublishedContent[] resolved =
@@ -115,8 +98,8 @@ internal sealed class ResponseCollector(
         return item?.Key ?? (target is "/" or "" ? Guid.Empty : null);
     }
 
-    // Past the direct-mode budget: the types of every item, which a publish of any of them purges.
-    private SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
+    /// <summary>The types of the given items, which a publish of any of them purges; <c>umbraco</c> for an item no longer cached.</summary>
+    public SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
     {
         var types = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var key in itemKeys)

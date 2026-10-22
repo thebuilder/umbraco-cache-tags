@@ -92,7 +92,7 @@ internal sealed class IndexStage(
         {
             foreach (LedgerEntry change in indexed)
             {
-                await eviction.EvictAsync((await resolver.ResolveAsync(change.Plan, cancellationToken)).Listings);
+                await eviction.EvictAsync((await resolver.ResolveAsync(change.Plan, cancellationToken)).ListingOutputCacheTags);
             }
         }
 

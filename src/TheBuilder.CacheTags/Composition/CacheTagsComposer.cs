@@ -46,7 +46,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddScoped<ResponseCollector>();
         builder.Services.AddScoped<CacheKeyResultFilter>();
         builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
-        builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, ResponseKeyOutputCacheTags>();
+        builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, OutputCacheTags>();
         builder.Services.Configure<UmbracoPipelineOptions>(options => options.AddFilter(SeenPipeline.Filter()));
 
         // The mapping.

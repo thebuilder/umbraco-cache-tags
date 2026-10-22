@@ -335,9 +335,10 @@ reindex existing items when a handler adds a field: after adding one to a site w
 the Delivery API index once (Settings > Examine Management, or
 `POST /umbraco/management/api/v1/indexer/DeliveryApiContentIndex/rebuild`).
 
-A search result is a Delivery API listing like any other, so the package tags it and purges it when a
-publish could change it (through `search-deliveryapicontentindex`), once every server's index has the
-change. The Next.js page (`app/search/page.tsx`) normalises the words so the same search is one cache
+A search result is a Delivery API listing, so the package tags it and purges it when a publish could
+change it, once every server's index has the change. Searches come from user input, so the package
+does not record them: each carries its own keys (its items, `search-deliveryapicontentindex` and
+`umbraco`), and the one `search-` key purges every cached search at once. The Next.js page (`app/search/page.tsx`) normalises the words so the same search is one cache
 entry. Searching Examine directly from a custom endpoint gives relevance ranking, but those responses
 are not Delivery API responses: the package does not tag them, and nothing purges them.
 

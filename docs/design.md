@@ -32,25 +32,40 @@ case-sensitively, so a key that differed only in case would behave differently p
 
 ## The response header
 
-Each cacheable Delivery API response carries one key:
+Each cacheable Delivery API response carries its response key, and `umbraco`, which a change to
+everything (a domain, language or public access change) purges:
 
 ```http
-X-Umbraco-Cache-Keys: response-3f9a...
+X-Umbraco-Cache-Keys: response-3f9a..., umbraco
 ```
 
 The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
 identity is the path, the query string normalised (parameters sorted, empty values and the defaults
 `skip=0` and `take=10` dropped), the request culture, the segment and the start item. The same
-request always gives the same key on every server.
+request always gives the same key on every server. Only the Delivery API's own query parameters
+(`id`, `fetch`, `filter`, `sort`, `skip`, `take`, `expand`, `fields`) are part of the key; any other
+parameter leaves it unchanged. A request whose segment or start item is too long to record gets
+`no-store` and no key.
 
 The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
-their `type-` keys). Only the Delivery API's own query parameters (`id`, `fetch`, `filter`, `sort`,
-`skip`, `take`, `expand`, `fields`) are part of the key; any other parameter leaves it unchanged. A
-request whose segment or start item is too long to record gets `no-store` and no key. A change is planned as item and selector keys and resolved to the response
-keys that cover them. With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
-itself), the header lists the item keys instead, up to `MaxItemKeys` (64), then falls back to
-`type-` keys. The header name is `CacheTags:HeaderName`.
+their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
+cover them, and sent with both.
+
+A listing only the catch-all `search-` key selects (a search, a name filter, any query that is not by
+parent or type) is not recorded. User input makes such queries endless: each would be another mapping
+row, and every content publish purges every one of them, so a purge would grow with every search ever
+cached. Such a response carries its keys itself instead, as in item keys mode below:
+
+```http
+X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco
+```
+
+and the planned `search-` key purges every such response at once, however many are cached.
+
+With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
+itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.
+The header name is `CacheTags:HeaderName`.
 
 No keys, and the given `Cache-Control`, on:
 
@@ -161,6 +176,7 @@ On SQLite, two transactions that each read and then write deadlock otherwise.
 | 2026-10-22 | Purge targets are a seam (`IPurgeTarget`), configured by name with a `Type`; the webhook is the built-in type. The webhook body is versioned and says which keys to expire and which to mark stale, so receivers need no knowledge of key names. |
 | 2026-10-22 | `schema-<alias>` keys: a content, media or element type change (or a data type used by it) purges every response that renders an item of that type, not only listings filtered by it. |
 | 2026-10-22 | Listings are purged a second time once every server's Delivery API index has the change, checked by comparing a stamp of the item's state written into each index document with its state in the database, replacing fixed re-purge delays. A time stamp was tried first and accepted a draft's document built just before the publish. |
+| 2026-10-22 | Catch-all listings (search, name filters, other queries) carry their own keys and are not recorded, so user input cannot grow the mapping or the purges. Every response carries `umbraco`, so a change to everything reaches it. |
 | 2026-10-22 | Unpublishing always purges every culture: Umbraco raises it only when the whole document goes. A sort's re-publish of the sorted items is not recorded as a publish. Items deleted from the recycle bin are not recorded again. Public access changes purge everything. |
 
 ## Debugging

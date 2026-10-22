@@ -47,6 +47,9 @@ internal static class CacheKeys
         return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare);
     }
 
+    /// <summary>Whether a key is the catch-all selector of an index or of media listings (<c>search-</c>).</summary>
+    public static bool IsSearch(string key) => key.StartsWith(SearchPrefix, StringComparison.Ordinal);
+
     /// <summary>Whether a key names a type whose items a response renders (<c>schema-</c>).</summary>
     public static bool IsSchema(string key) => key.StartsWith(SchemaPrefix, StringComparison.Ordinal);
 
