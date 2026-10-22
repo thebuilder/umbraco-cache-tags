@@ -145,7 +145,10 @@ jobs:
     name: End to end
     if: inputs.package-version == ''
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # A healthy run takes 3 to 4 minutes. The slow steps have limits of their own (the waits below,
+    # and timeout-minutes on the steps after them), so a stalled step fails, rather than the whole job
+    # being cancelled, and the thread dump and logs still run inside these 10 minutes.
+    timeout-minutes: 10
     env:
       NEXT_TELEMETRY_DISABLED: 1
       UMBRACO_URL: http://localhost:5320
@@ -203,11 +206,12 @@ jobs:
 
       # The Next.js listing pages cache an empty listing for an hour, so nothing fetches them before
       # the seeding has finished (Winter market is the last item it publishes) and Umbraco's Delivery
-      # API index has the three seeded articles (about a minute on a first start). Fails as soon as
-      # Umbraco stops or reports a failed boot, and after five minutes in any case.
+      # API index has the three seeded articles (about 70 seconds on a first start). Fails as soon as
+      # Umbraco stops or reports a failed boot, and after 150 seconds in any case.
       - name: Wait for the seeded site and the Delivery API index
+        timeout-minutes: 3
         run: |
-          deadline=$((SECONDS + 300))
+          deadline=$((SECONDS + 150))
           while (( SECONDS < deadline )); do
             if ! kill -0 "$(cat "$RUNNER_TEMP/umbraco.pid")" 2>/dev/null; then
               echo "Umbraco stopped." >&2
@@ -226,10 +230,11 @@ jobs:
             fi
             sleep 5
           done
-          echo "Umbraco was not seeded and indexed within 5 minutes." >&2
+          echo "Umbraco was not seeded and indexed within 150 seconds." >&2
           exit 1
 
       - name: Build and start the Next.js sample
+        timeout-minutes: 2
         working-directory: samples/nextjs
         run: |
           pnpm build
@@ -241,13 +246,16 @@ jobs:
           echo "The Next.js sample did not answer." >&2
           exit 1
 
+      # About 75 seconds when healthy.
       - name: End to end
+        timeout-minutes: 3
         working-directory: samples/nextjs
         run: pnpm e2e
 
       # Where every thread in Umbraco is, for a boot that stalls on the database.
       - name: Umbraco's threads
         if: failure()
+        timeout-minutes: 1
         run: |
           dotnet tool install --global dotnet-stack || true
           ~/.dotnet/tools/dotnet-stack report --process-id "$(cat "$RUNNER_TEMP/umbraco.pid")" || true
