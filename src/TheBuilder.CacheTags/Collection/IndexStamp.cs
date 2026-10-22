@@ -21,12 +21,14 @@ internal sealed class IndexStamp : IContentIndexHandler
         => [new IndexField { FieldName = FieldName, FieldType = FieldType.StringRaw, VariesByCulture = false }];
 
     /// <summary>
-    ///     What the index records about an item, for listings: which version is published in which
-    ///     cultures, where it is, and its order. A save, publish, unpublish, move or sort changes it.
+    ///     What the index records about an item, for listings: whether and which version is published
+    ///     in which cultures, where it is, and its order. A save, publish, unpublish, move or sort
+    ///     changes it.
     /// </summary>
     public static string For(IContent content)
         => string.Join(
             '|',
+            content.Published ? "published" : "draft",
             content.VersionId.ToString(CultureInfo.InvariantCulture),
             content.PublishedVersionId.ToString(CultureInfo.InvariantCulture),
             string.Join(',', content.PublishedCultures.Order(StringComparer.OrdinalIgnoreCase)),

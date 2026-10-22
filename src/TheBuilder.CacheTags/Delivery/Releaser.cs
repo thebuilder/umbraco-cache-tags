@@ -69,7 +69,9 @@ internal sealed class Releaser(
 
         // The listings are purged with everything else now, so the items they show are fresh at once,
         // and again once every server's index has the change, so their membership and order are.
-        var listingsWait = resolved.Listings.Count > 0 && IndexCheck.WaitsFor(Enum.Parse<ChangeKind>(change.Kind), change.Plan);
+        // Even with no listing response mapped yet: one can be requested and cached before the index
+        // has the change, and the listing purge resolves its keys again when it is released.
+        var listingsWait = IndexCheck.WaitsFor(Enum.Parse<ChangeKind>(change.Kind), change.Plan);
         List<NewPurge> purges = Purges(settings, keys, now);
         if (ledger.CompleteRelease(change.Id, identity.Name, decision.Missing, decision.TimedOut, listingsWait, now, purges) is false)
         {

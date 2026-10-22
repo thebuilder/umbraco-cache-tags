@@ -42,7 +42,7 @@ internal sealed class IndexWatcher(
     {
         if (entry.ReadChange() is { } change && IndexCheck.WaitsFor(change.Kind, entry.Plan))
         {
-            _watched.TryAdd(entry.Id, new Watched(entry.Id, change.Items, entry.Plan, time.GetUtcNow().UtcDateTime));
+            _watched.TryAdd(entry.Id, new Watched(entry.Id, change.Items.ToList(), entry.Plan, time.GetUtcNow().UtcDateTime));
         }
     }
 
@@ -66,9 +66,14 @@ internal sealed class IndexWatcher(
                 _watched.TryRemove(watched.ChangeId, out _);
                 logger.LogWarning("Cache tags change {ChangeId} was not in this server's Delivery API index after {Timeout}.", watched.ChangeId, timeout);
             }
-            else if (index is null || watched.Items.All(item => HasIndexed(index, item)))
+            else
             {
-                indexed.Add(watched);
+                // An item stays indexed once it matched: a later edit is a change of its own, watched on its own.
+                watched.Pending.RemoveAll(item => index is null || HasIndexed(index, item));
+                if (watched.Pending.Count == 0)
+                {
+                    indexed.Add(watched);
+                }
             }
         }
 
@@ -118,5 +123,5 @@ internal sealed class IndexWatcher(
         return IndexCheck.HasIndexed(state, documents);
     }
 
-    private sealed record Watched(Guid ChangeId, IReadOnlyList<ChangedItem> Items, PurgePlan Plan, DateTime AddedUtc);
+    private sealed record Watched(Guid ChangeId, List<ChangedItem> Pending, PurgePlan Plan, DateTime AddedUtc);
 }

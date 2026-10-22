@@ -315,6 +315,10 @@ API user works; see `scripts/e2e.mts` for getting a token).
 `pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
 `stale`.
 
+Right after Umbraco starts, its Delivery API index can take a minute or more to catch up, and a
+change's listing purge waits for it, so run the checks with a longer timeout then:
+`E2E_TIMEOUT=120 pnpm e2e`.
+
 ## Check it on two servers
 
 `two-servers/run.sh` runs the Umbraco sample as two servers on one SQL Server database, the way a
