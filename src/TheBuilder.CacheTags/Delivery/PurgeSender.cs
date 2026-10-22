@@ -51,8 +51,8 @@ internal sealed class PurgeSender(
                 continue;
             }
 
-            ledger.Failed(purge.Id, identity.Name, purge.Attempts + 1, settings.MaxAttempts, error, finished);
-            logger.LogWarning("Cache tags purge {PurgeId} to {Target} failed (attempt {Attempt} of {Max}): {Error}", purge.Id, purge.Target, purge.Attempts + 1, settings.MaxAttempts, error);
+            var attempt = ledger.Failed(purge.Id, identity.Name, settings.MaxAttempts, error, finished);
+            logger.LogWarning("Cache tags purge {PurgeId} to {Target} failed (attempt {Attempt} of {Max}): {Error}", purge.Id, purge.Target, attempt ?? purge.Attempts + 1, settings.MaxAttempts, error);
         }
 
         return Math.Max(0, pending - due.Count);

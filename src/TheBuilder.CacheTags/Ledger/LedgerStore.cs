@@ -82,8 +82,9 @@ internal sealed class LedgerStore(PackageDatabase database)
 
     /// <summary>The changes released since a time without <paramref name="server" />'s acknowledgement, after the ack timeout.</summary>
     public IReadOnlyList<LedgerEntry> ReleasedWithout(string server, DateTime sinceUtc, int take)
-        => database.Read(db => LedgerSql.ReleasedWithoutAll(db, sinceUtc, take))
+        => database.Read(db => LedgerSql.ReleasedWithout(db, JsonSerializer.Serialize(server, Json), sinceUtc, take))
             .Select(Entry)
+            // SQLite's LIKE ignores case.
             .Where(change => change.NotAcknowledgedBy.Contains(server, StringComparer.Ordinal))
             .ToList();
 
@@ -132,8 +133,9 @@ internal sealed class LedgerStore(PackageDatabase database)
     public void Sent(Guid purgeId, string owner, DateTime nowUtc)
         => database.Write(db => LedgerSql.Sent(db, purgeId, owner, nowUtc));
 
-    public void Failed(Guid purgeId, string owner, int attempts, int maxAttempts, string error, DateTime nowUtc)
-        => database.Write(db => LedgerSql.Failed(db, purgeId, owner, attempts, maxAttempts, error, nowUtc));
+    /// <summary>Records a failed attempt. Returns the attempt it was, or <c>null</c> when <paramref name="owner" /> no longer holds the lease.</summary>
+    public int? Failed(Guid purgeId, string owner, int maxAttempts, string error, DateTime nowUtc)
+        => database.Write(db => LedgerSql.Failed(db, purgeId, owner, maxAttempts, error, nowUtc));
 
     public void Prune(DateTime cutoffUtc) => database.Write(db => LedgerSql.Prune(db, cutoffUtc));
 

@@ -59,7 +59,7 @@ internal sealed class SourceChangeHandlers(
 
     // Before a publish: the URL segments now live, to tell afterwards whether the route changed.
     public void Handle(ContentPublishingNotification notification)
-        => Guard(() =>
+        => Guard(_ =>
         {
             foreach (IContent content in notification.PublishedEntities)
             {
@@ -69,7 +69,7 @@ internal sealed class SourceChangeHandlers(
 
     public void Handle(ContentPublishedNotification notification)
     {
-        Guard(() =>
+        Guard(at =>
         {
             var published = CultureMap(PublishedCulturesProperty, notification);
             var unpublished = CultureMap(PublishedUnpublishedCulturesProperty, notification);
@@ -86,97 +86,104 @@ internal sealed class SourceChangeHandlers(
                 return Item(content, routeChanged: routeChanged);
             }).ToList();
 
-            Record(ChangeKind.Published, items, Cultures(entities.Select(c => c.Key), published, unpublished));
+            Record(at, ChangeKind.Published, items, Cultures(entities.Select(c => c.Key), published, unpublished));
         });
     }
 
     // Raised when the whole document is unpublished, even when it was asked to unpublish one
     // (mandatory) culture; unpublishing one culture of several is raised as a publish of the rest.
     public void Handle(ContentUnpublishedNotification notification)
-        => Guard(() => Record(
+        => Guard(at => Record(
+            at,
             ChangeKind.Unpublished,
             notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true)).ToList()));
 
     public void Handle(ContentMovedNotification notification)
-        => Guard(() => Record(
+        => Guard(at => Record(
+            at,
             ChangeKind.Moved,
             notification.MoveInfoCollection.Where(move => move.Entity.Published).Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
 
     public void Handle(ContentMovedToRecycleBinNotification notification)
-        => Guard(() => Record(
+        => Guard(at => Record(
+            at,
             ChangeKind.Trashed,
             notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
 
     // An item deleted from the recycle bin was purged when it was trashed.
     public void Handle(ContentDeletedNotification notification)
-        => Guard(() => Record(ChangeKind.Deleted, notification.DeletedEntities.Where(content => content.Trashed is false).Select(content => Item(content)).ToList()));
+        => Guard(at => Record(at, ChangeKind.Deleted, notification.DeletedEntities.Where(content => content.Trashed is false).Select(content => Item(content)).ToList()));
 
     public void Handle(ContentSortingNotification notification)
-        => Guard(() => pending.MarkSorting(notification.SortedEntities.Where(content => content.Published).Select(content => content.Key)));
+        => Guard(_ => pending.MarkSorting(notification.SortedEntities.Where(content => content.Published).Select(content => content.Key)));
 
     public void Handle(ContentSortedNotification notification)
-        => Guard(() => Record(ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).ToList()));
+        => Guard(at => Record(at, ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).ToList()));
 
     public void Handle(MediaSavedNotification notification)
-        => Guard(() => Record(ChangeKind.MediaSaved, notification.SavedEntities.Select(media => Item(media)).ToList()));
+        => Guard(at => Record(at, ChangeKind.MediaSaved, notification.SavedEntities.Select(media => Item(media)).ToList()));
 
     public void Handle(MediaMovedNotification notification)
-        => Guard(() => Record(
+        => Guard(at => Record(
+            at,
             ChangeKind.MediaMoved,
             notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList()));
 
     public void Handle(MediaMovedToRecycleBinNotification notification)
-        => Guard(() => Record(
+        => Guard(at => Record(
+            at,
             ChangeKind.MediaTrashed,
             notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList()));
 
     public void Handle(MediaDeletedNotification notification)
-        => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Where(media => media.Trashed is false).Select(media => Item(media)).ToList()));
+        => Guard(at => Record(at, ChangeKind.MediaDeleted, notification.DeletedEntities.Where(media => media.Trashed is false).Select(media => Item(media)).ToList()));
 
     public void Handle(ContentTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item), "content types changed"));
+        => Guard(at => RecordTypes(at, notification.Changes.Select(change => change.Item), "content types changed"));
 
     public void Handle(MediaTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item), "media types changed"));
+        => Guard(at => RecordTypes(at, notification.Changes.Select(change => change.Item), "media types changed"));
 
     // A data type's configuration changes how every property using it renders.
     public void Handle(DataTypeSavedNotification notification)
     {
-        Guard(() =>
+        Guard(at =>
         {
             var keys = notification.SavedEntities.Select(dataType => dataType.Key).ToHashSet();
             var aliases = contentTypeService.GetAll().Cast<IContentTypeComposition>()
                 .Concat(mediaTypeService.GetAll())
                 .Where(type => type.CompositionPropertyTypes.Any(property => keys.Contains(property.DataTypeKey)))
                 .Select(type => type.Alias);
-            RecordTypes(aliases, "data types saved", keys.Select(key => AckSignal.Source(AckSignal.DataTypes, key)));
+            RecordTypes(at, aliases, "data types saved", keys.Select(key => AckSignal.Source(AckSignal.DataTypes, key)));
         });
     }
 
     public void Handle(DomainSavedNotification notification)
-        => Guard(() => RecordEverything("domains saved", notification.SavedEntities.Select(domain => AckSignal.Source(AckSignal.Domains, domain.Id))));
+        => Guard(at => RecordEverything(at, "domains saved", notification.SavedEntities.Select(domain => AckSignal.Source(AckSignal.Domains, domain.Id))));
 
     public void Handle(DomainDeletedNotification notification)
-        => Guard(() => RecordEverything("domains deleted", notification.DeletedEntities.Select(domain => AckSignal.Source(AckSignal.Domains, domain.Id))));
+        => Guard(at => RecordEverything(at, "domains deleted", notification.DeletedEntities.Select(domain => AckSignal.Source(AckSignal.Domains, domain.Id))));
 
     public void Handle(LanguageSavedNotification notification)
-        => Guard(() => RecordEverything("languages saved", notification.SavedEntities.Select(language => AckSignal.Source(AckSignal.Languages, language.Id))));
+        => Guard(at => RecordEverything(at, "languages saved", notification.SavedEntities.Select(language => AckSignal.Source(AckSignal.Languages, language.Id))));
 
     public void Handle(LanguageDeletedNotification notification)
-        => Guard(() => RecordEverything("languages deleted", notification.DeletedEntities.Select(language => AckSignal.Source(AckSignal.Languages, language.Id))));
+        => Guard(at => RecordEverything(at, "languages deleted", notification.DeletedEntities.Select(language => AckSignal.Source(AckSignal.Languages, language.Id))));
 
     // Protecting a page changes what the Delivery API returns for it and every page under it.
-    public void Handle(PublicAccessEntrySavedNotification notification) => Guard(() => RecordEverything("public access saved", [AckSignal.Source(AckSignal.PublicAccess)]));
+    public void Handle(PublicAccessEntrySavedNotification notification) => Guard(at => RecordEverything(at, "public access saved", [AckSignal.Source(AckSignal.PublicAccess)]));
 
-    public void Handle(PublicAccessEntryDeletedNotification notification) => Guard(() => RecordEverything("public access removed", [AckSignal.Source(AckSignal.PublicAccess)]));
+    public void Handle(PublicAccessEntryDeletedNotification notification) => Guard(at => RecordEverything(at, "public access removed", [AckSignal.Source(AckSignal.PublicAccess)]));
 
     // A throwing handler would stop Umbraco from publishing the operation's remaining notifications,
     // including the one that refreshes every server's cache. Missing a purge is the lesser failure.
-    private void Guard(Action handle)
+    // The change is timed as the handler is entered: the refresh this server applies for it can come
+    // first, and building the items (URL segments, ancestors) can take a while for a large branch.
+    private void Guard(Action<DateTime> handle)
     {
         try
         {
-            handle();
+            handle(time.GetUtcNow().UtcDateTime);
         }
         catch (Exception exception)
         {
@@ -184,34 +191,33 @@ internal sealed class SourceChangeHandlers(
         }
     }
 
-    private void Record(ChangeKind kind, IReadOnlyList<ChangedItem> items, IReadOnlyList<string>? cultures = null)
+    private void Record(DateTime at, ChangeKind kind, IReadOnlyList<ChangedItem> items, IReadOnlyList<string>? cultures = null)
     {
         if (items.Count > 0)
         {
-            recorder.Record(new Change(Guid.CreateVersion7(), Now(), kind, items, [], cultures));
+            recorder.Record(new Change(Guid.CreateVersion7(), at, kind, items, [], cultures));
         }
     }
 
     // Umbraco refreshes each changed content or media type by its id.
-    private void RecordTypes(IEnumerable<IContentTypeBase> types, string reason)
+    private void RecordTypes(DateTime at, IEnumerable<IContentTypeBase> types, string reason)
     {
         var changed = types.ToList();
-        RecordTypes(changed.Select(type => type.Alias), reason, changed.Select(type => AckSignal.Source(AckSignal.ContentTypes, type.Id)));
+        RecordTypes(at, changed.Select(type => type.Alias), reason, changed.Select(type => AckSignal.Source(AckSignal.ContentTypes, type.Id)));
     }
 
-    private void RecordTypes(IEnumerable<string> aliases, string reason, IEnumerable<string> sources)
+    private void RecordTypes(DateTime at, IEnumerable<string> aliases, string reason, IEnumerable<string> sources)
     {
         var distinct = aliases.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
         if (distinct.Count > 0)
         {
-            recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.TypesChanged, [], distinct, null, reason, Sources: sources.Distinct().ToList()));
+            recorder.Record(new Change(Guid.CreateVersion7(), at, ChangeKind.TypesChanged, [], distinct, null, reason, Sources: sources.Distinct().ToList()));
         }
     }
 
-    private void RecordEverything(string reason, IEnumerable<string> sources)
-        => recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.Everything, [], [], null, reason, Sources: sources.Distinct().ToList()));
+    private void RecordEverything(DateTime at, string reason, IEnumerable<string> sources)
+        => recorder.Record(new Change(Guid.CreateVersion7(), at, ChangeKind.Everything, [], [], null, reason, Sources: sources.Distinct().ToList()));
 
-    private DateTime Now() => time.GetUtcNow().UtcDateTime;
 
     private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false)
     {

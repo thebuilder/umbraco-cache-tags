@@ -18,7 +18,10 @@ public sealed class PurgeSenderTests : IDisposable
 
     public void Dispose() => _database.Dispose();
 
-    /// <summary>A target whose every send takes longer than a lease, noting which purges another server could send meanwhile.</summary>
+    /// <summary>
+    ///     A target whose every send takes 20 seconds, within the 30 second lease, noting at the end of
+    ///     each which purges another server could send then.
+    /// </summary>
     private sealed class SlowTarget(LedgerStore ledger, ManualTime time) : IPurgeTarget
     {
         public List<(Guid Sending, IReadOnlyList<Guid> DueElsewhere)> Sends { get; } = [];
@@ -27,14 +30,14 @@ public sealed class PurgeSenderTests : IDisposable
 
         public Task<string?> SendAsync(PurgeRequest request, CacheTagsTargetOptions target, CancellationToken cancellationToken)
         {
+            time.UtcNow += TimeSpan.FromSeconds(20);
             Sends.Add((request.Id, ledger.Due(time.UtcNow, 20).Due.Select(purge => purge.Id).ToList()));
-            time.UtcNow += TimeSpan.FromSeconds(31);
             return Task.FromResult<string?>(null);
         }
     }
 
     [Fact]
-    public async Task A_purge_is_not_due_to_another_server_while_this_one_sends_it_even_after_slow_sends_before_it()
+    public async Task A_purge_is_not_due_to_another_server_while_this_one_sends_it_even_after_slow_sends_before_it_in_the_same_pass()
     {
         var time = new ManualTime(Noon);
         var ledger = new LedgerStore(_database.Package);

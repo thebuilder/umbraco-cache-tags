@@ -70,16 +70,52 @@ public sealed class DeliverySqlTests : IDisposable
         _database.Insert(Purge(id, Now));
 
         LedgerSql.ClaimSend(_database, id, "server-1", Now, Now.AddSeconds(30));
-        LedgerSql.Failed(_database, id, "server-1", attempts: 1, maxAttempts: 3, "503 Service Unavailable", Now);
+        Assert.Equal(1, LedgerSql.Failed(_database, id, "server-1", maxAttempts: 3, error: "503 Service Unavailable", nowUtc: Now));
         OutboxRow retried = _database.Single<OutboxRow>("SELECT * FROM theBuilderCacheTagsOutbox WHERE Id = @0", id);
         Assert.Equal(OutboxStates.Pending, retried.State);
         Assert.Equal(Now.AddSeconds(2), retried.NotBeforeUtc);
         Assert.Empty(LedgerSql.Due(_database, Now.AddSeconds(1), 10));
 
-        LedgerSql.ClaimSend(_database, id, "server-1", Now.AddSeconds(2), Now.AddSeconds(32));
-        LedgerSql.Failed(_database, id, "server-1", attempts: 3, maxAttempts: 3, "503 Service Unavailable", Now.AddSeconds(2));
+        // The attempts are counted from the row, so a sender that read the purge before a failure does not lose one.
+        LedgerSql.ClaimSend(_database, id, "server-2", Now.AddSeconds(2), Now.AddSeconds(32));
+        Assert.Equal(2, LedgerSql.Failed(_database, id, "server-2", maxAttempts: 3, error: "503 Service Unavailable", nowUtc: Now.AddSeconds(2)));
+        Assert.Equal(OutboxStates.Pending, _database.ExecuteScalar<string>("SELECT State FROM theBuilderCacheTagsOutbox WHERE Id = @0", id));
+
+        LedgerSql.ClaimSend(_database, id, "server-1", Now.AddSeconds(10), Now.AddSeconds(40));
+        Assert.Equal(3, LedgerSql.Failed(_database, id, "server-1", maxAttempts: 3, error: "503 Service Unavailable", nowUtc: Now.AddSeconds(10)));
         Assert.Equal(OutboxStates.Dead, _database.ExecuteScalar<string>("SELECT State FROM theBuilderCacheTagsOutbox WHERE Id = @0", id));
         Assert.Empty(LedgerSql.Due(_database, Now.AddHours(1), 10));
+    }
+
+    [Fact]
+    public void A_purge_put_off_after_a_failure_cannot_be_claimed_early_by_a_server_that_read_it_before()
+    {
+        Guid id = Guid.NewGuid();
+        _database.Insert(Purge(id, Now));
+
+        // Both servers read the purge as due; server-1 claims it first and its send fails.
+        Assert.Single(LedgerSql.Due(_database, Now, 10));
+        Assert.True(LedgerSql.ClaimSend(_database, id, "server-1", Now, Now.AddSeconds(30)));
+        LedgerSql.Failed(_database, id, "server-1", maxAttempts: 10, error: "503 Service Unavailable", nowUtc: Now);
+
+        Assert.False(LedgerSql.ClaimSend(_database, id, "server-2", Now.AddSeconds(1), Now.AddSeconds(31)));
+        Assert.True(LedgerSql.ClaimSend(_database, id, "server-2", Now.AddSeconds(2), Now.AddSeconds(32)));
+    }
+
+    [Fact]
+    public void A_server_finds_the_recent_changes_released_without_it_and_only_those()
+    {
+        Guid other = Guid.NewGuid();
+        Guid old = Guid.NewGuid();
+        _database.Insert(new EventRow { Id = other, CreatedUtc = Now, Kind = "Published", Server = "backoffice", Change = "{}", Plan = "{}", Status = nameof(ChangeStage.Pending) });
+        _database.Insert(new EventRow { Id = old, CreatedUtc = Now, Kind = "Published", Server = "backoffice", Change = "{}", Plan = "{}", Status = nameof(ChangeStage.Pending) });
+
+        // Names as JSON, as Release writes them; LIKE's own characters must not widen the match.
+        LedgerSql.Release(_database, Change, ChangeStage.Released, Now.AddMinutes(1), "[\"web_1/0a1b2c3d\"]", []);
+        LedgerSql.Release(_database, other, ChangeStage.Released, Now.AddMinutes(1), "[\"webX1/0a1b2c3d\"]", []);
+        LedgerSql.Release(_database, old, ChangeStage.Released, Now.AddMinutes(-30), "[\"web_1/0a1b2c3d\"]", []);
+
+        Assert.Equal([Change], LedgerSql.ReleasedWithout(_database, "\"web_1/0a1b2c3d\"", Now, 10).Select(row => row.Id));
     }
 
     [Fact]

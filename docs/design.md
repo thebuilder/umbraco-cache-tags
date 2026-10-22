@@ -189,22 +189,27 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    refresh or removal of an item's ancestor counts for the item; a type, data type, language,
    domain or public access change needs the refresh of that same type, data type, language or
    domain), it evicts the change's responses from its Delivery API output cache and acknowledges
-   the change. A refresh applied after a change reloads its items, so one refresh can complete
+   the change. A change is timed when Umbraco raises it, before its items are read. A refresh seen
+   more than 2 seconds after a change reloaded its items after it, so one refresh can complete
    several changes made before it. A refresh can also arrive moments before its change is
    recorded (Umbraco raises some changes after refreshing), so unmatched refreshes are tried again
-   for 10 seconds, and one seen up to 2 seconds before a change counts for that change alone, and
-   not if it already completed an earlier one. Those 2 seconds also cover how far a server's clock
-   may be behind the clock of the server making the change, so keep servers' clocks in sync (NTP
-   does): a server further off is not acknowledged in time, and its changes wait for the ack timeout.
+   for 10 seconds. One seen within 2 seconds of a change, before or after, counts for that one
+   change only, and not if its notification already completed another change. Those 2 seconds also
+   cover how far apart two servers' clocks may be, so keep servers' clocks in sync (NTP does). A
+   server more than 2 seconds behind is not acknowledged in time: its changes wait for the ack
+   timeout, and it evicts them once they are released (step 3).
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
    not. It resolves the plan to response keys and queues one purge per target (split at
    `MaxKeysPerRequest`). Listing responses are in it too, deliberately: the items they show come
    from the published cache, so they are fresh at once, even though their membership and order are
-   not yet. A server that applies a change after it was released without it (up to 15 minutes
-   later) still evicts the change's responses and listings from its own output cache, but does not
-   acknowledge it and is not waited for in the listings stage: its listings may be cached again from
-   its index before the index has the change.
+   not yet. A server that a change was released without evicts the change's responses and listings
+   from its own output cache once it has seen a refresh of the change, whether before the release
+   (its clock is behind) or up to 15 minutes after (it applied the change late). It keeps the
+   refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
+   costs a cache miss, and the change's own refresh evicts after it. It does not acknowledge the
+   change and is not waited for in the listings stage, so its listings may be cached again from its
+   index before the index has the change.
 4. **Listings.** Listings come from each server's Delivery API index, which Umbraco updates in a
    background task after the refresh (a second or two; over a minute right after a restart). An
    index handler stamps every document with the state of the item it was built from (version,
@@ -218,8 +223,10 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    changes purge as a whole, so those do not wait.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. Each lease runs 30 seconds from when the purge is claimed, just before it is sent, so slow
-   sends before it do not leave it expired. A failure is retried after 2, 4, 8 ... seconds (at most
-   10 minutes), and kept as dead after `CacheTags:MaxAttempts` (10).
+   sends before it do not leave it expired, and a purge is claimed only while it is due, so a server
+   working from an older list does not resend one another server just failed. A failure is retried
+   after 2, 4, 8 ... seconds (at most 10 minutes), counted in the database, and kept as dead after
+   `CacheTags:MaxAttempts` (10).
 
 The delivery worker and the heartbeat log an error and carry on, so neither stops the site. Settings
 that fail validation at start stop the site; settings that become invalid on a reload of
