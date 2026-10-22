@@ -11,7 +11,11 @@ namespace TheBuilder.CacheTags.Delivery;
 /// <param name="Kind">Which caches: content, media, types or everything.</param>
 /// <param name="Keys">The items, for content and media.</param>
 /// <param name="Requires">For content: publish, unpublish, branch, remove or any.</param>
-internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string Requires)
+/// <param name="Ancestors">
+///     The items' ancestors. Umbraco refreshes a branch (a publish with descendants, a delete) as one
+///     refresh of its root, which refreshes every item under it.
+/// </param>
+internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string Requires, IReadOnlyList<Guid>? Ancestors = null)
 {
     public const string Content = "content";
     public const string Media = "media";
@@ -27,14 +31,15 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
     public static AckSignal For(Change change)
     {
         var keys = change.Items.Select(item => item.Key).ToList();
+        var ancestors = change.Items.SelectMany(item => item.Ancestors ?? []).Distinct().ToList();
         return change.Kind switch
         {
-            ChangeKind.Published => new(Content, keys, Publish),
-            ChangeKind.Unpublished => new(Content, keys, Unpublish),
-            ChangeKind.Moved or ChangeKind.Trashed => new(Content, keys, Branch),
-            ChangeKind.Deleted => new(Content, keys, Remove),
+            ChangeKind.Published => new(Content, keys, Publish, ancestors),
+            ChangeKind.Unpublished => new(Content, keys, Unpublish, ancestors),
+            ChangeKind.Moved or ChangeKind.Trashed => new(Content, keys, Branch, ancestors),
+            ChangeKind.Deleted => new(Content, keys, Remove, ancestors),
             ChangeKind.Sorted => new(Content, keys, Any),
-            ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted => new(Media, keys, Any),
+            ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted => new(Media, keys, Any, ancestors),
             ChangeKind.TypesChanged => new(Types, [], Any),
             _ => new(Everything, [], Any),
         };
@@ -55,7 +60,7 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
 
         if (refresh.Key is { } key && Keys.Contains(key) is false)
         {
-            return false;
+            return Ancestors?.Contains(key) is true && IsBranch(refresh);
         }
 
         // A refresh of everything (no key) covers every item in any way.
@@ -67,12 +72,16 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
         return Requires switch
         {
             Publish => refresh.HasPublishedCultures || refresh.HasUnpublishedCultures,
-            Unpublish => refresh.HasUnpublishedCultures,
-            Branch => refresh.ChangeTypes.HasFlag(TreeChangeTypes.RefreshBranch) || refresh.ChangeTypes.HasFlag(TreeChangeTypes.Remove),
+            // Deleting a published item unpublishes it, refreshed as a removal.
+            Unpublish => refresh.HasUnpublishedCultures || refresh.ChangeTypes.HasFlag(TreeChangeTypes.Remove),
+            Branch => IsBranch(refresh),
             Remove => refresh.ChangeTypes.HasFlag(TreeChangeTypes.Remove),
             _ => false,
         };
     }
+
+    private static bool IsBranch(ObservedRefresh refresh)
+        => refresh.ChangeTypes.HasFlag(TreeChangeTypes.RefreshBranch) || refresh.ChangeTypes.HasFlag(TreeChangeTypes.Remove);
 }
 
 /// <summary>

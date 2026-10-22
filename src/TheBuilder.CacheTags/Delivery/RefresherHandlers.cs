@@ -18,7 +18,8 @@ internal sealed class RefresherHandlers(AckProcessor processor, ILogger<Refreshe
         INotificationAsyncHandler<ContentTypeCacheRefresherNotification>,
         INotificationAsyncHandler<DataTypeCacheRefresherNotification>,
         INotificationAsyncHandler<DomainCacheRefresherNotification>,
-        INotificationAsyncHandler<LanguageCacheRefresherNotification>
+        INotificationAsyncHandler<LanguageCacheRefresherNotification>,
+        INotificationAsyncHandler<PublicAccessCacheRefresherNotification>
 {
     public Task HandleAsync(ContentCacheRefresherNotification notification, CancellationToken cancellationToken)
         => Observe(notification, () => notification.MessageType == MessageType.RefreshByPayload && notification.MessageObject is ContentCacheRefresher.JsonPayload[] payloads
@@ -48,6 +49,9 @@ internal sealed class RefresherHandlers(AckProcessor processor, ILogger<Refreshe
         => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null)]);
 
     public Task HandleAsync(LanguageCacheRefresherNotification notification, CancellationToken cancellationToken)
+        => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null)]);
+
+    public Task HandleAsync(PublicAccessCacheRefresherNotification notification, CancellationToken cancellationToken)
         => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null)]);
 
     private Task Observe(CacheRefresherNotification notification, Func<IReadOnlyCollection<ObservedRefresh>> read)

@@ -19,6 +19,7 @@ namespace TheBuilder.CacheTags.Ledger;
 /// </summary>
 internal sealed class SourceChangeHandlers(
     ChangeRecorder recorder,
+    PendingOperations pending,
     IIdKeyMap idKeyMap,
     IDocumentUrlService documentUrlService,
     IDefaultCultureAccessor defaultCulture,
@@ -34,6 +35,7 @@ internal sealed class SourceChangeHandlers(
         INotificationHandler<ContentMovedNotification>,
         INotificationHandler<ContentMovedToRecycleBinNotification>,
         INotificationHandler<ContentDeletedNotification>,
+        INotificationHandler<ContentSortingNotification>,
         INotificationHandler<ContentSortedNotification>,
         INotificationHandler<MediaSavedNotification>,
         INotificationHandler<MediaMovedNotification>,
@@ -45,35 +47,37 @@ internal sealed class SourceChangeHandlers(
         INotificationHandler<DomainSavedNotification>,
         INotificationHandler<DomainDeletedNotification>,
         INotificationHandler<LanguageSavedNotification>,
-        INotificationHandler<LanguageDeletedNotification>
+        INotificationHandler<LanguageDeletedNotification>,
+        INotificationHandler<PublicAccessEntrySavedNotification>,
+        INotificationHandler<PublicAccessEntryDeletedNotification>
 {
-    private const string SegmentsState = "TheBuilder.CacheTags.Segments";
-
     // The per-item culture maps on these notifications arrived in Umbraco 17.6 and 18.1. Read them
     // when present; on older versions every publish counts as all cultures, which only over-purges.
     private static readonly PropertyInfo? PublishedCulturesProperty = typeof(ContentPublishedNotification).GetProperty("PublishedCultures");
     private static readonly PropertyInfo? PublishedUnpublishedCulturesProperty = typeof(ContentPublishedNotification).GetProperty("UnpublishedCultures");
-    private static readonly PropertyInfo? UnpublishedCulturesProperty = typeof(ContentUnpublishedNotification).GetProperty("UnpublishedCultures");
 
     // Before a publish: the URL segments now live, to tell afterwards whether the route changed.
     public void Handle(ContentPublishingNotification notification)
-        => Guard(() => notification.State[SegmentsState] = notification.PublishedEntities.ToDictionary(
-            content => content.Key,
-            content => Cultures(content).ToDictionary(culture => culture, culture => documentUrlService.GetUrlSegment(content.Key, culture, isDraft: false))));
+        => Guard(() =>
+        {
+            foreach (IContent content in notification.PublishedEntities)
+            {
+                pending.RememberSegments(content.Key, Cultures(content).ToDictionary(culture => culture, culture => documentUrlService.GetUrlSegment(content.Key, culture, isDraft: false)));
+            }
+        });
 
     public void Handle(ContentPublishedNotification notification)
     {
         Guard(() =>
         {
-            var before = notification.State.TryGetValue(SegmentsState, out var state) && state is Dictionary<Guid, Dictionary<string, string?>> segments
-                ? segments
-                : [];
             var published = CultureMap(PublishedCulturesProperty, notification);
             var unpublished = CultureMap(PublishedUnpublishedCulturesProperty, notification);
 
-            var items = notification.PublishedEntities.Select(content =>
+            // A sort publishes the sorted items again; the sort is recorded on its own.
+            var entities = notification.PublishedEntities.Where(content => pending.TakeSorting(content.Key) is false).ToList();
+            var items = entities.Select(content =>
             {
-                var routeChanged = before.TryGetValue(content.Key, out var live) && live.Any(pair =>
+                var routeChanged = pending.TakeSegments(content.Key) is { } live && live.Any(pair =>
                     pair.Value is not null && pair.Value != content.GetUrlSegment(shortStringHelper, urlSegmentProviders, Variant(content) ? pair.Key : null));
 
                 // Unpublishing one culture is raised as a publish of the rest; that culture's route is gone.
@@ -81,15 +85,16 @@ internal sealed class SourceChangeHandlers(
                 return Item(content, routeChanged: routeChanged);
             }).ToList();
 
-            Record(ChangeKind.Published, items, Cultures(notification.PublishedEntities.Select(c => c.Key), published, unpublished));
+            Record(ChangeKind.Published, items, Cultures(entities.Select(c => c.Key), published, unpublished));
         });
     }
 
+    // Raised when the whole document is unpublished, even when it was asked to unpublish one
+    // (mandatory) culture; unpublishing one culture of several is raised as a publish of the rest.
     public void Handle(ContentUnpublishedNotification notification)
         => Guard(() => Record(
             ChangeKind.Unpublished,
-            notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true)).ToList(),
-            Cultures(notification.UnpublishedEntities.Select(c => c.Key), CultureMap(UnpublishedCulturesProperty, notification), null)));
+            notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true)).ToList()));
 
     public void Handle(ContentMovedNotification notification)
         => Guard(() => Record(
@@ -101,8 +106,12 @@ internal sealed class SourceChangeHandlers(
             ChangeKind.Trashed,
             notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
 
+    // An item deleted from the recycle bin was purged when it was trashed.
     public void Handle(ContentDeletedNotification notification)
-        => Guard(() => Record(ChangeKind.Deleted, notification.DeletedEntities.Select(content => Item(content)).ToList()));
+        => Guard(() => Record(ChangeKind.Deleted, notification.DeletedEntities.Where(content => content.Trashed is false).Select(content => Item(content)).ToList()));
+
+    public void Handle(ContentSortingNotification notification)
+        => Guard(() => pending.MarkSorting(notification.SortedEntities.Where(content => content.Published).Select(content => content.Key)));
 
     public void Handle(ContentSortedNotification notification)
         => Guard(() => Record(ChangeKind.Sorted, notification.SortedEntities.Where(content => content.Published).Select(content => Item(content)).Take(1).ToList()));
@@ -121,7 +130,7 @@ internal sealed class SourceChangeHandlers(
             notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Media))).ToList()));
 
     public void Handle(MediaDeletedNotification notification)
-        => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Select(media => Item(media)).ToList()));
+        => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Where(media => media.Trashed is false).Select(media => Item(media)).ToList()));
 
     public void Handle(ContentTypeChangedNotification notification)
         => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "content types changed"));
@@ -150,6 +159,11 @@ internal sealed class SourceChangeHandlers(
     public void Handle(LanguageSavedNotification notification) => Guard(() => RecordEverything("languages saved"));
 
     public void Handle(LanguageDeletedNotification notification) => Guard(() => RecordEverything("languages deleted"));
+
+    // Protecting a page changes what the Delivery API returns for it and every page under it.
+    public void Handle(PublicAccessEntrySavedNotification notification) => Guard(() => RecordEverything("public access saved"));
+
+    public void Handle(PublicAccessEntryDeletedNotification notification) => Guard(() => RecordEverything("public access removed"));
 
     // A throwing handler would stop Umbraco from publishing the operation's remaining notifications,
     // including the one that refreshes every server's cache. Missing a purge is the lesser failure.
@@ -188,7 +202,17 @@ internal sealed class SourceChangeHandlers(
     private DateTime Now() => time.GetUtcNow().UtcDateTime;
 
     private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false)
-        => new(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, item is IMedia ? UmbracoObjectTypes.Media : UmbracoObjectTypes.Document), oldParent, routeChanged);
+    {
+        UmbracoObjectTypes type = item is IMedia ? UmbracoObjectTypes.Media : UmbracoObjectTypes.Document;
+
+        // A path is "-1,1069,1077,<id>": the ancestors are every id between the root and the item.
+        var ids = item.Path.Split(',');
+        var ancestors = ids.Skip(1).Take(ids.Length - 2)
+            .Select(id => int.TryParse(id, out var ancestor) ? KeyOf(ancestor, type) : Guid.Empty)
+            .Where(key => key != Guid.Empty)
+            .ToList();
+        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors);
+    }
 
     // A path is "-1,1069,1077": the parent is the next-to-last id.
     private Guid? OldParent(string? originalPath, UmbracoObjectTypes type)

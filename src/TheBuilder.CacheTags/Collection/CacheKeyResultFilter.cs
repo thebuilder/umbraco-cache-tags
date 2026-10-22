@@ -14,8 +14,8 @@ namespace TheBuilder.CacheTags.Collection;
 /// <summary>
 ///     Runs after every Delivery API action: gives a cacheable response its key in the response
 ///     header and queues the record of what it covers. Preview responses get <c>no-store</c> and
-///     member responses <c>private</c>, and neither gets a key. Nor does a response whose request headers
-///     are too long to record, which gets <c>no-store</c>.
+///     member responses <c>private</c>, and neither gets a key. Nor does a response other than a 200 with a
+///     body, or one whose request headers are too long to record: both get <c>no-store</c>.
 /// </summary>
 internal sealed class CacheKeyResultFilter(
     IOptionsMonitor<CacheTagsOptions> options,
@@ -61,6 +61,9 @@ internal sealed class CacheKeyResultFilter(
 
         if (context.Result is not ObjectResult { Value: { } value } result || (result.StatusCode ?? 200) != 200)
         {
+            // A not found or a redirect covers no item, so no purge would reach it: publishing at
+            // that path later must not leave it cached.
+            http.Response.Headers[HeaderNames.CacheControl] = "no-store";
             return;
         }
 

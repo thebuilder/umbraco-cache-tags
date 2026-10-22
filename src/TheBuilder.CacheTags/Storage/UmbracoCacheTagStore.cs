@@ -18,7 +18,7 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
             {
                 database.Write(db => CacheTagSql.Record(db, response));
             }
-            catch (System.Data.Common.DbException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 // The rows now exist, so the retry updates them. A response that fails again is
                 // skipped, so it does not cost the rest of the batch.
@@ -26,9 +26,9 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
                 {
                     database.Write(db => CacheTagSql.Record(db, response));
                 }
-                catch (System.Data.Common.DbException exception)
+                catch (Exception retryException) when (retryException is not OperationCanceledException)
                 {
-                    logger.LogWarning(exception, "Recording cache tag response {ResponseKey} failed; it is recorded on its next render.", response.ResponseKey);
+                    logger.LogWarning(retryException, "Recording cache tag response {ResponseKey} failed; it is recorded on its next render.", response.ResponseKey);
                 }
             }
         }
@@ -48,6 +48,12 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
     public Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default)
         => Task.FromResult(database.Read(db => CacheTagSql.Get(db, responseKey)));
 
+    // Each step in its own short transaction, so a publish waiting for the write lock is not held up
+    // by one long delete. A render can skip rewriting keys written within the writer's touch interval,
+    // so a dropped key gets that much longer.
     public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
-        => Task.FromResult(database.Write(db => CacheTagSql.Prune(db, cutoffUtc)));
+        => Task.FromResult(
+            database.Write(db => CacheTagSql.PruneDroppedKeys(db, cutoffUtc - MappingWriter.TouchInterval))
+            + database.Write(db => CacheTagSql.PruneUnseenKeys(db, cutoffUtc))
+            + database.Write(db => CacheTagSql.PruneUnseenResponses(db, cutoffUtc)));
 }

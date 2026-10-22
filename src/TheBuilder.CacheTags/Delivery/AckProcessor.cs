@@ -25,6 +25,9 @@ internal sealed class AckProcessor(
     // it short also keeps an unrelated earlier refresh from acknowledging a later change.
     private static readonly TimeSpan RetryWindow = TimeSpan.FromSeconds(10);
 
+    // How far apart two servers' clocks may be for one's refresh to acknowledge the other's change.
+    private static readonly TimeSpan ClockSlack = TimeSpan.FromSeconds(10);
+
     private readonly ConcurrentQueue<(DateTime ObservedUtc, ObservedRefresh Refresh)> _queue = new();
     private readonly ConcurrentDictionary<Guid, byte> _acknowledged = new();
 
@@ -48,14 +51,10 @@ internal sealed class AckProcessor(
     /// <summary>Acknowledges the changes the queued refreshes complete, and keeps the rest while they are recent.</summary>
     public async Task ProcessAsync(CancellationToken cancellationToken)
     {
-        DateTime now = time.GetUtcNow().UtcDateTime;
         var queued = new List<(DateTime ObservedUtc, ObservedRefresh Refresh)>();
         while (_queue.TryDequeue(out var item))
         {
-            if (now - item.ObservedUtc < RetryWindow)
-            {
-                queued.Add(item);
-            }
+            queued.Add(item);
         }
 
         if (queued.Count == 0)
@@ -63,32 +62,59 @@ internal sealed class AckProcessor(
             return;
         }
 
-        var refreshes = queued.Select(item => item.Refresh).ToList();
         var used = new HashSet<ObservedRefresh>();
         var completed = new List<LedgerEntry>();
-        foreach (LedgerEntry change in ledger.Unreleased(500).Where(change => _acknowledged.ContainsKey(change.Id) is false))
+        try
         {
-            ObservedRefresh? refresh = change.Signal is null ? null : refreshes.FirstOrDefault(change.Signal.IsMetBy);
-            if (refresh is not null)
+            IReadOnlyList<LedgerEntry> unreleased = ledger.Unreleased(500);
+            foreach (Guid released in _acknowledged.Keys.Except(unreleased.Select(change => change.Id)))
             {
-                used.Add(refresh);
-                completed.Add(change);
+                _acknowledged.TryRemove(released, out _);
+            }
+
+            completed.AddRange(Match(unreleased.Where(change => _acknowledged.ContainsKey(change.Id) is false), queued, used));
+
+            if (completed.Count > 0)
+            {
+                await AcknowledgeAsync(completed, cancellationToken);
             }
         }
-
-        foreach (var item in queued.Where(item => used.Contains(item.Refresh) is false))
+        catch
         {
-            _queue.Enqueue(item);
+            // Nothing was acknowledged: every refresh is tried again on the next pass.
+            used.Clear();
+            throw;
         }
-
-        if (completed.Count > 0)
+        finally
         {
-            await AcknowledgeAsync(completed, cancellationToken);
+            // A refresh that completed nothing is kept for a while: its change may not be recorded yet.
+            DateTime now = time.GetUtcNow().UtcDateTime;
+            foreach (var item in queued.Where(item => used.Contains(item.Refresh) is false && now - item.ObservedUtc < RetryWindow))
+            {
+                _queue.Enqueue(item);
+            }
         }
     }
 
-    /// <summary>Forgets a change once it is released, so the set does not grow forever.</summary>
-    public void Forget(Guid changeId) => _acknowledged.TryRemove(changeId, out _);
+    /// <summary>
+    ///     The changes the refreshes complete, adding the refreshes that completed one to <paramref name="used" />.
+    ///     A refresh acknowledges only a change made before it: a late refresh of an earlier change to
+    ///     the same item must not count for a newer one.
+    /// </summary>
+    public static IEnumerable<LedgerEntry> Match(IEnumerable<LedgerEntry> changes, IReadOnlyList<(DateTime ObservedUtc, ObservedRefresh Refresh)> refreshes, ISet<ObservedRefresh> used)
+    {
+        foreach (LedgerEntry change in changes)
+        {
+            var match = change.Signal is null
+                ? default
+                : refreshes.FirstOrDefault(item => change.CreatedUtc <= item.ObservedUtc + ClockSlack && change.Signal.IsMetBy(item.Refresh));
+            if (match.Refresh is not null)
+            {
+                used.Add(match.Refresh);
+                yield return change;
+            }
+        }
+    }
 
     private async Task AcknowledgeAsync(IReadOnlyList<LedgerEntry> changes, CancellationToken cancellationToken)
     {

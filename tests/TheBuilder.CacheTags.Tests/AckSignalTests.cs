@@ -9,6 +9,7 @@ public sealed class AckSignalTests
 {
     private static readonly Guid A = new("10000000-0000-0000-0000-00000000000a");
     private static readonly Guid B = new("10000000-0000-0000-0000-00000000000b");
+    private static readonly Guid Parent = new("10000000-0000-0000-0000-0000000000aa");
 
     private static AckSignal Signal(string kind)
         => AckSignal.For(new Change(Guid.Empty, DateTime.UnixEpoch, Enum.Parse<ChangeKind>(kind), [new ChangedItem(A, "page", Guid.Empty)], [], null));
@@ -33,12 +34,15 @@ public sealed class AckSignalTests
     }
 
     [Fact]
-    public void An_unpublish_needs_unpublished_cultures()
+    public void An_unpublish_needs_unpublished_cultures_or_a_removal()
     {
         AckSignal unpublish = Signal(nameof(ChangeKind.Unpublished));
 
         Assert.False(unpublish.IsMetBy(Content(A, TreeChangeTypes.RefreshBranch, published: true)));
         Assert.True(unpublish.IsMetBy(Content(A, TreeChangeTypes.RefreshBranch, unpublished: true)));
+
+        // Deleting a published item unpublishes it; its refresh is a removal, with no cultures.
+        Assert.True(unpublish.IsMetBy(Content(A, TreeChangeTypes.Remove)));
     }
 
     [Theory]
@@ -74,5 +78,18 @@ public sealed class AckSignalTests
         Assert.True(types.IsMetBy(new ObservedRefresh(AckSignal.Types, null)));
         Assert.False(types.IsMetBy(new ObservedRefresh(AckSignal.Everything, null)));
         Assert.True(everything.IsMetBy(new ObservedRefresh(AckSignal.Everything, null)));
+    }
+
+    [Theory]
+    [InlineData(nameof(ChangeKind.Published), TreeChangeTypes.RefreshBranch)]
+    [InlineData(nameof(ChangeKind.Deleted), TreeChangeTypes.Remove)]
+    [InlineData(nameof(ChangeKind.Trashed), TreeChangeTypes.RefreshBranch)]
+    public void A_branch_refresh_of_an_ancestor_acknowledges_a_change_to_an_item_under_it(string kind, TreeChangeTypes types)
+    {
+        AckSignal signal = AckSignal.For(new Change(Guid.Empty, DateTime.UnixEpoch, Enum.Parse<ChangeKind>(kind), [new ChangedItem(A, "page", Parent, Ancestors: [Parent])], [], null));
+
+        Assert.True(signal.IsMetBy(Content(Parent, types)));
+        Assert.False(signal.IsMetBy(Content(Parent, TreeChangeTypes.RefreshNode, published: true)));
+        Assert.False(signal.IsMetBy(Content(B, types)));
     }
 }

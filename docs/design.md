@@ -98,13 +98,17 @@ Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, an
 
 ## Delivery
 
-1. **Ledger.** The server making a change records it (with its plan and an ack signal) as pending,
-   and acknowledges it itself: it applied the cache refresh before the change was recorded.
+1. **Ledger.** The server making a change records it (with its plan and an ack signal) as pending.
+   It acknowledges the change from its own cache refresh, like every other server: Umbraco raises
+   some changes (unpublish, delete, sort, media save) before refreshing. A change that cannot be
+   recorded (the write lock timed out) is kept in memory and recorded again by the worker.
 2. **Acks.** Every server sends a heartbeat every 30 seconds. When a server applies a cache refresh
    that completes a pending change (the refresh must carry what the change did: published cultures
-   for a publish, a branch refresh for a move, and so on, so a draft save does not count), it evicts
+   for a publish, a branch refresh for a move, and so on, so a draft save does not count; a branch
+   refresh or removal of an item's ancestor counts for the item), it evicts
    the change's responses from its Delivery API output cache and acknowledges the change. A refresh
-   can arrive before its change is recorded, so unmatched refreshes are tried again for 10 seconds.
+   can arrive before its change is recorded, so unmatched refreshes are tried again for 10 seconds,
+   and a refresh counts only for changes made before it (with 10 seconds of slack for clocks).
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
    not. It resolves the plan to response keys and queues one purge per target (split at
@@ -114,6 +118,9 @@ Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, an
 4. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
    `CacheTags:MaxAttempts` (10).
+
+Non-200 Delivery API responses (not found, redirects) get `no-store`: no item covers them, so no
+purge would reach them.
 
 Every package write takes the package's own Umbraco write lock first (`umbracoLock` id -91730).
 On SQLite, two transactions that each read and then write deadlock otherwise.
@@ -135,6 +142,9 @@ On SQLite, two transactions that each read and then write deadlock otherwise.
 | 2026-10-21 | Descendant routes are expanded at purge time (`IDocumentNavigationQueryService.TryGetDescendantsKeys`) for route-changing events, overflowing to `type-` or `umbraco` past the budget. The mapping stores no ancestor keys. |
 | 2026-10-21 | Readable key names (this table), lowercase, with an optional prefix. |
 | 2026-10-21 | `children-` and `search-` keys are purged stale-while-revalidate, like `type-`. |
+| 2026-10-22 | Purge targets are a seam (`IPurgeTarget`), configured by name with a `Type`; the webhook is the built-in type. The webhook body is versioned and says which keys to expire and which to mark stale, so receivers need no knowledge of key names. |
+| 2026-10-22 | `schema-<alias>` keys: a content, media or element type change (or a data type used by it) purges every response that renders an item of that type, not only listings filtered by it. |
+| 2026-10-22 | Unpublishing always purges every culture: Umbraco raises it only when the whole document goes. A sort's re-publish of the sorted items is not recorded as a publish. Items deleted from the recycle bin are not recorded again. Public access changes purge everything. |
 
 ## Debugging
 

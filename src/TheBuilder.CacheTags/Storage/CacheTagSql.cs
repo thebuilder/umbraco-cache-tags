@@ -109,17 +109,21 @@ internal static class CacheTagSql
     }
 
     public static int Prune(IDatabase database, DateTime cutoffUtc)
-    {
-        // Keys a later render no longer included, once they are older than the cutoff.
-        var dropped = database.Execute(
+        => PruneDroppedKeys(database, cutoffUtc) + PruneUnseenKeys(database, cutoffUtc) + PruneUnseenResponses(database, cutoffUtc);
+
+    /// <summary>Keys a later render no longer included, once they are older than the cutoff.</summary>
+    public static int PruneDroppedKeys(IDatabase database, DateTime cutoffUtc)
+        => database.Execute(
             $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE RenderedUtc < @0 AND RenderedUtc < (SELECT r.RenderedUtc FROM {Constants.Tables.Responses} r WHERE r.ResponseKey = {Constants.Tables.ResponseKeys}.ResponseKey)",
             cutoffUtc);
 
-        // Responses nobody has asked for since the cutoff, with all their keys.
-        var orphaned = database.Execute(
+    /// <summary>The keys of responses nobody has asked for since the cutoff.</summary>
+    public static int PruneUnseenKeys(IDatabase database, DateTime cutoffUtc)
+        => database.Execute(
             $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey IN (SELECT ResponseKey FROM {Constants.Tables.Responses} WHERE SeenUtc < @0)",
             cutoffUtc);
-        var responses = database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
-        return dropped + orphaned + responses;
-    }
+
+    /// <summary>Responses nobody has asked for since the cutoff; their keys go first.</summary>
+    public static int PruneUnseenResponses(IDatabase database, DateTime cutoffUtc)
+        => database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
 }

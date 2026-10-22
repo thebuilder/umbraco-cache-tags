@@ -35,8 +35,6 @@ internal sealed class ChangeRecorder(
 
         PurgePlan plan = planner.Plan(change, settings.MaxDescendants);
 
-        // This server applied the change's cache refresh before this handler ran, so recording it as
-        // the change's server also counts as its acknowledgement.
         try
         {
             ledger.Add(change, plan, identity.Name);

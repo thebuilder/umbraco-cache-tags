@@ -61,6 +61,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<PurgePlanner>();
         builder.Services.AddSingleton<LedgerStore>();
         builder.Services.AddSingleton<ChangeRecorder>();
+        builder.Services.AddSingleton<PendingOperations>();
         builder
             .AddNotificationHandler<ContentPublishingNotification, SourceChangeHandlers>()
             .AddNotificationHandler<ContentPublishedNotification, SourceChangeHandlers>()
@@ -68,6 +69,7 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationHandler<ContentMovedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<ContentMovedToRecycleBinNotification, SourceChangeHandlers>()
             .AddNotificationHandler<ContentDeletedNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<ContentSortingNotification, SourceChangeHandlers>()
             .AddNotificationHandler<ContentSortedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaSavedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaMovedNotification, SourceChangeHandlers>()
@@ -79,7 +81,9 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationHandler<DomainSavedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<DomainDeletedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<LanguageSavedNotification, SourceChangeHandlers>()
-            .AddNotificationHandler<LanguageDeletedNotification, SourceChangeHandlers>();
+            .AddNotificationHandler<LanguageDeletedNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<PublicAccessEntrySavedNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<PublicAccessEntryDeletedNotification, SourceChangeHandlers>();
 
         // Delivery: heartbeats, acks from every server's cache refreshes, and the purge outbox.
         builder.Services.AddSingleton<ServerIdentity>();
@@ -102,7 +106,8 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationAsyncHandler<ContentTypeCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<DataTypeCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<DomainCacheRefresherNotification, RefresherHandlers>()
-            .AddNotificationAsyncHandler<LanguageCacheRefresherNotification, RefresherHandlers>();
+            .AddNotificationAsyncHandler<LanguageCacheRefresherNotification, RefresherHandlers>()
+            .AddNotificationAsyncHandler<PublicAccessCacheRefresherNotification, RefresherHandlers>();
 
         // The lookup API.
         builder.Services.AddSingleton<ICacheTagsLookup, CacheTagsLookup>();

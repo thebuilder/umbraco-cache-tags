@@ -12,7 +12,6 @@ namespace TheBuilder.CacheTags.Delivery;
 internal sealed class Releaser(
     LedgerStore ledger,
     PurgeResolver resolver,
-    AckProcessor acks,
     IAckTransport transport,
     ServerIdentity identity,
     IOptionsMonitor<CacheTagsOptions> options,
@@ -38,9 +37,9 @@ internal sealed class Releaser(
         var waiting = 0;
         foreach (LedgerEntry change in unreleased)
         {
-            // The server that recorded the change applied its refresh first, so it has acknowledged it.
-            var acknowledgedBy = new HashSet<string>(StringComparer.Ordinal) { change.Server };
-            acknowledgedBy.UnionWith(acked.GetValueOrDefault(change.Id) ?? new HashSet<string>());
+            // The recording server is not counted until its own refresh acknowledges the change:
+            // Umbraco raises some changes (unpublish, delete, sort, media save) before the refresh.
+            IReadOnlySet<string> acknowledgedBy = acked.GetValueOrDefault(change.Id) ?? new HashSet<string>();
 
             ReleaseDecision decision = ReleaseDecision.Decide(change.CreatedUtc, now, servers, acknowledgedBy, settings.AckTimeout, settings.ServerTimeout);
             if (decision.Release)
@@ -85,7 +84,6 @@ internal sealed class Releaser(
             return;
         }
 
-        acks.Forget(change.Id);
         if (decision.TimedOut)
         {
             logger.LogWarning(
