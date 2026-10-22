@@ -3,6 +3,7 @@ using Examine;
 using Examine.Search;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core.Configuration.Models;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
@@ -11,7 +12,7 @@ using Umbraco.Extensions;
 namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>This server's Delivery API content index, as listings query it.</summary>
-internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentService contentService, IOptionsMonitor<DeliveryApiSettings> deliveryApi)
+internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentService contentService, PackageDatabase database, IOptionsMonitor<DeliveryApiSettings> deliveryApi)
 {
     /// <summary>The Delivery API content index (<c>Constants.UmbracoIndexes.DeliveryApiContentIndexName</c>).</summary>
     public const string IndexName = "DeliveryApiContentIndex";
@@ -22,7 +23,9 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
     ///     (the Delivery API is off), nothing can wait for it.
     /// </summary>
     public bool Has(Change change)
-        => examine.TryGetIndex(IndexName, out IIndex index) is false || change.Items.All(item => Has(index, item));
+        => examine.TryGetIndex(IndexName, out IIndex index) is false
+            // Runs on the delivery worker while editors may be saving (see PackageDatabase.ReadUmbraco).
+            || database.ReadUmbraco(() => change.Items.All(item => Has(index, item)));
 
     private bool Has(IIndex index, ChangedItem item)
     {

@@ -277,12 +277,15 @@ change when it ends, and a run first cleans up after one that was stopped halfwa
 again and again against the same database. Before a change, each case waits until the pages it checks
 are cached and steady, so a page that refetches only because its cache entry was empty cannot pass.
 
-**Known issue:** on SQLite, the sample can lock up after a few runs: requests and Umbraco's own
-background jobs wait on a database lock that nothing releases, and it needs a restart. It happens
-right after `pnpm e2e` creates and publishes its new article, and it reproduces with the package
-switched off (`CacheTags__Enabled=false`) and on `main` without the package, so it is Umbraco on
-SQLite under this load. Restart Umbraco between longer series of runs, or run the sample on SQL
-Server.
+**Known issue:** on SQLite, the sample could lock up: requests and Umbraco's own background jobs
+waited on a database lock until one of them timed out, sometimes failing the first start's seeding.
+One cause was the package: after a publish, its delivery worker read the changed items through
+`IContentService` while a save was still writing. Umbraco connects to SQLite with a shared cache,
+where a read transaction keeps each table it has read locked until it ends, so the read and the save
+each waited for a table the other held. The worker now takes the package's write lock before it
+reads (`PackageDatabase.ReadUmbraco`). An earlier report had the lock-up with the package switched
+off too, so Umbraco on SQLite under this load may have another cause: if it happens, restart Umbraco
+between longer series of runs, or run the sample on SQL Server.
 
 `E2E_TIMEOUT` sets how many seconds a case waits (default 30). `UMBRACO_URL`, `FRONTEND_URL`,
 `UMBRACO_CLIENT_ID` and `UMBRACO_CLIENT_SECRET` come from `.env`, and can be overridden in the

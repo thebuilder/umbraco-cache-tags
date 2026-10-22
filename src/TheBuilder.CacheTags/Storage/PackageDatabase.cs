@@ -50,6 +50,17 @@ internal sealed class PackageDatabase(IScopeProvider scopeProvider, IRuntimeStat
         return result;
     }
 
+    /// <summary>
+    ///     Reads Umbraco's own tables, through its services, from a background thread: in one
+    ///     transaction that takes the package's write lock first. On SQLite with a shared cache (how
+    ///     Umbraco connects to it), a read transaction keeps a lock on each table it has read until it
+    ///     ends, so one that waits for a table an editor's save is writing can hold a table that save
+    ///     needs next: each waits for the other until one times out, and it can be the save that fails.
+    ///     SQLite has one writer at a time, so holding the write lock makes the read wait for the save
+    ///     to finish instead, and no save can start while it reads.
+    /// </summary>
+    public T ReadUmbraco<T>(Func<T> read) => Write(_ => read());
+
     public void Write(Action<IDatabase> write) => Write(database =>
     {
         write(database);
