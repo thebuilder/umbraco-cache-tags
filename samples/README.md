@@ -207,11 +207,10 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   previous.
 - A purge id seen in the last few minutes is answered with `"duplicate": true` and not purged again.
   Ids are kept in memory, per process.
-- `response-`, `content-` and `media-` keys are expired at once (`revalidateTag(key, { expire: 0 })`):
-  the next request waits for fresh content. `type-`, `children-` and `search-` keys and `umbraco` are
-  marked stale (`revalidateTag(key, 'max')`): the next request still gets the old page and refreshes
-  it in the background. Other keys are returned under `ignored`. The key names are defined in
-  `docs/design.md`.
+- Keys in the body's `expire` list are expired at once (`revalidateTag(key, { expire: 0 })`), so
+  the next request waits for fresh content. Keys in its `stale` list are marked stale
+  (`revalidateTag(key, 'max')`), so the next request still gets the old page and refreshes it in the
+  background. The package decides which list a key goes in; see `docs/design.md`.
 
 `pnpm purge` sends a signed webhook, the same way:
 
@@ -312,8 +311,8 @@ The admin-only lookup API answers what a key covers and what recent changes plan
 `GET /umbraco/management/api/v1/cache-tags/changes`, with a backoffice or API user token (the seeded
 API user works; see `scripts/e2e.mts` for getting a token).
 
-`pnpm purge` exercises the webhook by hand: it should answer `200` with the keys under `expired` or
-`stale`.
+`pnpm purge` exercises the webhook by hand. It should answer `200` with how many keys it expired and
+marked stale.
 
 Right after Umbraco starts, its Delivery API index can take a minute or more to catch up, and a
 change's listing purge waits for it, so run the checks with a longer timeout then:

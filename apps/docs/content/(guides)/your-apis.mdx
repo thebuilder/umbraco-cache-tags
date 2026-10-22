@@ -50,17 +50,24 @@ When the data behind those responses changes, record a change with `ICacheTagsCh
 ```csharp
 public sealed class DictionaryCacheTags(ICacheTagsChanges changes, ILanguageService languages)
     : INotificationAsyncHandler<DictionaryItemSavedNotification>,
+      INotificationAsyncHandler<DictionaryItemDeletedNotification>,
       INotificationHandler<DictionaryCacheRefresherNotification>
 {
-    // Saving a dictionary item changes every language's response.
-    public async Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken cancellationToken)
-        => changes.Record(
-            (await languages.GetAllAsync()).Select(language => $"x-dictionary-{language.IsoCode.ToLowerInvariant()}"),
-            waitFor: "dictionary",
-            reason: "dictionary items saved");
+    public Task HandleAsync(DictionaryItemSavedNotification notification, CancellationToken cancellationToken)
+        => RecordAsync("dictionary items saved");
+
+    public Task HandleAsync(DictionaryItemDeletedNotification notification, CancellationToken cancellationToken)
+        => RecordAsync("dictionary items deleted");
 
     // Raised on every server, once its dictionary cache has the change.
     public void Handle(DictionaryCacheRefresherNotification notification) => changes.Applied("dictionary");
+
+    // A dictionary item has text in every language, so a change reaches every language's response.
+    private async Task RecordAsync(string reason)
+        => changes.Record(
+            (await languages.GetAllAsync()).Select(language => $"x-dictionary-{language.IsoCode.ToLowerInvariant()}"),
+            waitFor: "dictionary",
+            reason: reason);
 }
 ```
 
@@ -68,6 +75,7 @@ Register it in a composer:
 
 ```csharp
 builder.AddNotificationAsyncHandler<DictionaryItemSavedNotification, DictionaryCacheTags>();
+builder.AddNotificationAsyncHandler<DictionaryItemDeletedNotification, DictionaryCacheTags>();
 builder.AddNotificationHandler<DictionaryCacheRefresherNotification, DictionaryCacheTags>();
 ```
 
@@ -82,7 +90,7 @@ Administrators can purge keys under **Settings > Advanced > Cache tags > Purge**
 
 | Request | Does |
 | --- | --- |
-| `POST /umbraco/management/api/v1/cache-tags/purge` | Purges the keys in the JSON array body at once. `["umbraco"]` purges everything. |
+| `POST /umbraco/management/api/v1/cache-tags/purge` | Purges the keys in the JSON array body at once: `x-` keys, items' `content-` and `media-` keys, or `["umbraco"]` for everything. |
 | `GET .../cache-tags/purges?state=Dead` | Lists purges in a state: `Pending`, `Sent`, `Dead` or `Discarded`. |
 | `POST .../cache-tags/purges/{id}/retry` | Sends a failed or set-aside purge again. |
 | `POST .../cache-tags/purges/{id}/discard` | Sets a pending or failed purge aside. |
