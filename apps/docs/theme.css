@@ -20,3 +20,63 @@
   border-radius: 0.3rem;
   padding: 0.15em 0.35em;
 }
+
+/*
+ * The pages a change reaches, on the Why page: one tile per cached page, colored by what a purge
+ * left it showing. The status is written on each tile too, so the colors only reinforce it.
+ */
+.purge-map {
+  --purge-fresh: #16a34a;
+  --purge-stale: #dc2626;
+  --purge-wasted: #d97706;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.purge-map > div {
+  --purge-color: var(--blume-muted-foreground);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid color-mix(in oklab, var(--purge-color) 70%, var(--blume-background));
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--purge-color) 8%, var(--blume-background));
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+.purge-map > div > strong {
+  color: var(--blume-foreground);
+  font-weight: 500;
+}
+
+.purge-map > div > span {
+  color: var(--purge-color);
+  font-size: 0.8125rem;
+}
+
+.purge-map > [data-state="fresh"] {
+  --purge-color: var(--purge-fresh);
+}
+
+.purge-map > [data-state="stale"] {
+  --purge-color: var(--purge-stale);
+}
+
+.purge-map > [data-state="wasted"] {
+  --purge-color: var(--purge-wasted);
+}
+
+/* The rest of the site sits on its own row, dashed, apart from the pages that show the article. */
+.purge-map > [data-rest] {
+  grid-column: 1 / -1;
+  border-style: dashed;
+}
+
+.purge-map > [data-state="kept"] {
+  border-color: var(--blume-border);
+  background: transparent;
+}
