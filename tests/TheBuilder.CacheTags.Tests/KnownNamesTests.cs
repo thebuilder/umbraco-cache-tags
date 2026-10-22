@@ -13,6 +13,9 @@ public sealed class KnownNamesTests
         var time = new ManualTime();
         var reads = 0;
         var aliases = new[] { "article" };
+
+        // Every read after the first waits until the test lets it finish.
+        var release = new ManualResetEventSlim();
         var names = new KnownNames(
             Fake<IContentTypeService>.Of((method, _) =>
             {
@@ -21,7 +24,11 @@ public sealed class KnownNamesTests
                     return null;
                 }
 
-                Interlocked.Increment(ref reads);
+                if (Interlocked.Increment(ref reads) > 1)
+                {
+                    release.Wait(TimeSpan.FromSeconds(10));
+                }
+
                 return Volatile.Read(ref aliases).Select(alias => Fake<IContentType>.Of((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray();
             }),
             Fake<IMediaTypeService>.Of((method, _) => method.Name == "GetAll" ? Array.Empty<IMediaType>() : null),
@@ -33,7 +40,12 @@ public sealed class KnownNamesTests
         Volatile.Write(ref aliases, ["page"]);
         time.Advance(TimeSpan.FromMinutes(2));
 
-        Assert.All(Enumerable.Range(0, 20).AsParallel().Select(_ => names.IsType("article", media: false)).ToArray(), Assert.True);
+        // While the read is held, every request answers at once, from the old names.
+        var answers = await Task.Run(() => Enumerable.Range(0, 20).Select(_ => names.IsType("article", media: false)).ToArray())
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.All(answers, Assert.True);
+
+        release.Set();
         for (var tries = 0; names.IsType("page", media: false) is false; tries++)
         {
             Assert.True(tries < 200, "The names were not read again.");
