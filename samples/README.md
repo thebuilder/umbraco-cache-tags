@@ -319,6 +319,28 @@ Right after Umbraco starts, its Delivery API index can take a minute or more to 
 change's listing purge waits for it, so run the checks with a longer timeout then:
 `E2E_TIMEOUT=120 pnpm e2e`.
 
+## Search
+
+The Umbraco sample adds full-text search to the Delivery API (`TheBuilder.CacheTags.Example/Search`):
+an index handler puts each item's published text (name, text fields, rich text without markup) into
+the Delivery API content index as analyzed text, and a filter queries it. Each `search:` filter
+matches words starting with any of its words; send one per word to require all of them:
+
+```http
+GET /umbraco/delivery/api/v2/content?filter=search:harbour&filter=search:morning
+```
+
+The Delivery API index is an Examine (Lucene) index, so this needs no second index. Umbraco does not
+reindex existing items when a handler adds a field: after adding one to a site with content, rebuild
+the Delivery API index once (Settings > Examine Management, or
+`POST /umbraco/management/api/v1/indexer/DeliveryApiContentIndex/rebuild`).
+
+A search result is a Delivery API listing like any other, so the package tags it and purges it when a
+publish could change it (through `search-deliveryapicontentindex`), once every server's index has the
+change. The Next.js page (`app/search/page.tsx`) normalises the words so the same search is one cache
+entry. Searching Examine directly from a custom endpoint gives relevance ranking, but those responses
+are not Delivery API responses: the package does not tag them, and nothing purges them.
+
 ## Check it on two servers
 
 `two-servers/run.sh` runs the Umbraco sample as two servers on one SQL Server database, the way a
