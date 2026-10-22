@@ -34,6 +34,7 @@ Listings, such as an article list or a search, come from each server's Delivery 
 
 ## Where to go next
 
+- [Why Cache Tags](/why) compares it with caching on a timer, purging everything and purging by path.
 - [Quickstart](/quickstart) installs the package and purges a first page.
 - [Keys](/keys) explains what each key covers.
 - [Your own APIs](/your-apis) tags responses from your site's own controllers, such as a dictionary endpoint.
