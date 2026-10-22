@@ -12,6 +12,7 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
     // unique index rejects one insert, and only that response is retried rather than the batch lost.
     public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default)
     {
+        var failed = new List<Exception>();
         foreach (CachedResponse response in responses)
         {
             try
@@ -20,20 +21,24 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The rows now exist, so the retry updates them. A response that fails again is
-                // skipped, so it does not cost the rest of the batch.
+                // The rows now exist, so the retry updates them. A response that fails again does not
+                // cost the rest of the batch, but fails the call once they are written: its key is out
+                // already, so the writer must try it again.
                 try
                 {
                     database.Write(db => CacheTagSql.Record(db, response));
                 }
                 catch (Exception retryException) when (retryException is not OperationCanceledException)
                 {
-                    logger.LogWarning(retryException, "Recording cache tag response {ResponseKey} failed; it is recorded on its next render.", response.ResponseKey);
+                    logger.LogWarning(retryException, "Recording cache tag response {ResponseKey} failed.", response.ResponseKey);
+                    failed.Add(retryException);
                 }
             }
         }
 
-        return Task.CompletedTask;
+        return failed.Count == 0
+            ? Task.CompletedTask
+            : Task.FromException(new AggregateException($"Recording {failed.Count} of {responses.Count} cache tag responses failed.", failed));
     }
 
     public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default)

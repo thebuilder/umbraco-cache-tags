@@ -44,14 +44,27 @@ X-Umbraco-Cache-Keys: response-3f9a..., umbraco
 ```
 
 The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
-identity is the path, the query parameters that select content (`id`, `fetch`, `filter`, sorted, empty
-values dropped), the request culture, the segment and the start item. The same request always gives
-the same key on every server. The Delivery API's other parameters (`expand`, `fields`, `sort`,
-`skip`, `take`) only change how a response is presented, and any other parameter is ignored, so
-requests that differ only in them share a key: the mapping only adds keys, so the shared key covers
-everything any of them showed, and a purge reaches each. Input such as `?fields=properties[<random>]`
-or `?skip=<n>` therefore makes no new key. A request whose segment or start item is too long to
-record gets `no-store` and no key.
+identity is the path (lowercased), the query parameters that select content (`id`, `fetch`, `filter`:
+lowercased, sorted, empty and repeated values dropped, an id or a `fetch` target id written in `D`
+form), the request culture, the segment and the start item. The same request always gives the same
+key on every server. The Delivery API's other parameters (`expand`, `fields`, `sort`, `skip`, `take`)
+only change how a response is presented, and any other parameter is ignored, so requests that differ
+only in them, or in the case or form of a value, share a key: the mapping only adds keys, so the
+shared key covers everything any of them showed, and a purge reaches each. Input such as
+`?fields=properties[<random>]`, `?skip=<n>` or `?id=<id>&id=<id>` therefore makes no new key. A
+request whose segment or start item is too long to record gets `no-store` and no key.
+
+The mapping is written in the background (`MappingWriter`), but a response carries its `response-`
+key only once its record is queued, so no key goes out that a purge cannot reach:
+
+- A record that cannot be queued (the queue of 10,000 writes is full, the server is stopping, or the
+  package's tables do not exist yet on a first boot) makes the response carry its keys itself instead,
+  as a catch-all response does below. It is not recorded.
+- A queued record is never given up. A batch whose write fails (the default store retries each
+  response once, then fails the batch) is written again after 1, 2, 4 ... seconds, at most a minute
+  apart, until it succeeds, while new responses fill the queue and then carry their keys themselves.
+  A stopping server writes what is queued once more. Only a crash loses queued records (the last
+  moment's renders): until a frontend fetches those responses again, only `umbraco` reaches them.
 
 The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
@@ -60,9 +73,10 @@ cover them, and sent with both.
 
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
-selected; a listing with no parent or type to select it; a `fetch` of an item that does not exist;
-and `items?id=` naming an item that does not exist (it covers each id asked for, so publishing one
-later reaches it). Each of these can vary with input without end: recorded, each would be another
+selected; a listing with no parent or type to select it; a `fetch` of an item that does not exist,
+by path or by id; a type filter naming a type that does not exist, or more than 10 types; and
+`items?id=` naming an item that does not exist (it covers each id asked for, so publishing one later
+reaches it). Each of these can vary with input without end: recorded, each would be another
 mapping row, and every content publish would purge every one of them, so a purge would grow with
 every variation ever cached. Such a response carries its keys itself instead, as in item keys mode
 below:

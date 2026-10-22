@@ -35,20 +35,37 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
 
     /// <summary>
     ///     Keeps the parameters that select content, sorts them by name, then value (so repeated
-    ///     parameters keep a stable order), drops empty values, and encodes the rest the same way
-    ///     every time. Parameter
-    ///     names are lowercased; values keep their case, since filters and paths can depend on it.
+    ///     parameters keep a stable order), drops empty and repeated values, and encodes the rest the
+    ///     same way every time. Names and values are lowercased, and an id is written in one form
+    ///     (<c>D</c>), as is the id after a <c>:</c> (<c>children:&lt;id&gt;</c>): Umbraco reads ids,
+    ///     paths and aliases regardless of case or form, so the variants of a request share a key.
+    ///     Where a value's case did matter, sharing a key is still safe, for the reason given at
+    ///     <see cref="DeliveryParameters" />.
     /// </summary>
     public static string NormaliseQuery(IEnumerable<KeyValuePair<string, string?>> query, IReadOnlySet<string>? parameters = null)
     {
         IReadOnlySet<string> selecting = parameters ?? DeliveryParameters;
         var normalised = query
             .Where(pair => string.IsNullOrEmpty(pair.Value) is false && selecting.Contains(pair.Key))
-            .Select(pair => (Name: pair.Key.ToLowerInvariant(), Value: pair.Value!))
+            .Select(pair => (Name: pair.Key.ToLowerInvariant(), Value: Canonical(pair.Value!)))
+            .Distinct()
             .OrderBy(pair => pair.Name, StringComparer.Ordinal)
             .ThenBy(pair => pair.Value, StringComparer.Ordinal)
             .Select(pair => Uri.EscapeDataString(pair.Name) + "=" + Uri.EscapeDataString(pair.Value));
         return string.Join("&", normalised);
+    }
+
+    private static string Canonical(string value)
+    {
+        if (Guid.TryParse(value, out Guid id))
+        {
+            return id.ToString("D");
+        }
+
+        var colon = value.IndexOf(':', StringComparison.Ordinal);
+        return colon >= 0 && Guid.TryParse(value.AsSpan(colon + 1), out id)
+            ? value[..colon].ToLowerInvariant() + ":" + id.ToString("D")
+            : value.ToLowerInvariant();
     }
 
     /// <summary>

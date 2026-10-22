@@ -14,8 +14,9 @@ namespace TheBuilder.CacheTags.Collection;
 
 /// <summary>
 ///     Runs after every Delivery API action, and every action with <see cref="CacheTaggedAttribute" />:
-///     gives a cacheable response its keys in the response header and queues the record of what it
-///     covers. Preview responses get <c>no-store</c> and member responses <c>private</c>, and neither
+///     queues the record of what a cacheable response covers, then gives the response its keys in the
+///     header (the keys themselves rather than its response key when the record could not be
+///     queued). Preview responses get <c>no-store</c> and member responses <c>private</c>, and neither
 ///     gets a key. Nor does a response other than a 200, or one whose request headers are too long to
 ///     record: both get <c>no-store</c>.
 /// </summary>
@@ -104,22 +105,29 @@ internal sealed class CacheKeyResultFilter(
         IReadOnlySet<string> keys = collect(value);
 
         ResponseTags tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, responseKey, keys, collector.TypeKeys, recordable);
+        if (tags.Recorded && Record(identity, responseKey, keys) is false)
+        {
+            // The mapping write could not be queued, so no purge would find the response by its key:
+            // it carries its keys itself instead, like a response that is never recorded.
+            tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, responseKey, keys, collector.TypeKeys, recordable: false);
+        }
+
         http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Keys.Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
 
         // Umbraco's output cache is evicted by the same keys a purge names: the response key, or the
         // keys a response that is not recorded carries itself.
         http.Items[OutputCacheTagsItem] = tags.Recorded ? new[] { responseKey } : tags.Keys;
-        if (tags.Recorded is false)
-        {
-            return;
-        }
+    }
 
+    /// <summary>Queues the record of what the response covers, before its key goes out. False when it could not be queued.</summary>
+    private bool Record(ResponseIdentity identity, string responseKey, IReadOnlySet<string> keys)
+    {
         // The key hashes the culture as requested; the mapping stores the culture actually served
         // (Accept-Language: da resolves to da-DK, no header to the default), which a culture-limited
         // purge compares against.
         var servedCulture = variationContext.VariationContext?.Culture?.ToLowerInvariant() ?? identity.Culture;
         DateTime now = time.GetUtcNow().UtcDateTime;
-        writer.Record(new CachedResponse
+        return writer.Record(new CachedResponse
         {
             ResponseKey = responseKey,
             Path = identity.Path,

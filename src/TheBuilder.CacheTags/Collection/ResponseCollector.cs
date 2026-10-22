@@ -3,6 +3,7 @@ using TheBuilder.CacheTags.Keys;
 using Umbraco.Cms.Core.DeliveryApi;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.PublishedCache;
+using Umbraco.Cms.Core.Services;
 
 namespace TheBuilder.CacheTags.Collection;
 
@@ -19,7 +20,9 @@ internal sealed class ResponseCollector(
     IPublishedMediaCache mediaCache,
     IVariationContextAccessor variationContext,
     IApiContentPathResolver contentPaths,
-    IApiMediaQueryService mediaQuery)
+    IApiMediaQueryService mediaQuery,
+    IContentTypeService contentTypes,
+    IMediaTypeService mediaTypes)
 {
     // Umbraco.Cms.Api.Delivery.Caching.DeliveryApiOutputCacheKeys is internal; these are its values
     // from 17.4.0 on. When they are missing, only the result objects are walked.
@@ -45,6 +48,7 @@ internal sealed class ResponseCollector(
                 http.Request.Query["fetch"].ToString(),
                 http.Request.Query["filter"].Where(filter => filter is not null).Select(filter => filter!),
                 target => ResolveTarget(target, endpoint.Media),
+                alias => endpoint.Media ? mediaTypes.Get(alias) is not null : contentTypes.Get(alias) is not null,
                 endpoint.Media));
         }
 
@@ -112,9 +116,12 @@ internal sealed class ResponseCollector(
 
     private Guid? ResolveTarget(string target, bool media)
     {
+        // An id that names nothing is like a path that does: a catch-all, so random ids cannot make a
+        // recorded response each.
         if (Guid.TryParse(target, out Guid key))
         {
-            return key;
+            IPublishedContent? byKey = media ? mediaCache.GetById(key) : contentCache.GetById(key);
+            return byKey?.Key;
         }
 
         // "children:/" lists the children of the item routed at "/" (the site's root page). Only when

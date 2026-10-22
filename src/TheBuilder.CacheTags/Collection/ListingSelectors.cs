@@ -15,13 +15,20 @@ internal static class ListingSelectors
     /// <summary>The key media listings share; media queries walk the media cache rather than an index.</summary>
     public const string MediaSearch = "media";
 
+    /// <summary>The most type aliases a listing is selected by; one filtered by more is a catch-all.</summary>
+    public const int MaxTypes = 10;
+
     private const int MaxAliasLength = 255;
 
     /// <param name="fetch">The <c>fetch</c> parameter, such as <c>children:/articles/</c> or <c>descendants:&lt;id&gt;</c>.</param>
     /// <param name="filters">The <c>filter</c> parameters, such as <c>contentType:article</c>.</param>
-    /// <param name="resolve">Resolves the id or path after <c>children:</c> to the parent's key; <see cref="Guid.Empty" /> for the root.</param>
+    /// <param name="resolve">
+    ///     Resolves the id or path after <c>children:</c> to the item's key, <see cref="Guid.Empty" /> for
+    ///     the root, or <c>null</c> when no such item exists.
+    /// </param>
+    /// <param name="isType">Whether a content or media type with the given alias exists.</param>
     /// <param name="media">Whether this is the media query endpoint.</param>
-    public static IReadOnlyCollection<string> For(string? fetch, IEnumerable<string> filters, Func<string, Guid?> resolve, bool media)
+    public static IReadOnlyCollection<string> For(string? fetch, IEnumerable<string> filters, Func<string, Guid?> resolve, Func<string, bool> isType, bool media)
     {
         var keys = new SortedSet<string>(StringComparer.Ordinal);
         var catchAll = CacheKeys.Search(media ? MediaSearch : ContentIndex);
@@ -72,7 +79,10 @@ internal static class ListingSelectors
             // not fit the mapping.
             .Where(v => v.Length <= MaxAliasLength)
             .ToList();
-        if (types.Count > 0 && types.All(t => t.Length > 0 && t.StartsWith('!') is false))
+
+        // Only aliases that name a type select a listing, and only a few of them: any other alias, or
+        // more of them, is input that can vary without end, and would make a mapping row each.
+        if (types.Count is > 0 and <= MaxTypes && types.All(t => t.Length > 0 && t.StartsWith('!') is false && isType(t)))
         {
             foreach (var type in types)
             {

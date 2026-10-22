@@ -100,7 +100,7 @@ public sealed class CustomChangeTests
         var locale = new HashSet<string>(["locale"], StringComparer.OrdinalIgnoreCase);
 
         Assert.Equal(
-            "locale=da-DK",
+            "locale=da-dk",
             ResponseIdentity.NormaliseQuery([new("format", "next-intl"), new("Locale", "da-DK"), new("filter", "contentType:article")], locale));
     }
 

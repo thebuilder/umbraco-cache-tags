@@ -12,16 +12,29 @@ namespace TheBuilder.CacheTags.Storage;
 ///     <see cref="ICacheTagStore" /> in batches. A render whose keys were written recently is skipped,
 ///     and a response is touched at most once per <see cref="TouchInterval" />.
 /// </summary>
+/// <remarks>
+///     A response's <c>response-</c> key goes out before its render is written, so a queued render is
+///     never given up: a batch that fails is written again until it is written, while the queue fills.
+///     A render that cannot be queued makes <see cref="Record" /> return false, and the response then
+///     carries its keys itself instead (see <c>CacheKeyResultFilter</c>).
+/// </remarks>
 internal sealed class MappingWriter : BackgroundService
 {
     /// <summary>How long an identical render, or a touch, is not written again.</summary>
     public static readonly TimeSpan TouchInterval = TimeSpan.FromHours(1);
 
+    /// <summary>How many writes wait in the queue before more are refused.</summary>
+    public const int Capacity = 10_000;
+
     private const int BatchSize = 200;
 
-    private readonly Channel<MappingWrite> _queue = Channel.CreateBounded<MappingWrite>(new BoundedChannelOptions(10_000)
+    private static readonly TimeSpan LongestRetry = TimeSpan.FromMinutes(1);
+
+    // Wait rather than DropWrite: with DropWrite, TryWrite reports a dropped write as queued. TryWrite
+    // never waits either way.
+    private readonly Channel<MappingWrite> _queue = Channel.CreateBounded<MappingWrite>(new BoundedChannelOptions(Capacity)
     {
-        FullMode = BoundedChannelFullMode.DropWrite,
+        FullMode = BoundedChannelFullMode.Wait,
         SingleReader = true,
     });
 
@@ -41,14 +54,26 @@ internal sealed class MappingWriter : BackgroundService
         _logger = logger;
     }
 
-    /// <summary>Queues a rendered response. Returns false when the queue is full and the write was dropped.</summary>
+    /// <summary>
+    ///     Queues a rendered response. Returns false when it could not be queued (the queue is full, the
+    ///     writer is stopping, or the package's tables do not exist yet): a purge could then not reach
+    ///     the response through its <c>response-</c> key.
+    /// </summary>
     public bool Record(CachedResponse response)
     {
+        if (_database.IsInstalled() is false)
+        {
+            // On a first boot, before the package's migrations have run, there is nowhere to write it.
+            return false;
+        }
+
         var fingerprint = "r:" + response.ResponseKey + ":" + string.Join(',', response.Keys.Order(StringComparer.Ordinal));
         if (_recent.TryGetValue(fingerprint, out _))
         {
-            // Same keys as a render written within the hour: only the "seen" time could change.
-            return Touch(response.ResponseKey);
+            // Same keys as a render queued within the hour, which is written or still being retried:
+            // only the "seen" time could change, and the response key is reachable either way.
+            Touch(response.ResponseKey);
+            return true;
         }
 
         if (Enqueue(new MappingWrite.Render(response)) is false)
@@ -78,7 +103,7 @@ internal sealed class MappingWriter : BackgroundService
         return true;
     }
 
-    // Only a write that was queued is remembered: a dropped one is tried again on the next request.
+    // Only a write that was queued is remembered: one that was not is tried again on the next request.
     private void Remember(string key)
         => _recent.Set(key, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TouchInterval });
 
@@ -89,37 +114,75 @@ internal sealed class MappingWriter : BackgroundService
             return true;
         }
 
-        _logger.LogWarning("The cache tag mapping queue is full; a write was dropped. That response is purged only through its broader keys until it is rendered again.");
+        _logger.LogWarning("The cache tag mapping queue is full or stopped; a write was not queued. A response that cannot be recorded carries its item and selector keys instead of its response key.");
         return false;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var batch = new List<MappingWrite>(BatchSize);
-        while (await _queue.Reader.WaitToReadAsync(stoppingToken))
+        try
         {
-            batch.Clear();
-            while (batch.Count < BatchSize && _queue.Reader.TryRead(out var item))
+            while (await _queue.Reader.WaitToReadAsync(stoppingToken))
             {
-                batch.Add(item);
+                Fill(batch, BatchSize);
+                await WriteUntilWrittenAsync(batch, stoppingToken);
+                batch.Clear();
             }
-
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Stopping: refuse new writes, so responses from now on carry their keys themselves, and
+            // write what is queued (and any batch still being retried) once more.
+            _queue.Writer.TryComplete();
+            Fill(batch, int.MaxValue);
             try
             {
-                await WriteAsync(batch, stoppingToken);
+                await WriteAsync(batch, CancellationToken.None);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception)
             {
-                // Forget what was written recently, so the next render of these responses writes again.
-                _recent.Compact(1.0);
-                _logger.LogError(exception, "Writing {Count} cache tag mapping entries failed.", batch.Count);
+                _logger.LogError(exception, "Writing {Count} cache tag mapping entries on shutdown failed.", batch.Count);
             }
         }
     }
 
+    private void Fill(List<MappingWrite> batch, int size)
+    {
+        while (batch.Count < size && _queue.Reader.TryRead(out var item))
+        {
+            batch.Add(item);
+        }
+    }
+
+    // The responses in the batch are out with their keys already, so a failed batch is written again
+    // until it goes through; writes are additive, so rewriting the part that did is harmless.
+    private async Task WriteUntilWrittenAsync(IReadOnlyList<MappingWrite> batch, CancellationToken stoppingToken)
+    {
+        for (var failures = 0; ; failures++)
+        {
+            try
+            {
+                await WriteAsync(batch, stoppingToken);
+                return;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                TimeSpan delay = RetryDelay(failures);
+                _logger.LogError(exception, "Writing {Count} cache tag mapping entries failed; trying again in {Delay}.", batch.Count, delay);
+                await Task.Delay(delay, _time, stoppingToken);
+            }
+        }
+    }
+
+    /// <summary>1, 2, 4 ... seconds after a batch has failed this many times before, at most a minute.</summary>
+    private static TimeSpan RetryDelay(int failures)
+        => TimeSpan.FromSeconds(Math.Min(LongestRetry.TotalSeconds, Math.Pow(2, Math.Min(failures, 10))));
+
     private async Task WriteAsync(IReadOnlyList<MappingWrite> batch, CancellationToken cancellationToken)
     {
-        // Responses served before the package is installed (first boot) are recorded on a later render.
+        // Only a change to the setting while writes were queued gets here with the package off; with
+        // it off, nothing is purged either.
         if (_options.CurrentValue.Enabled is false || _database.IsInstalled() is false)
         {
             _recent.Compact(1.0);

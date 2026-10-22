@@ -16,7 +16,11 @@ namespace TheBuilder.CacheTags.Storage;
 /// </remarks>
 public interface ICacheTagStore
 {
-    /// <summary>Adds or refreshes rendered responses and the keys they cover.</summary>
+    /// <summary>
+    ///     Adds or refreshes rendered responses and the keys they cover. Throws when any of them could not
+    ///     be recorded: those responses are out with their keys already, so the package writes the batch
+    ///     again until it succeeds.
+    /// </summary>
     Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default);
 
     /// <summary>Marks responses as served (for example from an output cache) at <paramref name="seenUtc" />.</summary>
