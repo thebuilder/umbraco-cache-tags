@@ -33,6 +33,8 @@
     <PackageVersion Include="Umbraco.Cms.Api.Delivery" Version="$(UmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Api.Management" Version="$(UmbracoVersion)" />
     <PackageVersion Include="Umbraco.Cms.Web.Common" Version="$(UmbracoVersion)" />
+    <!-- The tests only: the package's migrations run through Umbraco's SQLite syntax provider. -->
+    <PackageVersion Include="Umbraco.Cms.Persistence.Sqlite" Version="$(UmbracoVersion)" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>

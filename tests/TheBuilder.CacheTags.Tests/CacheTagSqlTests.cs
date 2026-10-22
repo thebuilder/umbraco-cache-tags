@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using NPoco;
 using TheBuilder.CacheTags.Storage;
 
@@ -11,30 +10,12 @@ public sealed class CacheTagSqlTests : IDisposable
     private static readonly DateTime Tuesday = Monday.AddDays(1);
     private static readonly DateTime NextWeek = Monday.AddDays(9);
 
-    private readonly SqliteConnection _connection;
+    private readonly MigratedDatabase _migrated = MigratedDatabase.Create();
     private readonly Database _database;
 
-    public CacheTagSqlTests()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _database = new Database(_connection, DatabaseType.SQLite);
+    public CacheTagSqlTests() => _database = _migrated.Database;
 
-        // The schema the package's migration creates, written out for SQLite.
-        _database.Execute("""
-            CREATE TABLE theBuilderCacheTagsResponse (ResponseKey TEXT PRIMARY KEY, Path TEXT NOT NULL, Query TEXT NOT NULL,
-                Culture TEXT NOT NULL, Segment TEXT NOT NULL, StartItem TEXT NOT NULL, RenderedUtc TEXT NOT NULL, SeenUtc TEXT NOT NULL);
-            CREATE TABLE theBuilderCacheTagsResponseKey (Id INTEGER PRIMARY KEY AUTOINCREMENT, ResponseKey TEXT NOT NULL,
-                CacheKey TEXT NOT NULL, RenderedUtc TEXT NOT NULL);
-            CREATE UNIQUE INDEX IX_Pair ON theBuilderCacheTagsResponseKey (ResponseKey, CacheKey);
-            """);
-    }
-
-    public void Dispose()
-    {
-        _database.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _migrated.Dispose();
 
     private static CachedResponse Render(string responseKey, DateTime at, string culture, params string[] keys)
         => new()

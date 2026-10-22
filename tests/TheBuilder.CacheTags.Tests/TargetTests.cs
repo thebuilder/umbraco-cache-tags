@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using NPoco;
 using TheBuilder.CacheTags.Configuration;
@@ -317,27 +316,12 @@ public sealed class TargetTests : IDisposable
     }
 
     // The store's SQL, against SQLite.
-    private readonly SqliteConnection _connection;
+    private readonly MigratedDatabase _migrated = MigratedDatabase.Create();
     private readonly Database _database;
 
-    public TargetTests()
-    {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _database = new Database(_connection, DatabaseType.SQLite);
-        _database.Execute("""
-            CREATE TABLE theBuilderCacheTagsTarget (Name TEXT PRIMARY KEY, Definition TEXT NOT NULL, CreatedUtc TEXT NOT NULL, UpdatedUtc TEXT NOT NULL);
-            CREATE TABLE theBuilderCacheTagsOutbox (Id TEXT PRIMARY KEY, EventId TEXT NOT NULL, Target TEXT NOT NULL, Keys TEXT NOT NULL,
-                State TEXT NOT NULL, Attempts INTEGER NOT NULL, CreatedUtc TEXT NOT NULL, NotBeforeUtc TEXT NOT NULL, SentUtc TEXT NULL,
-                LastError TEXT NULL, LeaseOwner TEXT NULL, LeaseUntilUtc TEXT NULL);
-            """);
-    }
+    public TargetTests() => _database = _migrated.Database;
 
-    public void Dispose()
-    {
-        _database.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _migrated.Dispose();
 
     [Fact]
     public void A_stored_target_reads_back_with_its_headers_and_a_name_is_added_once()
