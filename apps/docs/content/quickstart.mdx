@@ -57,6 +57,8 @@ Your frontend needs a route that receives purges and expires the keys in them. C
 
 In Umbraco, go to **Settings > Advanced > Cache tags > Targets** and select **Add target**. Enter the webhook's URL and a signing secret, then select **Send test purge** to check it before you save.
 
+A secret typed into the backoffice is stored in the database in plain text. Outside local development, set it as an environment variable such as `CacheTags__Secrets__WebhookSecret`, and have the target name `WebhookSecret` instead. See [Purge targets](/targets#in-the-backoffice).
+
 You can configure the target in `appsettings.json` instead:
 
 ```json appsettings.json
@@ -71,6 +73,8 @@ You can configure the target in `appsettings.json` instead:
   }
 }
 ```
+
+Keep the secret out of source control. Set it as the environment variable `CacheTags__Targets__nextjs__Secret`, or in your host's secret store, and leave it out of the file.
 
 Give the frontend the same secret, as `CACHE_TAGS_WEBHOOK_SECRET`, and use a different one for each environment. To generate one:
 
