@@ -19,7 +19,8 @@ internal sealed class ResponseCollector(
     IPublishedMediaCache mediaCache,
     IVariationContextAccessor variationContext,
     IApiContentPathResolver contentPaths,
-    IApiMediaQueryService mediaQuery)
+    IApiMediaQueryService mediaQuery,
+    KnownNames names)
 {
     // Umbraco.Cms.Api.Delivery.Caching.DeliveryApiOutputCacheKeys is internal; these are its values
     // from 17.4.0 on. When they are missing, only the result objects are walked.
@@ -33,7 +34,7 @@ internal sealed class ResponseCollector(
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         OutputWalker.Collect(result, keys);
-        if (endpoint.Listing is false)
+        if (endpoint.ByIds)
         {
             CollectRequestedItems(http.Request.Query["id"], endpoint.Media, keys);
         }
@@ -45,6 +46,7 @@ internal sealed class ResponseCollector(
                 http.Request.Query["fetch"].ToString(),
                 http.Request.Query["filter"].Where(filter => filter is not null).Select(filter => filter!),
                 target => ResolveTarget(target, endpoint.Media),
+                alias => names.IsType(alias, endpoint.Media),
                 endpoint.Media));
         }
 
@@ -63,20 +65,33 @@ internal sealed class ResponseCollector(
     /// <summary>
     ///     Items asked for by id (<c>items?id=…</c>): a later publish of one the response could not show
     ///     yet must reach it, so it covers every id asked for. A request for an item that does not exist
-    ///     is a catch-all, like a fetch of one, so random ids cannot make a recorded response each.
+    ///     is a catch-all, like a fetch of one, so random ids cannot make a recorded response each. So is
+    ///     a request for more than one item: every set of a site's public ids would be a key of its own.
     /// </summary>
     /// <param name="ids">The <c>id</c> parameters.</param>
     /// <param name="media">Whether the ids are media.</param>
     /// <param name="keys">The keys collected from what the response shows, added to.</param>
     public static void CollectRequestedItems(IEnumerable<string?> ids, bool media, ISet<string> keys)
     {
+        var catchAll = CacheKeys.Search(media ? ListingSelectors.MediaSearch : ListingSelectors.ContentIndex);
+        var requested = new HashSet<Guid>();
         foreach (var value in ids)
         {
-            // The walk has already added what the response shows; an id not among it does not exist.
-            if (Guid.TryParse(value, out Guid id) && keys.Add(media ? CacheKeys.Media(id) : CacheKeys.Content(id)))
+            if (Guid.TryParse(value, out Guid id) is false || requested.Add(id) is false)
             {
-                keys.Add(CacheKeys.Search(media ? ListingSelectors.MediaSearch : ListingSelectors.ContentIndex));
+                continue;
             }
+
+            // The walk has already added what the response shows; an id not among it does not exist.
+            if (keys.Add(media ? CacheKeys.Media(id) : CacheKeys.Content(id)))
+            {
+                keys.Add(catchAll);
+            }
+        }
+
+        if (requested.Count > 1)
+        {
+            keys.Add(catchAll);
         }
     }
 
@@ -112,9 +127,12 @@ internal sealed class ResponseCollector(
 
     private Guid? ResolveTarget(string target, bool media)
     {
+        // An id that names nothing is like a path that does: a catch-all, so random ids cannot make a
+        // recorded response each.
         if (Guid.TryParse(target, out Guid key))
         {
-            return key;
+            IPublishedContent? byKey = media ? mediaCache.GetById(key) : contentCache.GetById(key);
+            return byKey?.Key;
         }
 
         // "children:/" lists the children of the item routed at "/" (the site's root page). Only when
@@ -139,12 +157,22 @@ internal sealed class ResponseCollector(
     }
 }
 
-/// <summary>Which Delivery API endpoint served a request: content or media, item or listing.</summary>
-internal sealed record DeliveryEndpoint(bool Media, bool Listing)
+/// <summary>
+///     Which Delivery API endpoint served a request: content or media, and a listing (<c>Query…</c>,
+///     reads <c>fetch</c> and <c>filter</c>), several items by id (<c>ByIds…</c>, reads <c>id</c>) or
+///     one item by route or id (reads neither).
+/// </summary>
+internal sealed record DeliveryEndpoint(bool Media, bool Listing, bool ByIds = false)
 {
     /// <summary>The Delivery API's own controllers, recognised by namespace and name; anything else is not one.</summary>
     public static DeliveryEndpoint? Of(Type controller)
         => controller.Namespace?.StartsWith("Umbraco.Cms.Api.Delivery.Controllers", StringComparison.Ordinal) is true
-            ? new DeliveryEndpoint(controller.Name.Contains("Media", StringComparison.Ordinal), controller.Name.StartsWith("Query", StringComparison.Ordinal))
+            ? new DeliveryEndpoint(
+                controller.Name.Contains("Media", StringComparison.Ordinal),
+                controller.Name.StartsWith("Query", StringComparison.Ordinal),
+                controller.Name.StartsWith("ByIds", StringComparison.Ordinal))
             : null;
+
+    /// <summary>The query parameters this endpoint reads, so the only ones part of its responses' keys.</summary>
+    public IReadOnlySet<string> Parameters => Listing ? ResponseIdentity.ListingParameters : ByIds ? ResponseIdentity.ItemsParameters : ResponseIdentity.NoParameters;
 }

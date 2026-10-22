@@ -30,10 +30,15 @@ Tag each cached response with the keys in its header. In Next.js with Cache Comp
 ```ts lib/umbraco.ts
 import { cacheLife, cacheTag } from "next/cache";
 
-export async function deliveryApi<T>(path: string): Promise<T> {
+export async function deliveryApi<T>(path: string): Promise<T | null> {
   "use cache";
   const url = `${process.env.UMBRACO_URL}/umbraco/delivery/api/v2/${path}`;
   const response = await fetch(url);
+  if (!response.ok) {
+    // An error carries no keys, so no purge would reach it. Keep it only briefly.
+    cacheLife("seconds");
+    return null;
+  }
   cacheTag(...(response.headers.get("x-umbraco-cache-keys")?.split(", ") ?? []));
   cacheLife("days");
   return response.json();

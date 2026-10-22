@@ -4,8 +4,8 @@ namespace TheBuilder.CacheTags.Targets;
 
 /// <summary>
 ///     A target added in the backoffice, as stored. A secret is never stored by the package: a value
-///     is either typed in (and stored as typed, in plain text) or names an app setting, which is
-///     read when a purge is sent.
+///     is either typed in (and stored as typed, in plain text) or names a secret under
+///     <c>CacheTags:Secrets</c>, which is read when a purge is sent.
 /// </summary>
 internal sealed record TargetDefinition
 {
@@ -35,7 +35,7 @@ internal sealed record TargetDefinition
     public bool Unreadable { get; init; }
 }
 
-/// <summary>A value typed in, or the name of the app setting that holds it. Exactly one is set.</summary>
+/// <summary>A value typed in, or the name of the secret under <c>CacheTags:Secrets</c> that holds it. Exactly one is set.</summary>
 internal sealed record TargetValue(string? Value = null, string? Setting = null);
 
 /// <summary>A named <see cref="TargetValue" />: a request header, or a target type's setting.</summary>

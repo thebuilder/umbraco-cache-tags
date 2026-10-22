@@ -64,7 +64,7 @@ internal sealed class Releaser(
         // Listing responses are in this purge too, so the items they show are fresh at once; their
         // membership and order follow in the indexing stage. A change waits there even with no
         // listing response mapped yet: one can be requested and cached before the index has it.
-        ChangeStage next = IndexCheck.WaitsFor(change.Change.Kind, change.Plan) ? ChangeStage.Indexing : ChangeStage.Released;
+        ChangeStage next = IndexCheck.WaitsFor(change.Change, change.Plan) ? ChangeStage.Indexing : ChangeStage.Released;
         if (ledger.Release(change.Id, next, barrier.Waiting, now, purges) is false)
         {
             return;

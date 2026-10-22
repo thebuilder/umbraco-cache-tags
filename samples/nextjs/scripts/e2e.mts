@@ -47,6 +47,11 @@ const keys = {
   about: "e0000000-0000-0000-0000-000000000006",
   harbourImage: "e1000000-0000-0000-0000-000000000001",
   articleType: "e3000000-0000-0000-0000-000000000003",
+  guideType: "e3000000-0000-0000-0000-000000000012",
+  gettingAround: "e0000000-0000-0000-0000-000000000011",
+  byBike: "e0000000-0000-0000-0000-000000000012",
+  byFerry: "e0000000-0000-0000-0000-000000000014",
+  onFoot: "e0000000-0000-0000-0000-000000000015",
   // The dictionary item the footer shows (Dictionary/DictionarySeeder.cs in the Umbraco sample).
   footerTagline: "e7000000-0000-0000-0000-000000000001",
   // Not seeded: the article case 2 creates, and deletes again. e9 keys are kept for this script.
@@ -152,6 +157,27 @@ async function sortChildren(parent: string, first: string[]) {
 /** The articles in the order the sample seeds them. */
 const seededArticles = [keys.harbour, keys.forest, keys.dusk];
 
+/** Waits until the Delivery API index has something matching a filter again, for the next case. */
+async function indexed(filter: string, ms = 120_000) {
+  const started = Date.now();
+  while (Date.now() - started < ms) {
+    const response = await fetch(`${umbracoUrl}/umbraco/delivery/api/v2/content?filter=${filter}&take=1`);
+    if (response.ok && ((await response.json()) as { total: number }).total > 0) {
+      return;
+    }
+    await sleep(2000);
+  }
+  throw new Error(`Umbraco's index has nothing for ${filter} after ${ms / 1000}s.`);
+}
+
+/** Changes a document type's alias. */
+async function setTypeAlias(id: string, alias: string) {
+  const { id: _, ...type } = await management<{ id: string; alias: string }>("GET", `document-type/${id}`);
+  if (type.alias !== alias) {
+    await management("PUT", `document-type/${id}`, { ...type, alias });
+  }
+}
+
 function setValue(update: Update, alias: string, culture: string | null, map: (text: string) => string) {
   const value = update.values.find((v) => v.alias === alias && v.culture === culture);
   if (!value) {
@@ -227,6 +253,38 @@ async function settle(paths: string[]) {
 
 // Checks, each judged against a fresh read of its page.
 
+/** The items of one listing on a page (its `<ul data-listing="...">`), as HTML. */
+function listing(html: string, name: string) {
+  const start = html.indexOf(`data-listing="${name}"`);
+  if (start < 0) {
+    throw new Error(`The page has no ${name} listing.`);
+  }
+  return html.slice(start, html.indexOf("</ul>", start));
+}
+
+/** The listing shows `first` before `second`. */
+const lists = (path: string, name: string, first: string, second: string): Check => ({
+  path,
+  label: `${path} lists ${first} before ${second} (${name})`,
+  test: (current) => {
+    const items = listing(current.html, name);
+    return items.includes(`>${first}<`) && items.indexOf(`>${first}<`) < items.indexOf(`>${second}<`);
+  },
+});
+
+/** The listing shows (or no longer shows) `item`. */
+const contains = (path: string, name: string, item: string, shown: boolean): Check => ({
+  path,
+  label: `${path} ${shown ? "lists" : "no longer lists"} ${item} (${name})`,
+  test: (current) => listing(current.html, name).includes(`>${item}<`) === shown,
+});
+
+/** A check made directly against Umbraco's Delivery API, rather than a page of this site. */
+function direct(label: string, ok: boolean, detail: string): Result {
+  const current: Page = { path: "", status: 200, html: "", fetches: [], footerFetchedAt: null };
+  return { check: { path: "", label: ok ? label : `${label}: ${detail}`, test: () => ok }, ok, current };
+}
+
 /** The page shows `expected`, which only the change put there. */
 const shows = (path: string, expected: string, what: string): Check => ({
   path,
@@ -274,6 +332,17 @@ const footerRefetched = (before: Page): Check => ({
   path: before.path,
   label: `${before.path} refetched its footer (cached at ${before.footerFetchedAt})`,
   test: (current) => Boolean(before.footerFetchedAt && current.footerFetchedAt && current.footerFetchedAt !== before.footerFetchedAt),
+});
+
+/** The response for `request` is still the one cached at `before`. */
+const keptResponse = (before: Page, request: string, why: string): Check => ({
+  path: before.path,
+  label: `${before.path} kept ${request} (${why})`,
+  test: (current) => {
+    const then = before.fetches.find((f) => f.request === request);
+    const now = current.fetches.find((f) => f.request === request);
+    return Boolean(then && now && now.fetchedAt === then.fetchedAt);
+  },
 });
 
 /** Every response on the page is still the one cached at `before`. */
@@ -516,6 +585,104 @@ const cases: Case[] = [
       await sortChildren(keys.articles, seededArticles);
     },
   },
+  {
+    name: "Sorting a category's guides reorders the listings they are ordered in, and not the items",
+    async run(report) {
+      const category = "/guides/getting-around";
+      const [, guides, onFoot] = await settle([category, "/guides", "/guides/getting-around/on-foot"]);
+      report.checks(await holdsNow([lists(category, "editors-order", "By bike", "On foot")]));
+
+      await sortChildren(keys.gettingAround, [keys.onFoot, keys.byFerry, keys.byBike]);
+
+      // Every guide under the category by type, in sort order; and the recently updated guides,
+      // whose order the index decides and which only the catch-all search- key reaches.
+      report.checks(
+        await waitFor([
+          lists(category, "editors-order", "On foot", "By bike"),
+          refetched(guides, "content?fetch=descendants:/guides/&sort=updateDate:desc&take=3", "it lists guides in an order the index decides"),
+        ]),
+      );
+      report.checks(await holdsNow([keptResponse(onFoot, "content/item/guides/getting-around/on-foot/", "a sort changes no item")]));
+    },
+    async undo() {
+      await sortChildren(keys.gettingAround, [keys.byBike, keys.byFerry, keys.onFoot]);
+    },
+  },
+  {
+    name: "Renaming a document type's alias refreshes the pages that render it under the old alias",
+    async run(report) {
+      const [harbour] = await settle(["/articles/harbour-mornings"]);
+
+      await setTypeAlias(keys.articleType, `articleE2e${runId}`);
+
+      report.checks(await waitFor([refetched(harbour, "content/item/articles/harbour-mornings/", "it renders an article")]));
+    },
+    async undo() {
+      await setTypeAlias(keys.articleType, "article");
+    },
+  },
+  {
+    name: "Unpublishing a category takes its guides out of the guide listing, and publishing it again puts them back",
+    async run(report) {
+      // The guides stay published: they leave and rejoin listings with the category above them.
+      await settle(["/guides"]);
+      report.checks(await holdsNow([contains("/guides", "a-to-z", "On foot", true)]));
+
+      await unpublish(keys.gettingAround);
+      report.checks(await waitFor([contains("/guides", "a-to-z", "On foot", false)], timeoutMs * 2));
+
+      // Umbraco publishes the guides again in a notification of their own, whose change can wait for
+      // the ack timeout (60 seconds) when no refresh is matched to it.
+      await settle(["/guides"]);
+      await publish(keys.gettingAround);
+      report.checks(await waitFor([contains("/guides", "a-to-z", "On foot", true)], timeoutMs * 3));
+    },
+    async undo() {
+      await publish(keys.gettingAround);
+    },
+  },
+  {
+    name: "An item's old route answers a redirect that no cache keeps",
+    async run(report) {
+      const oldRoute = `${umbracoUrl}/umbraco/delivery/api/v2/content/item/guides/getting-around/on-foot/`;
+      await updateDocument(keys.onFoot, (update) => {
+        update.variants[0].name = original(update.variants[0].name) + marker;
+      });
+      await publish(keys.onFoot);
+
+      const response = await fetch(oldRoute, { redirect: "manual" });
+      const cacheControl = response.headers.get("cache-control");
+      const cacheKeys = response.headers.get("x-umbraco-cache-keys");
+      report.checks([
+        direct("The old route answers 301", response.status === 301, `it answered ${response.status}`),
+        direct("The redirect has Cache-Control: no-store", cacheControl === "no-store", `Cache-Control: ${cacheControl}`),
+        direct("The redirect has no cache keys", cacheKeys === null, `X-Umbraco-Cache-Keys: ${cacheKeys}`),
+      ]);
+    },
+    async undo() {
+      await updateDocument(keys.onFoot, (update) => {
+        update.variants[0].name = original(update.variants[0].name);
+      });
+      await publish(keys.onFoot);
+    },
+  },
+  {
+    name: "Renaming a document type's alias empties the listings filtered by the old one",
+    async run(report) {
+      await settle(["/guides"]);
+      report.checks(await holdsNow([contains("/guides", "a-to-z", "On foot", true)]));
+
+      // contentType:guidePage now matches nothing. Purged before Umbraco has indexed the guides again,
+      // the listing would be cached with them again, and no later change would purge it.
+      // Umbraco indexes a renamed type's documents again up to a minute later.
+      await setTypeAlias(keys.guideType, `guidePageE2e${runId}`);
+      report.checks(await waitFor([contains("/guides", "a-to-z", "On foot", false)], timeoutMs * 4));
+    },
+    async undo() {
+      await setTypeAlias(keys.guideType, "guidePage");
+      await indexed("contentType:guidePage");
+    },
+  },
 ];
 
 /** Deletes the article case 2 creates, wherever a previous run left it. */
@@ -561,6 +728,11 @@ async function main() {
   await deleteNewArticle();
   await ensurePublished(keys.dusk);
   await sortChildren(keys.articles, seededArticles);
+  await ensurePublished(keys.gettingAround);
+  await sortChildren(keys.gettingAround, [keys.byBike, keys.byFerry, keys.onFoot]);
+  await setTypeAlias(keys.articleType, "article");
+  await setTypeAlias(keys.guideType, "guidePage");
+  await indexed("contentType:guidePage");
 
   console.log(`Checking ${frontendUrl} against ${umbracoUrl}, ${timeoutMs / 1000}s per case.\n`);
   let failed = 0;

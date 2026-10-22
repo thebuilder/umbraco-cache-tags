@@ -82,6 +82,27 @@ public sealed class RequestedItemsTests
     }
 
     [Fact]
+    public void Several_items_asked_for_make_the_response_a_catch_all_even_when_all_exist()
+    {
+        const string AlsoShown = "e0000000-0000-0000-0000-000000000004";
+        var keys = new HashSet<string> { $"content-{Shown}", $"content-{AlsoShown}" };
+
+        ResponseCollector.CollectRequestedItems([Shown, AlsoShown.ToUpperInvariant(), Shown], media: false, keys);
+
+        Assert.Equal([$"content-{Shown}", $"content-{AlsoShown}", "search-deliveryapicontentindex"], keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void One_item_asked_for_twice_is_one_item()
+    {
+        var keys = new HashSet<string> { $"content-{Shown}" };
+
+        ResponseCollector.CollectRequestedItems([Shown, Shown.ToUpperInvariant()], media: false, keys);
+
+        Assert.Equal([$"content-{Shown}"], keys);
+    }
+
+    [Fact]
     public void An_item_asked_for_that_does_not_exist_is_covered_and_makes_the_response_a_catch_all()
     {
         var keys = new HashSet<string> { $"content-{Shown}" };

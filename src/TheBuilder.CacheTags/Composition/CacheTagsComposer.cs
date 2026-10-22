@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
@@ -29,24 +28,12 @@ public sealed class CacheTagsComposer : IComposer
     public void Compose(IUmbracoBuilder builder)
     {
         builder.PackageMigrationPlans().Add(typeof(CacheTagsMigrationPlan));
-        builder.Services.AddOptions<CacheTagsOptions>()
-            .Bind(builder.Config.GetSection(CacheTagsOptions.SectionName))
-            .Validate(options => options.HeaderName.Length > 0 && options.HeaderName.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'), "CacheTags:HeaderName must be a header name of letters, digits and hyphens.")
-            .Validate(options => options.KeyPrefix.Length == 0 || (options.KeyPrefix.EndsWith('-') && options.KeyPrefix.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-')), "CacheTags:KeyPrefix may contain only lowercase letters, digits and hyphens, and must end in a hyphen.")
-            .Validate(options => options.MaxItemKeys > 0, "CacheTags:MaxItemKeys must be above 0.")
-            .Validate(options => options.MaxDescendants >= 0, "CacheTags:MaxDescendants must be 0 or more.")
-            .Validate(options => options.MappingRetention > TimeSpan.Zero && options.LedgerRetention > TimeSpan.Zero, "CacheTags:MappingRetention and LedgerRetention must be above zero.")
-            .Validate(options => options.IndexTimeout > TimeSpan.Zero, "CacheTags:IndexTimeout must be above zero.")
-            .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
-            .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)
-            .Validate(options => options.Targets.Values.All(CloudflareTarget.IsValid), CloudflareTarget.ValidationMessage)
-            .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
-            .ValidateOnStart();
-        builder.Services.AddSingleton<IValidateOptions<CacheTagsOptions>, ConfiguredTargetHeaders>();
+        builder.Services.AddCacheTagsOptions(builder.Config);
         builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Collecting.
         builder.Services.AddSingleton<ReferenceReader>();
+        builder.Services.AddSingleton<KnownNames>();
         builder.Services.AddScoped<ResponseCollector>();
         builder.Services.AddScoped<CacheTagsResponse>();
         builder.Services.AddScoped<ICacheTagsResponse>(services => services.GetRequiredService<CacheTagsResponse>());
@@ -82,6 +69,8 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationHandler<MediaMovedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaMovedToRecycleBinNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaDeletedNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<ContentTypeSavingNotification, SourceChangeHandlers>()
+            .AddNotificationHandler<MediaTypeSavingNotification, SourceChangeHandlers>()
             .AddNotificationHandler<ContentTypeChangedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<MediaTypeChangedNotification, SourceChangeHandlers>()
             .AddNotificationHandler<DataTypeSavedNotification, SourceChangeHandlers>()

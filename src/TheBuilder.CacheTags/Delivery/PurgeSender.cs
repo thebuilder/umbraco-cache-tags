@@ -23,11 +23,18 @@ internal sealed class PurgeSender(
     public async Task<int> SendAsync(CancellationToken cancellationToken)
     {
         CacheTagsOptions settings = options.CurrentValue;
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        (IReadOnlyList<Purge> due, var pending) = ledger.Due(now, 20);
+        (IReadOnlyList<Purge> due, var pending) = ledger.Due(time.GetUtcNow().UtcDateTime, 20);
 
-        foreach (Purge purge in due.Where(purge => ledger.ClaimSend(purge.Id, identity.Name, now, now + Lease)))
+        foreach (Purge purge in due)
         {
+            // The time is read again for each claim: sending the purges before it can take longer than
+            // the lease, and a lease from the start of the pass would be over before this one is sent.
+            DateTime claimed = time.GetUtcNow().UtcDateTime;
+            if (ledger.ClaimSend(purge.Id, identity.Name, claimed, claimed + Lease) is false)
+            {
+                continue;
+            }
+
             if (Exists(purge.Target) is false)
             {
                 // Queued from another server's list just before the target was deleted.
@@ -44,8 +51,8 @@ internal sealed class PurgeSender(
                 continue;
             }
 
-            ledger.Failed(purge.Id, identity.Name, purge.Attempts + 1, settings.MaxAttempts, error, finished);
-            logger.LogWarning("Cache tags purge {PurgeId} to {Target} failed (attempt {Attempt} of {Max}): {Error}", purge.Id, purge.Target, purge.Attempts + 1, settings.MaxAttempts, error);
+            var attempt = ledger.Failed(purge.Id, identity.Name, settings.MaxAttempts, error, finished);
+            logger.LogWarning("Cache tags purge {PurgeId} to {Target} failed (attempt {Attempt} of {Max}): {Error}", purge.Id, purge.Target, attempt ?? purge.Attempts + 1, settings.MaxAttempts, error);
         }
 
         return Math.Max(0, pending - due.Count);

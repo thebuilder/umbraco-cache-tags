@@ -13,5 +13,6 @@ internal sealed class CacheTagsMigrationPlan : PackageMigrationPlan
         To<AddWriteLock>(new Guid("4d7a9c2e-6b1f-4e38-9a05-8f3c2d1e6b74"));
         To<AddIndexAcks>(new Guid("9b2e6f14-3a7d-4c51-8e09-d6f1a2b7c3e5"));
         To<AddTargets>(new Guid("c41f7a2e-8d3b-4e96-a5c0-2b7e9d4f1a68"));
+        To<AddReleasedIndex>(new Guid("5e0b8d37-2f6a-4c19-b4e2-7a9d1c3f6e05"));
     }
 }

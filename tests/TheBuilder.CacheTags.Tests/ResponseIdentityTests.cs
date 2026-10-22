@@ -17,7 +17,7 @@ public sealed class ResponseIdentityTests
             P("skip", "0"),
         ]);
 
-        Assert.Equal("fetch=children%3A%2Farticles%2F&filter=contentType%3Aarticle", query);
+        Assert.Equal("fetch=children%3A%2Farticles%2F&filter=contenttype%3Aarticle", query);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class ResponseIdentityTests
     public void Parameters_are_ordered_by_name_not_by_value()
     {
         Assert.Equal(
-            "fetch=children%3A%2Fa%2F&filter=contentType%3Aarticle",
+            "fetch=children%3A%2Fa%2F&filter=contenttype%3Aarticle",
             ResponseIdentity.NormaliseQuery([P("filter", "contentType:article"), P("fetch", "children:/a/")]));
     }
 
@@ -47,8 +47,44 @@ public sealed class ResponseIdentityTests
     public void Repeated_parameters_keep_every_value_in_a_stable_order()
     {
         Assert.Equal(
-            "filter=contentType%3Aarticle&filter=name%3Aharbour",
+            "filter=contenttype%3Aarticle&filter=name%3Aharbour",
             ResponseIdentity.NormaliseQuery([P("filter", "name:harbour"), P("filter", "contentType:article")]));
+    }
+
+    [Fact]
+    public void Values_are_lowercased_and_ids_written_in_one_form()
+    {
+        Assert.Equal(
+            "fetch=children%3A3f2504e0-4f89-11d3-9a0c-0305e82c3301&filter=contenttype%3Aarticle&id=3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+            ResponseIdentity.NormaliseQuery([
+                P("id", "{3F2504E0-4F89-11D3-9A0C-0305E82C3301}"),
+                P("fetch", "Children:3F2504E04F8911D39A0C0305E82C3301"),
+                P("filter", "contentType:Article"),
+            ]));
+    }
+
+    [Fact]
+    public void Repeated_values_count_once()
+    {
+        Assert.Equal(
+            "fetch=children%3A%2Farticles%2F&id=3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+            ResponseIdentity.NormaliseQuery([
+                P("id", "3f2504e0-4f89-11d3-9a0c-0305e82c3301"),
+                P("id", "3F2504E0-4F89-11D3-9A0C-0305E82C3301"),
+                P("fetch", "children:/articles/"),
+                P("fetch", "children:/Articles/"),
+            ]));
+    }
+
+    [Fact]
+    public void Padding_and_the_order_of_a_type_list_do_not_change_the_key()
+    {
+        Assert.Equal(
+            "fetch=children%3A%2Farticles%2F&filter=contenttype%3Aarticle%2Cpage",
+            ResponseIdentity.NormaliseQuery([
+                P("fetch", " children:/articles/   "),
+                P("filter", "contentType: page , article,page"),
+            ]));
     }
 
     // Expected values computed outside the package: Python's hashlib.sha256 over the same fields
@@ -64,7 +100,7 @@ public sealed class ResponseIdentityTests
             startItem: "Site");
         ResponseIdentity item = ResponseIdentity.Create("/umbraco/delivery/api/v2/content/item/Articles/", [], null, null, null);
 
-        Assert.Equal("response-e200fc8d2981f4d13248f90a0384d772", listing.ToKey());
+        Assert.Equal("response-0ac652de573895ae257a6c3efcdc0518", listing.ToKey());
         Assert.Equal("response-b8b882fdaac4c330543d7a6e943423d9", item.ToKey());
     }
 

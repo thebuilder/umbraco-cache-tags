@@ -15,7 +15,12 @@ namespace TheBuilder.CacheTags.Delivery;
 ///     The items' ancestors. Umbraco refreshes a branch (a publish with descendants, a delete) as one
 ///     refresh of its root, which refreshes every item under it.
 /// </param>
-internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string Requires, IReadOnlyList<Guid>? Ancestors = null)
+/// <param name="Sources">
+///     For types and everything: the refreshes Umbraco sends for the change (see <see cref="Source" />),
+///     so a refresh of another type, language or domain does not count. <c>null</c> on a change
+///     recorded before sources were, which any refresh of its kind acknowledges.
+/// </param>
+internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string Requires, IReadOnlyList<Guid>? Ancestors = null, IReadOnlyList<string>? Sources = null)
 {
     public const string Content = "content";
     public const string Media = "media";
@@ -34,6 +39,19 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
     public const string Remove = "remove";
     public const string Any = "any";
 
+    // The cache refreshers whose refreshes acknowledge type and site-wide changes.
+    public const string ContentTypes = "contenttype";
+    public const string DataTypes = "datatype";
+    public const string Domains = "domain";
+    public const string Languages = "language";
+    public const string PublicAccess = "publicaccess";
+
+    /// <summary>
+    ///     One refresh a refresher sends: <c>language:5</c> for one language, <c>language</c> for all of
+    ///     them (a refresh with no payload). Content and media types share Umbraco's node ids.
+    /// </summary>
+    public static string Source(string refresher, object? id = null) => id is null ? refresher : $"{refresher}:{id}";
+
     public static AckSignal For(Change change)
     {
         var keys = change.Items.Select(item => item.Key).ToList();
@@ -46,8 +64,8 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
             ChangeKind.Deleted => new(Content, keys, Remove, ancestors),
             ChangeKind.Sorted => new(Content, keys, Any),
             ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted => new(Media, keys, Any, ancestors),
-            ChangeKind.TypesChanged => new(Types, [], Any),
-            ChangeKind.Everything => new(Everything, [], Any),
+            ChangeKind.TypesChanged => new(Types, [], Any, Sources: change.Sources),
+            ChangeKind.Everything => new(Everything, [], Any, Sources: change.Sources),
             ChangeKind.Custom => new(change.WaitFor is null ? None : CustomPrefix + change.WaitFor, [], Any),
             _ => throw new ArgumentOutOfRangeException(nameof(change), change.Kind, "A change kind needs an ack signal."),
         };
@@ -66,7 +84,7 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
 
         if (Kind is Types or Everything)
         {
-            return true;
+            return Sources is null || (refresh.Source is { } source && Sources.Any(own => own == source || own.StartsWith(source + ":", StringComparison.Ordinal)));
         }
 
         if (refresh.Key is { } key && Keys.Contains(key) is false)
@@ -103,4 +121,5 @@ internal sealed record AckSignal(string Kind, IReadOnlyList<Guid> Keys, string R
 /// <param name="ChangeTypes">How the item was refreshed (content and media).</param>
 /// <param name="HasPublishedCultures">Whether the refresh carried published cultures (a publish).</param>
 /// <param name="HasUnpublishedCultures">Whether it carried unpublished cultures (an unpublish).</param>
-internal sealed record ObservedRefresh(string Kind, Guid? Key, TreeChangeTypes ChangeTypes = TreeChangeTypes.None, bool HasPublishedCultures = false, bool HasUnpublishedCultures = false);
+/// <param name="Source">For types and everything: the refresher and item refreshed (see <see cref="AckSignal.Source" />).</param>
+internal sealed record ObservedRefresh(string Kind, Guid? Key, TreeChangeTypes ChangeTypes = TreeChangeTypes.None, bool HasPublishedCultures = false, bool HasUnpublishedCultures = false, string? Source = null);

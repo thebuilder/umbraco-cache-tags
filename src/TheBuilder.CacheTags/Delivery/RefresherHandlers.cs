@@ -38,20 +38,27 @@ internal sealed class RefresherHandlers(AckProcessor processor, ILogger<Refreshe
                 p.ChangeTypes)).ToList()
             : [new ObservedRefresh(AckSignal.Media, null)]);
 
+    // Type and site-wide refreshes name the item they refreshed (see AckSignal.Source); one without a
+    // payload refreshes every item of its refresher.
     public Task HandleAsync(ContentTypeCacheRefresherNotification notification, CancellationToken cancellationToken)
-        => Observe(notification, () => [new ObservedRefresh(AckSignal.Types, null)]);
+        => Observe(notification, () => Sources(notification, AckSignal.Types, AckSignal.ContentTypes, (ContentTypeCacheRefresher.JsonPayload payload) => payload.Id));
 
     public Task HandleAsync(DataTypeCacheRefresherNotification notification, CancellationToken cancellationToken)
-        => Observe(notification, () => [new ObservedRefresh(AckSignal.Types, null)]);
+        => Observe(notification, () => Sources(notification, AckSignal.Types, AckSignal.DataTypes, (DataTypeCacheRefresher.JsonPayload payload) => payload.Key));
 
     public Task HandleAsync(DomainCacheRefresherNotification notification, CancellationToken cancellationToken)
-        => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null)]);
+        => Observe(notification, () => Sources(notification, AckSignal.Everything, AckSignal.Domains, (DomainCacheRefresher.JsonPayload payload) => payload.Id));
 
     public Task HandleAsync(LanguageCacheRefresherNotification notification, CancellationToken cancellationToken)
-        => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null)]);
+        => Observe(notification, () => Sources(notification, AckSignal.Everything, AckSignal.Languages, (LanguageCacheRefresher.JsonPayload payload) => payload.Id));
 
     public Task HandleAsync(PublicAccessCacheRefresherNotification notification, CancellationToken cancellationToken)
-        => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null)]);
+        => Observe(notification, () => [new ObservedRefresh(AckSignal.Everything, null, Source: AckSignal.Source(AckSignal.PublicAccess))]);
+
+    private static IReadOnlyCollection<ObservedRefresh> Sources<TPayload>(CacheRefresherNotification notification, string kind, string refresher, Func<TPayload, object> id)
+        => notification.MessageType == MessageType.RefreshByPayload && notification.MessageObject is TPayload[] payloads
+            ? payloads.Select(payload => new ObservedRefresh(kind, null, Source: AckSignal.Source(refresher, id(payload)))).ToList()
+            : [new ObservedRefresh(kind, null, Source: AckSignal.Source(refresher))];
 
     private Task Observe(CacheRefresherNotification notification, Func<IReadOnlyCollection<ObservedRefresh>> read)
     {

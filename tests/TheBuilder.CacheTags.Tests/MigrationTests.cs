@@ -28,6 +28,7 @@ public sealed class MigrationTests
             [
                 "theBuilderCacheTagsAck UNIQUE IX_theBuilderCacheTagsAck_Pair (EventId, Server)",
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_CreatedUtc (CreatedUtc)",
+                "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_ReleasedUtc (ReleasedUtc)",
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_Status (Status)",
                 "theBuilderCacheTagsOutbox IX_theBuilderCacheTagsOutbox_Due (State, NotBeforeUtc)",
                 "theBuilderCacheTagsResponse IX_theBuilderCacheTagsResponse_SeenUtc (SeenUtc)",

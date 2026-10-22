@@ -17,10 +17,14 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
     /// <summary>The Delivery API content index (<c>Constants.UmbracoIndexes.DeliveryApiContentIndexName</c>).</summary>
     public const string IndexName = "DeliveryApiContentIndex";
 
+    /// <summary>The field <c>filter=contentType:</c> matches (Umbraco's internal <c>ContentTypeFilterIndexer.FieldName</c>).</summary>
+    private const string ContentTypeField = "contentType";
+
     /// <summary>
     ///     Whether the index has every item of a change this server has applied: each item's documents
-    ///     were built from its state in the database now (<see cref="IndexStamp" />). Without the index
-    ///     (the Delivery API is off), nothing can wait for it.
+    ///     were built from its state in the database now (<see cref="IndexStamp" />), and no document is
+    ///     left of a content type alias it renamed. Without the index (the Delivery API is off), nothing
+    ///     can wait for it.
     /// </summary>
     public bool Has(Change change)
     {
@@ -32,8 +36,11 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
         // Runs on the delivery worker while editors may be saving (see PackageDatabase.ReadUmbraco).
         // Only the database reads hold the lock; the index is searched after.
         IReadOnlyList<IContent?> items = database.ReadUmbraco(() => change.Items.Select(item => contentService.GetById(item.Key)).ToList());
-        return items.All(content => Has(index, content));
+        return items.All(content => Has(index, content)) && (change.RenamedAliases ?? []).All(alias => Gone(index, alias));
     }
+
+    private static bool Gone(IIndex index, string alias)
+        => index.Searcher.CreateQuery().Field(ContentTypeField, alias).Execute(QueryOptions.SkipTake(0, 1)).TotalItemCount == 0;
 
     private bool Has(IIndex index, IContent? content)
     {
