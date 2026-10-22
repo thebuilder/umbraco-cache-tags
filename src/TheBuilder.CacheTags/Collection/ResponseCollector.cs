@@ -3,7 +3,6 @@ using TheBuilder.CacheTags.Keys;
 using Umbraco.Cms.Core.DeliveryApi;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.PublishedCache;
-using Umbraco.Cms.Core.Services;
 
 namespace TheBuilder.CacheTags.Collection;
 
@@ -21,8 +20,7 @@ internal sealed class ResponseCollector(
     IVariationContextAccessor variationContext,
     IApiContentPathResolver contentPaths,
     IApiMediaQueryService mediaQuery,
-    IContentTypeService contentTypes,
-    IMediaTypeService mediaTypes)
+    KnownNames names)
 {
     // Umbraco.Cms.Api.Delivery.Caching.DeliveryApiOutputCacheKeys is internal; these are its values
     // from 17.4.0 on. When they are missing, only the result objects are walked.
@@ -48,7 +46,7 @@ internal sealed class ResponseCollector(
                 http.Request.Query["fetch"].ToString(),
                 http.Request.Query["filter"].Where(filter => filter is not null).Select(filter => filter!),
                 target => ResolveTarget(target, endpoint.Media),
-                alias => endpoint.Media ? mediaTypes.Get(alias) is not null : contentTypes.Get(alias) is not null,
+                alias => names.IsType(alias, endpoint.Media),
                 endpoint.Media));
         }
 

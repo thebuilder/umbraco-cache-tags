@@ -34,12 +34,14 @@ The package records which items and listings each response key covers. When cont
 The response key is a hash of what selects the content:
 
 - The path
-- The `id`, `fetch` and `filter` query parameters, lowercased and sorted, with empty and repeated ones dropped, and ids written in one form
-- The culture, the segment and the start item
+- The query parameters the endpoint reads: `id` for an item endpoint, `fetch` and `filter` for a query (listing) endpoint. Values are lowercased and stripped of whitespace, ids are written in one form, type lists are sorted, and empty and repeated values are dropped.
+- The culture and the start item (as the item it resolves to)
 
-The other Delivery API parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how Umbraco presents a response, and the package ignores any other parameter. Requests that differ only in those, or in the case or form of a value, share a key. The shared key covers everything any of them showed, so a purge reaches each, and input such as `?skip=<n>` cannot make new keys.
+The segment is left out, so a response's segment variants share its key. Nothing purges by segment, so a purge still reaches each.
 
-The record of what a response covers is written in the background. A response carries its response key only once that write is queued, and a queued write is retried until it succeeds. When the queue is full, the response carries its item and listing keys itself instead, as a catch-all listing does, so a purge always reaches it.
+The other Delivery API parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how Umbraco presents a response, and the package ignores any other parameter. Requests that differ only in those, or in the case, form or order of a value, share a key. The shared key covers everything any of them showed, so a purge reaches each, and input such as `?skip=<n>` cannot make new keys.
+
+The record of what a response covers is written in the background. A response carries its response key only once that write is queued, and a queued write is retried while the server runs, one response at a time once a batch fails, so one bad response does not hold up the rest. When the queue is full, the response carries its item and listing keys itself instead, as a catch-all listing does, so a purge always reaches it.
 
 ## Catch-all listings
 
@@ -49,7 +51,7 @@ The package does not record a listing selected by a search, a name filter, or an
 X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco
 ```
 
-Every publish plans the `search-` key, which purges all of them at once, however many are cached. The same goes for a `fetch` of an item that does not exist (by path or by id), a content type filter naming a type that does not exist or more than 10 types, and an `items?id=` request naming an item that does not exist yet.
+Every publish plans the `search-` key, which purges all of them at once, however many are cached. The same goes for a `fetch` of an item that does not exist (by path or by id), a content type filter naming a type that does not exist or more than 10 types, and an `items?id=` request naming an item that does not exist yet. A request in a culture that is not one of the site's languages is not recorded either, and carries its own keys.
 
 ## Which responses get keys
 

@@ -47,6 +47,7 @@ public sealed class CacheTagsComposer : IComposer
 
         // Collecting.
         builder.Services.AddSingleton<ReferenceReader>();
+        builder.Services.AddSingleton<KnownNames>();
         builder.Services.AddScoped<ResponseCollector>();
         builder.Services.AddScoped<CacheTagsResponse>();
         builder.Services.AddScoped<ICacheTagsResponse>(services => services.GetRequiredService<CacheTagsResponse>());

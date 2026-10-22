@@ -44,15 +44,27 @@ X-Umbraco-Cache-Keys: response-3f9a..., umbraco
 ```
 
 The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
-identity is the path (lowercased), the query parameters that select content (`id`, `fetch`, `filter`:
-lowercased, sorted, empty and repeated values dropped, an id or a `fetch` target id written in `D`
-form), the request culture, the segment and the start item. The same request always gives the same
-key on every server. The Delivery API's other parameters (`expand`, `fields`, `sort`, `skip`, `take`)
-only change how a response is presented, and any other parameter is ignored, so requests that differ
-only in them, or in the case or form of a value, share a key: the mapping only adds keys, so the
-shared key covers everything any of them showed, and a purge reaches each. Input such as
-`?fields=properties[<random>]`, `?skip=<n>` or `?id=<id>&id=<id>` therefore makes no new key. A
-request whose segment or start item is too long to record gets `no-store` and no key.
+identity is:
+
+- the path, lowercased;
+- the query parameters the endpoint selects content by: `id` for an item endpoint (`items?id=`),
+  `fetch` and `filter` for a query (listing) endpoint. An endpoint ignores the others, so they are
+  left out. Each value is lowercased and stripped of whitespace, an id (alone or after a `:`, as in
+  `children:<id>`) is written in `D` form, and a list after a `:` (`contentType:b,a`) is sorted with
+  repeats dropped. The values are then sorted, with empty and repeated ones dropped;
+- the culture, as Umbraco reads it from `Accept-Language`;
+- the start item, as the id of the item `Start-Item` resolves to.
+
+The segment is left out: Umbraco takes `Accept-Segment` as sent, and no purge is limited by segment,
+so segment variants share a key. The same request always gives the same key on every server. The
+Delivery API's other parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how a
+response is presented, and any other parameter is ignored, so requests that differ only in them, or
+in the case, form or order of a value, share a key: the mapping only adds keys, so the shared key
+covers everything any of them showed, and a purge reaches each. Input such as
+`?fields=properties[<random>]`, `?skip=<n>`, `?id=<id>&id=<id>` or `item/<path>?filter=<random>`
+therefore makes no new key. A request whose start item is too long to record gets `no-store` and no
+key. A culture that is no language of the site is not recorded (see below): Umbraco takes
+`Accept-Language` as sent too, and a purge limited to a language would not match it.
 
 The mapping is written in the background (`MappingWriter`), but a response carries its `response-`
 key only once its record is queued, so no key goes out that a purge cannot reach:
@@ -60,12 +72,16 @@ key only once its record is queued, so no key goes out that a purge cannot reach
 - A record that cannot be queued (the queue of 10,000 writes is full, the server is stopping, or the
   package's tables do not exist yet on a first boot) makes the response carry its keys itself instead,
   as a catch-all response does below. It is not recorded.
-- A queued record is never given up. A batch whose write fails (the default store retries each
-  response once, then fails the batch) is written again after 1, 2, 4 ... seconds, at most a minute
-  apart, until it succeeds, while new responses fill the queue and then carry their keys themselves.
-  A stopping server refuses new records and tries once more to write what is queued. A crash, or a
-  database already gone at shutdown, loses queued records (the last moment's renders): until a
-  frontend fetches those responses again, only `umbraco` reaches them.
+- A queued record is not given up while the server runs. When a batch fails (the default store
+  retries each response once, then fails the batch), its records are written one by one, and those
+  that fail again are retried after 2, 4, 8 ... seconds, at most a minute apart, so one record the
+  store keeps rejecting does not hold up the rest. Once 200 records are failing (the store is down),
+  the writer takes no new ones until they go through: the queue fills, and new responses carry their
+  keys themselves. Any exception but the server stopping counts as a failure, a store's own timeout
+  included.
+- A stopping server refuses new records and spends up to 5 seconds writing what is queued or
+  failing. A crash, or what is left after those seconds, loses those records (the last moment's
+  renders): until a frontend fetches those responses again, only `umbraco` reaches them.
 
 The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
@@ -75,9 +91,10 @@ cover them, and sent with both.
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
 selected; a listing with no parent or type to select it; a `fetch` of an item that does not exist,
-by path or by id; a type filter naming a type that does not exist, or more than 10 types; and
-`items?id=` naming an item that does not exist (it covers each id asked for, so publishing one later
-reaches it). Each of these can vary with input without end: recorded, each would be another
+by path or by id; a type filter naming a type that does not exist (one longer than an alias can be
+included), or more than 10 types; `items?id=` naming an item that does not exist (it covers each id
+asked for, so publishing one later reaches it). Content and media types are read at most once a
+minute, so one created in the last minute counts as unknown until then. Each of these can vary with input without end: recorded, each would be another
 mapping row, and every content publish would purge every one of them, so a purge would grow with
 every variation ever cached. Such a response carries its keys itself instead, as in item keys mode
 below:
@@ -89,6 +106,10 @@ X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontent
 and the planned `search-` key purges every such response at once, however many are cached. Being
 unrecorded, these responses lose culture-limited purging (a purge reaches them in every culture, which
 only over-purges) and are not shown by the lookup API.
+
+A response in a culture that is no language of the site (Umbraco takes `Accept-Language` as sent, so
+`Accept-Language: <random>` is one) is not recorded either, and carries its keys itself the same way,
+reached by the item and selector keys a purge sends. Languages are read at most once a minute too.
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
 characters) and ignores the rest. A header carries at most `MaxItemKeys` (64) item keys, plus schema

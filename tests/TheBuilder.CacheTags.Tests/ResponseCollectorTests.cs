@@ -44,6 +44,12 @@ public sealed class ResponseCollectorTests
         Assert.Equal(["search-deliveryapicontentindex"], Collect(query));
     }
 
+    [Fact]
+    public void A_type_filter_with_an_alias_longer_than_umbraco_allows_is_a_catch_all()
+    {
+        Assert.Equal(["search-deliveryapicontentindex"], Collect("?filter=contentType:article," + new string('a', 256)));
+    }
+
     private static string[] Collect(string query)
     {
         var collector = new ResponseCollector(
@@ -53,8 +59,7 @@ public sealed class ResponseCollectorTests
             Fake<IVariationContextAccessor>.Of(),
             Fake<IApiContentPathResolver>.Of(),
             Fake<IApiMediaQueryService>.Of(),
-            Fake<IContentTypeService>.Of((method, args) => method.Name == "Get" && args[0] is "article" or "page" ? Fake<IContentType>.Of() : null),
-            Fake<IMediaTypeService>.Of());
+            Names.Of(["article", "page"]));
 
         var http = new DefaultHttpContext();
         http.Request.QueryString = new QueryString(query);

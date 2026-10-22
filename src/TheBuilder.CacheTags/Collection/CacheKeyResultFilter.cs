@@ -24,10 +24,10 @@ internal sealed class CacheKeyResultFilter(
     IOptionsMonitor<CacheTagsOptions> options,
     IRequestPreviewService preview,
     IRequestCultureService requestCulture,
-    IRequestSegmentService requestSegment,
     IRequestStartItemProvider startItem,
     IVariationContextAccessor variationContext,
     ResponseCollector collector,
+    KnownNames names,
     CacheTagsResponse named,
     MappingWriter writer,
     TimeProvider time) : IAsyncResultFilter
@@ -42,7 +42,7 @@ internal sealed class CacheKeyResultFilter(
         {
             if (DeliveryEndpoint.Of(action.ControllerTypeInfo) is { } endpoint)
             {
-                Tag(context, settings, value => collector.Collect(value, context.HttpContext, endpoint), ResponseIdentity.DeliveryParameters, recordable: true);
+                Tag(context, settings, value => collector.Collect(value, context.HttpContext, endpoint), endpoint.Listing ? ResponseIdentity.ListingParameters : ResponseIdentity.ItemParameters, recordable: true);
             }
             else if ((action.MethodInfo.GetCustomAttribute<CacheTaggedAttribute>() ?? action.ControllerTypeInfo.GetCustomAttribute<CacheTaggedAttribute>()) is { } tagged)
             {
@@ -87,12 +87,16 @@ internal sealed class CacheKeyResultFilter(
             return;
         }
 
+        // Umbraco takes the culture and segment headers as sent, so they are input that can vary
+        // without end. The segment is left out of the key: segment variants share it, which is safe
+        // because no purge is limited by segment. The start item is keyed as the item it resolves to.
+        var culture = variationContext.VariationContext?.Culture ?? requestCulture.GetRequestedCulture();
         ResponseIdentity identity = ResponseIdentity.Create(
             http.Request.Path.Value ?? string.Empty,
             http.Request.Query.SelectMany(pair => pair.Value.Select(v => new KeyValuePair<string, string?>(pair.Key, v))),
-            requestCulture.GetRequestedCulture(),
-            requestSegment.GetRequestedSegment(),
-            startItem.RequestedStartItem(),
+            culture,
+            segment: null,
+            startItem.GetStartItem()?.Key.ToString("D"),
             parameters);
         if (identity.Fits is false)
         {
@@ -104,6 +108,9 @@ internal sealed class CacheKeyResultFilter(
         var responseKey = identity.ToKey();
         IReadOnlySet<string> keys = collect(value);
 
+        // A culture that is no language is not recorded: a purge limited to a language would miss it,
+        // and its values would make a mapping row each. It carries its keys itself.
+        recordable = recordable && (string.IsNullOrEmpty(culture) || names.IsCulture(culture));
         ResponseTags tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, responseKey, keys, collector.TypeKeys, recordable);
         if (tags.Recorded && Record(identity, responseKey, keys) is false)
         {
@@ -122,17 +129,13 @@ internal sealed class CacheKeyResultFilter(
     /// <summary>Queues the record of what the response covers, before its key goes out. False when it could not be queued.</summary>
     private bool Record(ResponseIdentity identity, string responseKey, IReadOnlySet<string> keys)
     {
-        // The key hashes the culture as requested; the mapping stores the culture actually served
-        // (Accept-Language: da resolves to da-DK, no header to the default), which a culture-limited
-        // purge compares against.
-        var servedCulture = variationContext.VariationContext?.Culture?.ToLowerInvariant() ?? identity.Culture;
         DateTime now = time.GetUtcNow().UtcDateTime;
         return writer.Record(new CachedResponse
         {
             ResponseKey = responseKey,
             Path = identity.Path,
             Query = identity.Query,
-            Culture = servedCulture,
+            Culture = identity.Culture,
             Segment = identity.Segment,
             StartItem = identity.StartItem,
             Keys = keys.Order(StringComparer.Ordinal).ToArray(),

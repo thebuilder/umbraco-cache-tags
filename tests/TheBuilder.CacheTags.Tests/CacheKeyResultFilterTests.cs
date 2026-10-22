@@ -5,11 +5,15 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Umbraco.Cms.Api.Delivery.Controllers.Content;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core.DeliveryApi;
+using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core.PublishedCache;
+using Umbraco.Cms.Core.Services;
 
 namespace TheBuilder.CacheTags.Tests;
 
@@ -22,7 +26,7 @@ public sealed class CacheKeyResultFilterTests
     {
         using MappingWriter writer = Writers.Create(new NoStore());
 
-        var keys = await HeaderAsync(writer);
+        var keys = await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary"));
 
         Assert.Equal(2, keys.Length);
         Assert.StartsWith("response-", keys[0], StringComparison.Ordinal);
@@ -38,7 +42,7 @@ public sealed class CacheKeyResultFilterTests
             writer.Record(Writers.Response($"response-{i}"));
         }
 
-        Assert.Equal(["x-dictionary-en", "umbraco"], await HeaderAsync(writer));
+        Assert.Equal(["x-dictionary-en", "umbraco"], await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary")));
     }
 
     [Fact]
@@ -46,31 +50,95 @@ public sealed class CacheKeyResultFilterTests
     {
         using MappingWriter writer = Writers.Create(new NoStore(), installed: false);
 
-        Assert.Equal(["x-dictionary-en", "umbraco"], await HeaderAsync(writer));
+        Assert.Equal(["x-dictionary-en", "umbraco"], await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary")));
     }
 
-    /// <summary>Runs the filter over a <see cref="DictionaryController" /> response, and returns its header's keys.</summary>
-    private static async Task<string[]> HeaderAsync(MappingWriter writer)
+    [Fact]
+    public async Task An_item_request_keys_by_its_id_only_since_an_item_endpoint_ignores_fetch_and_filter()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore());
+        const string Item = "/umbraco/delivery/api/v2/content/item/articles/";
+
+        var plain = await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item));
+
+        Assert.Equal(plain, await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, "?filter=a8f3e1c2&fetch=children:/b7d2/")));
+        Assert.NotEqual(plain, await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, "?id=e0000000-0000-0000-0000-000000000002")));
+    }
+
+    [Fact]
+    public async Task A_listing_request_keys_by_fetch_and_filter_only_since_a_query_endpoint_ignores_id()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore());
+        const string Listing = "/umbraco/delivery/api/v2/content";
+
+        var plain = await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article"));
+
+        Assert.StartsWith("response-", plain[0], StringComparison.Ordinal);
+        Assert.Equal(plain, await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article&id=3f2504e0-4f89-11d3-9a0c-0305e82c3301")));
+        Assert.NotEqual(plain, await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article&fetch=children:/")));
+    }
+
+    [Fact]
+    public async Task A_culture_that_is_no_language_is_not_recorded()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore());
+        const string Listing = "/umbraco/delivery/api/v2/content";
+
+        var english = await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article", Culture: "en-US"));
+        var danish = await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article", Culture: "da-dk"));
+
+        Assert.StartsWith("response-", english[0], StringComparison.Ordinal);
+        Assert.StartsWith("response-", danish[0], StringComparison.Ordinal);
+        Assert.NotEqual(english, danish);
+        Assert.Equal(["type-article", "umbraco"], await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article", Culture: "x8f3e1c2")));
+    }
+
+    [Fact]
+    public async Task Segments_and_start_items_umbraco_does_not_resolve_share_a_key()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore());
+        const string Item = "/umbraco/delivery/api/v2/content/item/articles/";
+
+        var plain = await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, Culture: "en-us"));
+
+        Assert.StartsWith("response-", plain[0], StringComparison.Ordinal);
+        Assert.Equal(plain, await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, Culture: "en-us", Segment: "x8f3e1c2", RequestedStartItem: "b7d2")));
+    }
+
+    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? RequestedStartItem = null);
+
+    /// <summary>Runs the filter over a 200 response to the request, and returns its header's keys.</summary>
+    private static async Task<string[]> HeaderAsync(MappingWriter writer, Request request)
     {
         var named = new CacheTagsResponse();
         named.Add("x-dictionary-en");
+        KnownNames names = Names.Of(["article"], cultures: ["en-US", "da-DK"]);
+        IVariationContextAccessor variation = Fake<IVariationContextAccessor>.Of((method, _) => method.Name == "get_VariationContext" && request.Culture is not null ? new VariationContext(request.Culture, request.Segment) : null);
         var filter = new CacheKeyResultFilter(
             Writers.Options(Settings),
             Fake<IRequestPreviewService>.Of(),
-            Fake<IRequestCultureService>.Of(),
-            Fake<IRequestSegmentService>.Of(),
-            Fake<IRequestStartItemProvider>.Of(),
-            Fake<IVariationContextAccessor>.Of(),
-            new ResponseCollector(null!, null!, null!, null!, null!, null!, null!, null!),
+            Fake<IRequestCultureService>.Of((method, _) => method.Name == "GetRequestedCulture" ? request.Culture : null),
+            Fake<IRequestStartItemProvider>.Of((method, _) => method.Name == "RequestedStartItem" ? request.RequestedStartItem : null),
+            variation,
+            new ResponseCollector(
+                null!,
+                Fake<IPublishedContentCache>.Of(),
+                Fake<IPublishedMediaCache>.Of(),
+                variation,
+                Fake<IApiContentPathResolver>.Of(),
+                Fake<IApiMediaQueryService>.Of(),
+                names),
+            names,
             named,
             writer,
             TimeProvider.System);
 
         var http = new DefaultHttpContext();
-        http.Request.Path = "/api/dictionary";
+        http.Request.Path = request.Path;
+        http.Request.QueryString = new QueryString(request.Query);
         var action = new ControllerActionDescriptor
         {
-            ControllerTypeInfo = typeof(DictionaryController).GetTypeInfo(),
+            ControllerTypeInfo = request.Controller.GetTypeInfo(),
             MethodInfo = typeof(DictionaryController).GetMethod(nameof(DictionaryController.Get))!,
         };
         var context = new ResultExecutingContext(

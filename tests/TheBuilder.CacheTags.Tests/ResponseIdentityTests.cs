@@ -76,6 +76,17 @@ public sealed class ResponseIdentityTests
             ]));
     }
 
+    [Fact]
+    public void Padding_and_the_order_of_a_type_list_do_not_change_the_key()
+    {
+        Assert.Equal(
+            "fetch=children%3A%2Farticles%2F&filter=contenttype%3Aarticle%2Cpage",
+            ResponseIdentity.NormaliseQuery([
+                P("fetch", " children:/articles/   "),
+                P("filter", "contentType: page , article,page"),
+            ]));
+    }
+
     // Expected values computed outside the package: Python's hashlib.sha256 over the same fields
     // joined by newlines, first 32 hex characters.
     [Fact]

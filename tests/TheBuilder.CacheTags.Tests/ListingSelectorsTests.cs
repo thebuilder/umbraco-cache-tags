@@ -54,14 +54,6 @@ public sealed class ListingSelectorsTests
     }
 
     [Fact]
-    public void A_content_type_longer_than_an_alias_can_be_is_not_a_selector()
-    {
-        var keys = ListingSelectors.For(null, ["contentType:article," + new string('a', 256)], Resolve, IsType, media: false);
-
-        Assert.Equal(["type-article"], keys);
-    }
-
-    [Fact]
     public void A_filter_on_anything_but_the_type_makes_a_listing_a_catch_all_whatever_else_selects_it()
     {
         Assert.Equal(

@@ -9,8 +9,8 @@ namespace TheBuilder.CacheTags.Keys;
 /// </summary>
 /// <param name="Path">The request path, lowercased.</param>
 /// <param name="Query">The normalised query string (see <see cref="ResponseIdentity.NormaliseQuery" />).</param>
-/// <param name="Culture">The request culture, lowercased, or empty.</param>
-/// <param name="Segment">The requested segment, or empty.</param>
+/// <param name="Culture">The culture, lowercased, or empty.</param>
+/// <param name="Segment">The segment, or empty. Delivery API responses leave it out of their key (see CacheKeyResultFilter).</param>
 /// <param name="StartItem">The <c>Start-Item</c> header, lowercased, or empty.</param>
 internal sealed record ResponseIdentity(string Path, string Query, string Culture, string Segment, string StartItem)
 {
@@ -24,6 +24,15 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
     /// </summary>
     public static readonly IReadOnlySet<string> DeliveryParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "id", "fetch", "filter" };
 
+    /// <summary>
+    ///     The <see cref="DeliveryParameters" /> an item endpoint reads: <c>id</c> (<c>items?id=</c>). It
+    ///     ignores <c>fetch</c> and <c>filter</c>, so they must not make a new key per value.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ItemParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "id" };
+
+    /// <summary>The <see cref="DeliveryParameters" /> a query (listing) endpoint reads: <c>fetch</c> and <c>filter</c>, not <c>id</c>.</summary>
+    public static readonly IReadOnlySet<string> ListingParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "fetch", "filter" };
+
     /// <summary>The identity of a request; <paramref name="parameters" /> are the query parameters that select content, the Delivery API's by default.</summary>
     public static ResponseIdentity Create(string path, IEnumerable<KeyValuePair<string, string?>> query, string? culture, string? segment, string? startItem, IReadOnlySet<string>? parameters = null)
         => new(
@@ -36,11 +45,9 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
     /// <summary>
     ///     Keeps the parameters that select content, sorts them by name, then value (so repeated
     ///     parameters keep a stable order), drops empty and repeated values, and encodes the rest the
-    ///     same way every time. Names and values are lowercased, and an id is written in one form
-    ///     (<c>D</c>), as is the id after a <c>:</c> (<c>children:&lt;id&gt;</c>): Umbraco reads ids,
-    ///     paths and aliases regardless of case or form, so the variants of a request share a key.
-    ///     Where a value's case did matter, sharing a key is still safe, for the reason given at
-    ///     <see cref="DeliveryParameters" />.
+    ///     same way every time. Values are made canonical first (see <see cref="Canonical" />), so
+    ///     the variants of a request share a key. Where a difference did matter to Umbraco, sharing
+    ///     a key is still safe, for the reason given at <see cref="DeliveryParameters" />.
     /// </summary>
     public static string NormaliseQuery(IEnumerable<KeyValuePair<string, string?>> query, IReadOnlySet<string>? parameters = null)
     {
@@ -55,17 +62,30 @@ internal sealed record ResponseIdentity(string Path, string Query, string Cultur
         return string.Join("&", normalised);
     }
 
+    /// <summary>
+    ///     A value lowercased, without whitespace, and with an id written in one form (<c>D</c>). After
+    ///     a <c>:</c> (<c>children:&lt;id&gt;</c>, <c>contentType:a,b</c>), an id is written the same
+    ///     way, and a list is sorted with repeats dropped. Umbraco reads ids, paths and aliases
+    ///     regardless of case, form or padding, and a type filter's aliases in any order.
+    /// </summary>
     private static string Canonical(string value)
     {
-        if (Guid.TryParse(value, out Guid id))
+        var bare = string.Concat(value.Where(c => char.IsWhiteSpace(c) is false)).ToLowerInvariant();
+        if (Guid.TryParse(bare, out Guid id))
         {
             return id.ToString("D");
         }
 
-        var colon = value.IndexOf(':', StringComparison.Ordinal);
-        return colon >= 0 && Guid.TryParse(value.AsSpan(colon + 1), out id)
-            ? value[..colon].ToLowerInvariant() + ":" + id.ToString("D")
-            : value.ToLowerInvariant();
+        var colon = bare.IndexOf(':', StringComparison.Ordinal);
+        if (colon < 0)
+        {
+            return bare;
+        }
+
+        var target = bare[(colon + 1)..];
+        return bare[..colon] + ":" + (Guid.TryParse(target, out id)
+            ? id.ToString("D")
+            : string.Join(',', target.Split(',').Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)));
     }
 
     /// <summary>

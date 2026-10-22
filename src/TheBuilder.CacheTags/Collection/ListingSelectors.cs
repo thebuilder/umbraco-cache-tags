@@ -18,8 +18,6 @@ internal static class ListingSelectors
     /// <summary>The most type aliases a listing is selected by; one filtered by more is a catch-all.</summary>
     public const int MaxTypes = 10;
 
-    private const int MaxAliasLength = 255;
-
     /// <param name="fetch">The <c>fetch</c> parameter, such as <c>children:/articles/</c> or <c>descendants:&lt;id&gt;</c>.</param>
     /// <param name="filters">The <c>filter</c> parameters, such as <c>contentType:article</c>.</param>
     /// <param name="resolve">
@@ -75,9 +73,7 @@ internal static class ListingSelectors
             .Select(f => f[typeFilter.Length..])
             .SelectMany(v => v.Split(','))
             .Select(v => v.Trim())
-            // Umbraco aliases are at most 255 characters; a longer one matches no item, and would
-            // not fit the mapping.
-            .Where(v => v.Length <= MaxAliasLength)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         // Only aliases that name a type select a listing, and only a few of them: any other alias, or

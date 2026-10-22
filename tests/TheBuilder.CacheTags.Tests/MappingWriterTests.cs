@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
@@ -12,15 +13,45 @@ namespace TheBuilder.CacheTags.Tests;
 public sealed class MappingWriterTests
 {
     [Fact]
-    public async Task A_render_whose_write_fails_is_written_again_without_another_request()
+    public async Task A_render_whose_write_keeps_failing_is_written_again_without_another_request()
     {
-        var store = new FlakyStore(failures: 1);
+        // The batch fails, then the render on its own, so it waits for the next round.
+        var store = new Store((_, call) => call <= 2 ? new InvalidOperationException("The database is busy.") : null);
         using MappingWriter writer = Writers.Create(store);
         await writer.StartAsync(CancellationToken.None);
 
         Assert.True(writer.Record(Writers.Response("response-1")));
 
-        Assert.Equal(["response-1"], await store.Recorded.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        await store.WaitForAsync("response-1");
+        await writer.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task A_render_the_store_keeps_rejecting_does_not_hold_up_the_others()
+    {
+        var store = new Store((responses, _) => responses.Any(response => response.ResponseKey == "response-rejected") ? new InvalidOperationException("Rejected.") : null);
+        using MappingWriter writer = Writers.Create(store);
+        await writer.StartAsync(CancellationToken.None);
+
+        writer.Record(Writers.Response("response-rejected"));
+        writer.Record(Writers.Response("response-1"));
+        await store.WaitForAsync("response-1");
+        writer.Record(Writers.Response("response-2"));
+
+        await store.WaitForAsync("response-2");
+        await writer.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task A_store_that_times_out_with_a_cancellation_is_tried_again()
+    {
+        var store = new Store((_, call) => call == 1 ? new TaskCanceledException("The store timed out.") : null);
+        using MappingWriter writer = Writers.Create(store);
+        await writer.StartAsync(CancellationToken.None);
+
+        writer.Record(Writers.Response("response-1"));
+
+        await store.WaitForAsync("response-1");
         await writer.StopAsync(CancellationToken.None);
     }
 
@@ -28,7 +59,7 @@ public sealed class MappingWriterTests
     public void A_render_that_does_not_fit_the_queue_is_refused()
     {
         // Not started, so nothing takes writes off the queue.
-        using MappingWriter writer = Writers.Create(new FlakyStore(failures: 0));
+        using MappingWriter writer = Writers.Create(new Store((_, _) => null));
         for (var i = 0; i < MappingWriter.Capacity; i++)
         {
             Assert.True(writer.Record(Writers.Response($"response-{i}")));
@@ -40,27 +71,37 @@ public sealed class MappingWriterTests
     [Fact]
     public void A_render_before_the_package_is_installed_is_refused()
     {
-        using MappingWriter writer = Writers.Create(new FlakyStore(failures: 0), installed: false);
+        using MappingWriter writer = Writers.Create(new Store((_, _) => null), installed: false);
 
         Assert.False(writer.Record(Writers.Response("response-1")));
     }
 
-    private sealed class FlakyStore(int failures) : ICacheTagStore
+    /// <summary>A store that fails a call when <c>fail</c> returns an exception for it (calls count from 1), and records the rest.</summary>
+    private sealed class Store(Func<IReadOnlyCollection<CachedResponse>, int, Exception?> fail) : ICacheTagStore
     {
-        private int _failures = failures;
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> _recorded = new();
+        private int _calls;
 
-        public TaskCompletionSource<string[]> Recorded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task WaitForAsync(string responseKey)
+            => Recorded(responseKey).Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default)
         {
-            if (Interlocked.Decrement(ref _failures) >= 0)
+            if (fail(responses, Interlocked.Increment(ref _calls)) is { } exception)
             {
-                throw new InvalidOperationException("The database is busy.");
+                throw exception;
             }
 
-            Recorded.TrySetResult(responses.Select(response => response.ResponseKey).ToArray());
+            foreach (CachedResponse response in responses)
+            {
+                Recorded(response.ResponseKey).TrySetResult();
+            }
+
             return Task.CompletedTask;
         }
+
+        private TaskCompletionSource Recorded(string responseKey)
+            => _recorded.GetOrAdd(responseKey, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 
         public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
