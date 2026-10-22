@@ -41,8 +41,9 @@ internal sealed class LedgerStore(PackageDatabase database)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Records a change. Recording one that is already recorded does nothing, so a retry after a lost reply is safe.</summary>
     public void Add(Change change, PurgePlan plan, string server)
-        => database.Write(db => db.Insert(new EventRow
+        => database.Write(db => LedgerSql.Exists(db, change.Id) || db.Insert(new EventRow
         {
             Id = change.Id,
             CreatedUtc = change.CreatedUtc,
@@ -52,7 +53,7 @@ internal sealed class LedgerStore(PackageDatabase database)
             Plan = JsonSerializer.Serialize(plan, Json),
             Signal = JsonSerializer.Serialize(AckSignal.For(change), Json),
             Status = EventStatuses.Pending,
-        }));
+        }) is not null);
 
     public IReadOnlyList<LedgerEntry> Unreleased(int take)
         => database.Read(db => LedgerSql.Unreleased(db, take)).Select(Entry).ToList();

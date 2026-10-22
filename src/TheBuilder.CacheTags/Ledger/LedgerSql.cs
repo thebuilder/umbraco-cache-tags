@@ -11,6 +11,9 @@ namespace TheBuilder.CacheTags.Ledger;
 /// </summary>
 internal static class LedgerSql
 {
+    public static bool Exists(IDatabase database, Guid id)
+        => database.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Constants.Tables.Events} WHERE Id = @0", id) > 0;
+
     public static List<EventRow> Unreleased(IDatabase database, int take)
         => database.SkipTake<EventRow>(0, take, new Sql(
             $"SELECT * FROM {Constants.Tables.Events} WHERE Status = @0 OR Status = @1 ORDER BY CreatedUtc",
