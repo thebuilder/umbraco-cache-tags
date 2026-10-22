@@ -2,12 +2,12 @@ using System.Globalization;
 using Umbraco.Cms.Core.DeliveryApi;
 using Umbraco.Cms.Core.Models;
 
-namespace TheBuilder.CacheTags.Collection;
+namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>
 ///     Stamps each document Umbraco builds for the Delivery API content index with the state of the
 ///     item it was built from, so a server can tell whether its index has caught up with a change
-///     (<c>IndexWatcher</c>): when the stamp matches the item's state in the database now, the index
+///     (<see cref="LocalDeliveryIndex" />): when the stamp matches the item's state in the database now, the index
 ///     has every change made to it so far.
 /// </summary>
 internal sealed class IndexStamp : IContentIndexHandler

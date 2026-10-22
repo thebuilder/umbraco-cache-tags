@@ -92,7 +92,8 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<PurgeResolver>();
         builder.Services.AddSingleton<OutputCacheEviction>();
         builder.Services.AddSingleton<AckProcessor>();
-        builder.Services.AddSingleton<IndexWatcher>();
+        builder.Services.AddSingleton<LocalDeliveryIndex>();
+        builder.Services.AddSingleton<IndexStage>();
         builder.ContentIndexHandlers().Add<IndexStamp>();
         builder.Services.AddSingleton<Releaser>();
         builder.Services.AddSingleton<PurgeSender>();

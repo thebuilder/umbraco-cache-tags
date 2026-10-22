@@ -35,37 +35,3 @@ internal static class IndexCheck
             ? documents.Count == 0
             : documents.Count > 0 && documents.All(document => document.State == state);
 }
-
-/// <summary>Whether a released change's listings may be purged yet, and which servers they would be purged without.</summary>
-internal sealed record ListingDecision(bool Release, bool TimedOut, IReadOnlyList<string> Waiting)
-{
-    /// <summary>
-    ///     A change's listings are purged once every active server that acknowledged the change has
-    ///     indexed it, or once <paramref name="indexTimeout" /> has passed since the change was
-    ///     released. A server that stopped (no heartbeat within <paramref name="serverTimeout" />)
-    ///     serves nothing, so nothing waits for it.
-    /// </summary>
-    public static ListingDecision Decide(
-        DateTime releasedUtc,
-        DateTime nowUtc,
-        IEnumerable<ServerPresence> servers,
-        IReadOnlySet<string> acknowledgedBy,
-        IReadOnlySet<string> indexedBy,
-        TimeSpan indexTimeout,
-        TimeSpan serverTimeout)
-    {
-        var active = servers.Where(server => server.LastSeenUtc >= nowUtc - serverTimeout).Select(server => server.Server).ToHashSet(StringComparer.Ordinal);
-        var waiting = acknowledgedBy
-            .Where(server => active.Contains(server) && indexedBy.Contains(server) is false)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        if (waiting.Count == 0)
-        {
-            return new ListingDecision(true, false, []);
-        }
-
-        var timedOut = nowUtc - releasedUtc >= indexTimeout;
-        return new ListingDecision(timedOut, timedOut, waiting);
-    }
-}

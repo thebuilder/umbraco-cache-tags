@@ -17,6 +17,19 @@ internal enum ChangeKind
     Everything,
 }
 
+/// <summary>Where a recorded change is on its way to the frontends.</summary>
+internal enum ChangeStage
+{
+    /// <summary>Waiting for every server to apply it (the ack barrier).</summary>
+    Pending,
+
+    /// <summary>Its purge is queued; its listing purge waits for every server's Delivery API index.</summary>
+    Indexing,
+
+    /// <summary>Every purge for it is queued.</summary>
+    Released,
+}
+
 /// <summary>
 ///     One change to published output, recorded by the server that made it. Draft-only saves never
 ///     become a change.
@@ -42,10 +55,10 @@ internal sealed record Change(
 /// <param name="ParentKey">Its parent's key; <see cref="Guid.Empty" /> at the root.</param>
 /// <param name="OldParentKey">For moves: the parent it left.</param>
 /// <param name="RouteChanged">
-/// <param name="Ancestors">Its ancestors' keys, root first: a refresh of an ancestor's branch also refreshes it.</param>
 ///     Its route changed in a way its descendants' routes follow: a new URL segment, a move, an
 ///     unpublish.
 /// </param>
+/// <param name="Ancestors">Its ancestors' keys, root first: a refresh of an ancestor's branch also refreshes it.</param>
 internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null);
 
 /// <summary>

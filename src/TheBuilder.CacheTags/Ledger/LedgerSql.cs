@@ -5,72 +5,52 @@ using TheBuilder.CacheTags.Storage;
 namespace TheBuilder.CacheTags.Ledger;
 
 /// <summary>
-///     Releasing changes and sending purges, against any NPoco database. Every server runs the same
-///     loop; a lease (an owner and an expiry, set by a conditional update) makes sure one server
-///     handles each change and each purge at a time, and lets another take over if it stops.
+///     The ledger's SQL, against any NPoco database. Every server runs the same loop. A change moves
+///     on a stage only by a conditional update in the same transaction as the purges it queues, so
+///     whichever server gets there first queues them and the others do nothing. Sending a purge is
+///     not transactional, so a lease (an owner and an expiry) makes sure one server sends it at a
+///     time, and lets another take over if it stops.
 /// </summary>
 internal static class LedgerSql
 {
     public static bool Exists(IDatabase database, Guid id)
         => database.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Constants.Tables.Events} WHERE Id = @0", id) > 0;
 
-    public static List<EventRow> Unreleased(IDatabase database, int take)
+    /// <summary>The changes at a stage, oldest first.</summary>
+    public static List<EventRow> InStage(IDatabase database, ChangeStage stage, int take)
         => database.SkipTake<EventRow>(0, take, new Sql(
-            $"SELECT * FROM {Constants.Tables.Events} WHERE Status = @0 OR Status = @1 ORDER BY CreatedUtc",
-            EventStatuses.Pending,
-            EventStatuses.Releasing));
+            $"SELECT * FROM {Constants.Tables.Events} WHERE Status = @0 ORDER BY CreatedUtc",
+            stage.ToString()));
 
     public static List<EventRow> Latest(IDatabase database, int take)
         => database.SkipTake<EventRow>(0, take, new Sql($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC"));
 
-    /// <summary>Takes the lease on releasing a change. False when another server holds it, or it is released.</summary>
-    public static bool ClaimRelease(IDatabase database, Guid id, string owner, DateTime nowUtc, DateTime leaseUntilUtc)
-        => database.Execute(
-            $"UPDATE {Constants.Tables.Events} SET Status = @0, LeaseOwner = @1, LeaseUntilUtc = @2 WHERE Id = @3 AND (Status = @4 OR (Status = @0 AND LeaseUntilUtc < @5))",
-            EventStatuses.Releasing,
-            owner,
-            leaseUntilUtc,
-            id,
-            EventStatuses.Pending,
-            nowUtc) == 1;
-
-    /// <summary>Queues the purges and marks the change released, if this server still holds the lease.</summary>
-    public static bool CompleteRelease(IDatabase database, Guid id, string owner, string status, DateTime nowUtc, string? missing, bool listingsWait, IEnumerable<OutboxRow> purges)
-    {
-        var released = database.Execute(
-            $"UPDATE {Constants.Tables.Events} SET Status = @0, ReleasedUtc = @1, Missing = @2, ListingsState = @3, LeaseOwner = NULL, LeaseUntilUtc = NULL WHERE Id = @4 AND LeaseOwner = @5",
-            status,
-            nowUtc,
+    /// <summary>Releases a pending change to <paramref name="stage" /> and queues its purges, unless another server already has. Returns whether this call did.</summary>
+    public static bool Release(IDatabase database, Guid id, ChangeStage stage, DateTime releasedUtc, string? missing, IEnumerable<OutboxRow> purges)
+        => Advance(
+            database,
+            purges,
+            $"UPDATE {Constants.Tables.Events} SET Status = @0, ReleasedUtc = @1, Missing = @2 WHERE Id = @3 AND Status = @4",
+            stage.ToString(),
+            releasedUtc,
             missing ?? (object)DBNull.Value,
-            listingsWait ? ListingStates.Waiting : DBNull.Value,
             id,
-            owner) == 1;
-        if (released)
-        {
-            foreach (OutboxRow purge in purges)
-            {
-                database.Insert(purge);
-            }
-        }
+            nameof(ChangeStage.Pending));
 
-        return released;
-    }
+    /// <summary>Releases an indexing change's listing purges, unless another server already has. Returns whether this call did.</summary>
+    public static bool ReleaseListings(IDatabase database, Guid id, IEnumerable<OutboxRow> purges)
+        => Advance(
+            database,
+            purges,
+            $"UPDATE {Constants.Tables.Events} SET Status = @0 WHERE Id = @1 AND Status = @2",
+            nameof(ChangeStage.Released),
+            id,
+            nameof(ChangeStage.Indexing));
 
-    /// <summary>Released changes whose listing purge waits for the servers' indexes, oldest first.</summary>
-    public static List<EventRow> ListingsWaiting(IDatabase database, int take)
-        => database.SkipTake<EventRow>(0, take, new Sql(
-            $"SELECT * FROM {Constants.Tables.Events} WHERE ListingsState = @0 ORDER BY ReleasedUtc",
-            ListingStates.Waiting));
-
-    /// <summary>Queues a change's listing purges, if no other server has. Returns whether this call did.</summary>
-    public static bool CompleteListings(IDatabase database, Guid id, IEnumerable<OutboxRow> purges)
+    private static bool Advance(IDatabase database, IEnumerable<OutboxRow> purges, string sql, params object[] args)
     {
-        var completed = database.Execute(
-            $"UPDATE {Constants.Tables.Events} SET ListingsState = @0 WHERE Id = @1 AND ListingsState = @2",
-            ListingStates.Sent,
-            id,
-            ListingStates.Waiting) == 1;
-        if (completed)
+        var advanced = database.Execute(sql, args) == 1;
+        if (advanced)
         {
             foreach (OutboxRow purge in purges)
             {
@@ -78,7 +58,7 @@ internal static class LedgerSql
             }
         }
 
-        return completed;
+        return advanced;
     }
 
     public static List<OutboxRow> Due(IDatabase database, DateTime nowUtc, int take)
@@ -126,9 +106,8 @@ internal static class LedgerSql
             OutboxStates.Dead,
             cutoffUtc);
         database.Execute(
-            $"DELETE FROM {Constants.Tables.Events} WHERE (Status = @0 OR Status = @1) AND CreatedUtc < @2 AND Id NOT IN (SELECT EventId FROM {Constants.Tables.Outbox})",
-            EventStatuses.Released,
-            EventStatuses.ReleasedAfterTimeout,
+            $"DELETE FROM {Constants.Tables.Events} WHERE Status = @0 AND CreatedUtc < @1 AND Id NOT IN (SELECT EventId FROM {Constants.Tables.Outbox})",
+            nameof(ChangeStage.Released),
             cutoffUtc);
     }
 }

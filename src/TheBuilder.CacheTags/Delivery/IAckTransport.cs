@@ -20,17 +20,14 @@ public interface IAckTransport
     /// <summary>Records that <paramref name="server" /> has applied the given changes.</summary>
     Task AckAsync(string server, IReadOnlyCollection<Guid> changeIds, DateTime ackedUtc, CancellationToken cancellationToken = default);
 
-    /// <summary>The servers that have acknowledged each of the given changes.</summary>
-    Task<IReadOnlyDictionary<Guid, IReadOnlySet<string>>> GetAcksAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default);
+    /// <summary>The acknowledgements of each of the given changes, with whether each server has indexed it.</summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>>> GetAcksAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Records that <paramref name="server" />'s Delivery API index has the given changes, which it
     ///     has acknowledged. A change's listings are purged once every server that acknowledged it has.
     /// </summary>
     Task IndexedAsync(string server, IReadOnlyCollection<Guid> changeIds, DateTime indexedUtc, CancellationToken cancellationToken = default);
-
-    /// <summary>The servers whose index has each of the given changes.</summary>
-    Task<IReadOnlyDictionary<Guid, IReadOnlySet<string>>> GetIndexedAsync(IReadOnlyCollection<Guid> changeIds, CancellationToken cancellationToken = default);
 
     /// <summary>Removes servers not seen since <paramref name="cutoffUtc" />, and acks recorded before it.</summary>
     Task PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default);
@@ -41,3 +38,19 @@ public interface IAckTransport
 /// <param name="FirstSeenUtc">When this process started.</param>
 /// <param name="LastSeenUtc">Its latest heartbeat.</param>
 public sealed record ServerPresence(string Server, DateTime FirstSeenUtc, DateTime LastSeenUtc);
+
+/// <summary>One server's acknowledgement of a change.</summary>
+/// <param name="Server">The server.</param>
+/// <param name="AckedUtc">When it applied the change.</param>
+/// <param name="IndexedUtc">When its Delivery API index had the change, for a change whose listings wait for it.</param>
+public sealed record ServerAck(string Server, DateTime AckedUtc, DateTime? IndexedUtc);
+
+/// <summary>Reading acknowledgements by change.</summary>
+internal static class ServerAcks
+{
+    public static IReadOnlySet<string> AcknowledgedBy(this IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>> acks, Guid changeId)
+        => (acks.GetValueOrDefault(changeId) ?? []).Select(ack => ack.Server).ToHashSet(StringComparer.Ordinal);
+
+    public static IReadOnlySet<string> IndexedBy(this IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>> acks, Guid changeId)
+        => (acks.GetValueOrDefault(changeId) ?? []).Where(ack => ack.IndexedUtc is not null).Select(ack => ack.Server).ToHashSet(StringComparer.Ordinal);
+}

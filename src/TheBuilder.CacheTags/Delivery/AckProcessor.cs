@@ -15,7 +15,6 @@ internal sealed class AckProcessor(
     LedgerStore ledger,
     PurgeResolver resolver,
     OutputCacheEviction eviction,
-    IndexWatcher indexes,
     IAckTransport transport,
     ServerIdentity identity,
     DeliverySignal signal,
@@ -67,7 +66,7 @@ internal sealed class AckProcessor(
         var completed = new List<LedgerEntry>();
         try
         {
-            IReadOnlyList<LedgerEntry> unreleased = ledger.Unreleased(500);
+            IReadOnlyList<LedgerEntry> unreleased = ledger.InStage(ChangeStage.Pending, 500);
             foreach (Guid released in _acknowledged.Keys.Except(unreleased.Select(change => change.Id)))
             {
                 _acknowledged.TryRemove(released, out _);
@@ -131,9 +130,6 @@ internal sealed class AckProcessor(
         foreach (LedgerEntry change in completed)
         {
             _acknowledged.TryAdd(change.Id, 0);
-
-            // Its listings are purged once this server's index has it too.
-            indexes.Watch(change);
         }
 
         if (logger.IsEnabled(LogLevel.Debug))

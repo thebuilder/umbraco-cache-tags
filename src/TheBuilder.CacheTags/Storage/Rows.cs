@@ -44,23 +44,13 @@ internal sealed class EventRow
     /// <summary>What a server's cache refresh must show for it to acknowledge this change, as JSON.</summary>
     [Column(nameof(Signal)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Signal { get; set; }
 
-    /// <summary>Pending, Releasing, Released or ReleasedAfterTimeout.</summary>
+    /// <summary>The change's <c>ChangeStage</c>: Pending, Indexing or Released.</summary>
     [Column(nameof(Status)), Length(30), NullSetting(NullSetting = NullSettings.Null)] public string? Status { get; set; }
 
     [Column(nameof(ReleasedUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? ReleasedUtc { get; set; }
 
-    /// <summary>The servers that had not acknowledged when the change was released, as JSON.</summary>
+    /// <summary>The servers that had not acknowledged when the change was released after the ack timeout, as JSON.</summary>
     [Column(nameof(Missing)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Missing { get; set; }
-
-    [Column(nameof(LeaseOwner)), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? LeaseOwner { get; set; }
-
-    [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
-
-    /// <summary>
-    ///     Waiting while the listing purge waits for every server's Delivery API index, Sent once it is
-    ///     queued, or <c>null</c> when the change purges no listing that way.
-    /// </summary>
-    [Column(nameof(ListingsState)), Length(20), NullSetting(NullSetting = NullSettings.Null)] public string? ListingsState { get; set; }
 }
 
 [TableName(Constants.Tables.Servers), PrimaryKey(nameof(Server), AutoIncrement = false), ExplicitColumns]
@@ -103,20 +93,6 @@ internal sealed class OutboxRow
     [Column(nameof(LastError)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? LastError { get; set; }
     [Column(nameof(LeaseOwner)), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? LeaseOwner { get; set; }
     [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
-}
-
-internal static class EventStatuses
-{
-    public const string Pending = "Pending";
-    public const string Releasing = "Releasing";
-    public const string Released = "Released";
-    public const string ReleasedAfterTimeout = "ReleasedAfterTimeout";
-}
-
-internal static class ListingStates
-{
-    public const string Waiting = "Waiting";
-    public const string Sent = "Sent";
 }
 
 internal static class OutboxStates

@@ -13,6 +13,13 @@ internal sealed class ServerIdentity(TimeProvider time)
     public string Name { get; } = $"{Environment.MachineName}/{Guid.NewGuid().ToString("N")[..8]}";
 
     public DateTime StartedUtc { get; } = time.GetUtcNow().UtcDateTime;
+
+    /// <summary>
+    ///     The running servers, with this one among them even before its first heartbeat is recorded:
+    ///     a server must never release a change without waiting for itself.
+    /// </summary>
+    public IReadOnlyCollection<ServerPresence> Among(IEnumerable<ServerPresence> servers, DateTime nowUtc)
+        => [.. servers.Where(server => server.Server != Name), new ServerPresence(Name, StartedUtc, nowUtc)];
 }
 
 /// <summary>Sends this server's heartbeat every 30 seconds, and leaves on a clean shutdown.</summary>
@@ -22,10 +29,16 @@ internal sealed class Heartbeat(IAckTransport transport, Storage.PackageDatabase
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // On a first boot the package's tables come a moment after this starts: beat as soon as they exist.
+        while (database.IsInstalled() is false)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1), time, stoppingToken);
+        }
+
         using var timer = new PeriodicTimer(Interval, time);
         do
         {
-            if (options.CurrentValue.Enabled is false || database.IsInstalled() is false)
+            if (options.CurrentValue.Enabled is false)
             {
                 continue;
             }

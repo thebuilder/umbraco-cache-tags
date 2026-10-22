@@ -1,25 +1,30 @@
 using System.Text.Json;
+using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Storage;
 
 namespace TheBuilder.CacheTags.Ledger;
 
-/// <summary>A recorded change, with its plan and signal read back from the ledger.</summary>
+/// <summary>A recorded change, with its plan and signal, read back from the ledger.</summary>
+/// <param name="Change">What happened.</param>
+/// <param name="Server">The server that recorded it.</param>
+/// <param name="Plan">The keys it purges.</param>
+/// <param name="Signal">What a server's refresh must show to acknowledge it.</param>
+/// <param name="Stage">Where it is on its way to the frontends.</param>
+/// <param name="ReleasedUtc">When its purge was queued.</param>
+/// <param name="NotAcknowledgedBy">The servers it was released without, after the ack timeout.</param>
 internal sealed record LedgerEntry(
-    Guid Id,
-    DateTime CreatedUtc,
-    string Kind,
+    Change Change,
     string Server,
-    JsonElement Change,
     PurgePlan Plan,
     AckSignal? Signal,
-    string Status,
+    ChangeStage Stage,
     DateTime? ReleasedUtc,
-    IReadOnlyList<string> NotAcknowledgedBy,
-    string? ListingsState = null)
+    IReadOnlyList<string> NotAcknowledgedBy)
 {
-    /// <summary>The change itself, read back from the ledger.</summary>
-    public Change? ReadChange() => Change.ValueKind == JsonValueKind.Object ? JsonSerializer.Deserialize<Change>(Change, LedgerStore.Json) : null;
+    public Guid Id => Change.Id;
+
+    public DateTime CreatedUtc => Change.CreatedUtc;
 }
 
 /// <summary>A purge request to one target, as queued in the outbox.</summary>
@@ -35,7 +40,17 @@ internal sealed record Purge(
     string? LastError);
 
 /// <summary>A purge to queue when a change is released.</summary>
-internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateTime NotBeforeUtc);
+internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateTime NotBeforeUtc)
+{
+    /// <summary>The purges of these keys to every enabled target, split at each target's <c>MaxKeysPerRequest</c>.</summary>
+    public static IReadOnlyList<NewPurge> ToTargets(IReadOnlyDictionary<string, CacheTagsTargetOptions> targets, IReadOnlyList<string> keys, DateTime nowUtc)
+        => keys.Count == 0
+            ? []
+            : targets
+                .Where(target => target.Value.Enabled)
+                .SelectMany(target => keys.Chunk(target.Value.MaxKeysPerRequest).Select(chunk => new NewPurge(target.Key, chunk, nowUtc)))
+                .ToList();
+}
 
 /// <summary>
 ///     The ledger: recorded changes and the purges queued for them, in the Umbraco database. The only
@@ -44,7 +59,7 @@ internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateT
 /// </summary>
 internal sealed class LedgerStore(PackageDatabase database)
 {
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>Records a change. Recording one that is already recorded does nothing, so a retry after a lost reply is safe.</summary>
     public void Add(Change change, PurgePlan plan, string server)
@@ -57,42 +72,32 @@ internal sealed class LedgerStore(PackageDatabase database)
             Change = JsonSerializer.Serialize(change, Json),
             Plan = JsonSerializer.Serialize(plan, Json),
             Signal = JsonSerializer.Serialize(AckSignal.For(change), Json),
-            Status = EventStatuses.Pending,
+            Status = nameof(ChangeStage.Pending),
         }) is not null);
 
-    public IReadOnlyList<LedgerEntry> Unreleased(int take)
-        => database.Read(db => LedgerSql.Unreleased(db, take)).Select(Entry).ToList();
+    /// <summary>The changes at a stage, oldest first.</summary>
+    public IReadOnlyList<LedgerEntry> InStage(ChangeStage stage, int take)
+        => database.Read(db => LedgerSql.InStage(db, stage, take)).Select(Entry).ToList();
 
     public IReadOnlyList<LedgerEntry> Latest(int take)
         => database.Read(db => LedgerSql.Latest(db, take)).Select(Entry).ToList();
 
-    /// <summary>Takes the lease on releasing a change. False when another server holds it, or it is released.</summary>
-    public bool ClaimRelease(Guid changeId, string owner, DateTime nowUtc, DateTime leaseUntilUtc)
-        => database.Write(db => LedgerSql.ClaimRelease(db, changeId, owner, nowUtc, leaseUntilUtc));
-
     /// <summary>
-    ///     Marks a change released and queues its purges, in one transaction, if this server still holds
-    ///     the lease. With <paramref name="listingsWait" />, its listings are purged again once every
-    ///     server's index has it.
+    ///     Releases a pending change to <paramref name="stage" /> and queues its purges, in one
+    ///     transaction, unless another server already has. Returns whether this call did.
     /// </summary>
-    public bool CompleteRelease(Guid changeId, string owner, IReadOnlyList<string> notAcknowledgedBy, bool timedOut, bool listingsWait, DateTime nowUtc, IEnumerable<NewPurge> purges)
-        => database.Write(db => LedgerSql.CompleteRelease(
+    public bool Release(Guid changeId, ChangeStage stage, IReadOnlyList<string> notAcknowledgedBy, DateTime nowUtc, IEnumerable<NewPurge> purges)
+        => database.Write(db => LedgerSql.Release(
             db,
             changeId,
-            owner,
-            timedOut ? EventStatuses.ReleasedAfterTimeout : EventStatuses.Released,
+            stage,
             nowUtc,
             notAcknowledgedBy.Count == 0 ? null : JsonSerializer.Serialize(notAcknowledgedBy, Json),
-            listingsWait,
             Rows(changeId, nowUtc, purges)));
 
-    /// <summary>Released changes whose listing purge waits for the servers' indexes.</summary>
-    public IReadOnlyList<LedgerEntry> ListingsWaiting(int take)
-        => database.Read(db => LedgerSql.ListingsWaiting(db, take)).Select(Entry).ToList();
-
-    /// <summary>Queues a change's listing purges, unless another server already has. Returns whether this call did.</summary>
-    public bool CompleteListings(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
-        => database.Write(db => LedgerSql.CompleteListings(db, changeId, Rows(changeId, nowUtc, purges)));
+    /// <summary>Queues an indexing change's listing purges, in one transaction, unless another server already has. Returns whether this call did.</summary>
+    public bool ReleaseListings(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
+        => database.Write(db => LedgerSql.ReleaseListings(db, changeId, Rows(changeId, nowUtc, purges)));
 
     /// <summary>The purges due now, and how many are pending at all (now or later).</summary>
     public (IReadOnlyList<Purge> Due, int Pending) Due(DateTime nowUtc, int take)
@@ -129,18 +134,14 @@ internal sealed class LedgerStore(PackageDatabase database)
         }).ToList();
 
     private static LedgerEntry Entry(EventRow row) => new(
-        row.Id,
-        row.CreatedUtc,
-        row.Kind,
+        JsonSerializer.Deserialize<Change>(row.Change, Json)!,
         row.Server,
-        JsonSerializer.Deserialize<JsonElement>(row.Change),
         // A plan that cannot be read back is treated as purging everything: over-purging is safe.
         JsonSerializer.Deserialize<PurgePlan>(row.Plan, Json) ?? new PurgePlan([], Everything: true, Cultures: null),
         row.Signal is null ? null : JsonSerializer.Deserialize<AckSignal>(row.Signal, Json),
-        row.Status ?? EventStatuses.Released,
+        Enum.Parse<ChangeStage>(row.Status ?? nameof(ChangeStage.Released)),
         row.ReleasedUtc,
-        row.Missing is null ? [] : JsonSerializer.Deserialize<string[]>(row.Missing) ?? [],
-        row.ListingsState);
+        row.Missing is null ? [] : JsonSerializer.Deserialize<string[]>(row.Missing) ?? []);
 
     private static Purge Purge(OutboxRow row) => new(
         row.Id,

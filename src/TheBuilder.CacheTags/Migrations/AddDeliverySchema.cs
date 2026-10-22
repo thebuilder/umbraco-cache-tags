@@ -8,7 +8,7 @@ internal sealed class AddDeliverySchema(IMigrationContext context) : AsyncMigrat
 {
     protected override Task MigrateAsync()
     {
-        foreach (var column in new[] { nameof(EventRow.Signal), nameof(EventRow.Status), nameof(EventRow.ReleasedUtc), nameof(EventRow.Missing), nameof(EventRow.LeaseOwner), nameof(EventRow.LeaseUntilUtc) })
+        foreach (var column in new[] { nameof(EventRow.Signal), nameof(EventRow.Status), nameof(EventRow.ReleasedUtc), nameof(EventRow.Missing) })
         {
             if (ColumnExists(Constants.Tables.Events, column) is false)
             {
@@ -17,7 +17,7 @@ internal sealed class AddDeliverySchema(IMigrationContext context) : AsyncMigrat
         }
 
         // Changes recorded before this step have no signal to acknowledge; they are history.
-        Execute.Sql($"UPDATE {Constants.Tables.Events} SET Status = '{EventStatuses.Released}' WHERE Status IS NULL").Do();
+        Execute.Sql($"UPDATE {Constants.Tables.Events} SET Status = 'Released' WHERE Status IS NULL").Do();
 
         CreateIfMissing<ServerRow>(Constants.Tables.Servers);
         CreateIfMissing<AckRow>(Constants.Tables.Acks);
