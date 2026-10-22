@@ -27,32 +27,34 @@ internal sealed class Heartbeat(IAckTransport transport, Storage.PackageDatabase
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
+    /// <summary>How often a server waiting for the package's tables on a first boot looks for them.</summary>
+    private static readonly TimeSpan InstallInterval = TimeSpan.FromSeconds(1);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // On a first boot the package's tables come a moment after this starts: beat as soon as they exist.
-        while (database.IsInstalled() is false)
+        while (stoppingToken.IsCancellationRequested is false)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1), time, stoppingToken);
-        }
-
-        using var timer = new PeriodicTimer(Interval, time);
-        do
-        {
-            if (options.CurrentValue.Enabled is false)
-            {
-                continue;
-            }
-
+            TimeSpan wait = Interval;
             try
             {
-                await transport.HeartbeatAsync(identity.Name, identity.StartedUtc, time.GetUtcNow().UtcDateTime, stoppingToken);
+                // On a first boot the package's tables come a moment after this starts: beat as soon as they exist.
+                if (database.IsInstalled() is false)
+                {
+                    wait = InstallInterval;
+                }
+                else if (options.CurrentValue.Enabled)
+                {
+                    await transport.HeartbeatAsync(identity.Name, identity.StartedUtc, time.GetUtcNow().UtcDateTime, stoppingToken);
+                }
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException || stoppingToken.IsCancellationRequested is false)
             {
+                // A throw here would stop the host, and other servers would stop waiting for this one.
                 logger.LogWarning(exception, "Cache tags heartbeat failed; the next one tries again.");
             }
+
+            await Task.Delay(wait, time, stoppingToken);
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

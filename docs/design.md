@@ -186,16 +186,25 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 2. **Acks.** Every server sends a heartbeat every 30 seconds. When a server applies a cache refresh
    that completes a pending change (the refresh must carry what the change did: published cultures
    for a publish, a branch refresh for a move, and so on, so a draft save does not count; a branch
-   refresh or removal of an item's ancestor counts for the item), it evicts
-   the change's responses from its Delivery API output cache and acknowledges the change. A refresh
-   can arrive before its change is recorded, so unmatched refreshes are tried again for 10 seconds,
-   and a refresh counts only for changes made before it (with 10 seconds of slack for clocks).
+   refresh or removal of an item's ancestor counts for the item; a type, data type, language,
+   domain or public access change needs the refresh of that same type, data type, language or
+   domain), it evicts the change's responses from its Delivery API output cache and acknowledges
+   the change. A refresh applied after a change reloads its items, so one refresh can complete
+   several changes made before it. A refresh can also arrive moments before its change is
+   recorded (Umbraco raises some changes after refreshing), so unmatched refreshes are tried again
+   for 10 seconds, and one seen up to 2 seconds before a change counts for that change alone, and
+   not if it already completed an earlier one. Those 2 seconds also cover how far a server's clock
+   may be behind the clock of the server making the change, so keep servers' clocks in sync (NTP
+   does): a server further off is not acknowledged in time, and its changes wait for the ack timeout.
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
    not. It resolves the plan to response keys and queues one purge per target (split at
    `MaxKeysPerRequest`). Listing responses are in it too, deliberately: the items they show come
    from the published cache, so they are fresh at once, even though their membership and order are
-   not yet.
+   not yet. A server that applies a change after it was released without it (up to 15 minutes
+   later) still evicts the change's responses and listings from its own output cache, but does not
+   acknowledge it and is not waited for in the listings stage: its listings may be cached again from
+   its index before the index has the change.
 4. **Listings.** Listings come from each server's Delivery API index, which Umbraco updates in a
    background task after the refresh (a second or two; over a minute right after a restart). An
    index handler stamps every document with the state of the item it was built from (version,
@@ -208,8 +217,13 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    key) and queues the listing purge. Media listings walk the media cache, and type and site-wide
    changes purge as a whole, so those do not wait.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
-   time. A failure is retried after 2, 4, 8 ... seconds (at most 10 minutes), and kept as dead after
-   `CacheTags:MaxAttempts` (10).
+   time. Each lease runs 30 seconds from when the purge is claimed, just before it is sent, so slow
+   sends before it do not leave it expired. A failure is retried after 2, 4, 8 ... seconds (at most
+   10 minutes), and kept as dead after `CacheTags:MaxAttempts` (10).
+
+The delivery worker and the heartbeat log an error and carry on, so neither stops the site. Settings
+that fail validation at start stop the site; settings that become invalid on a reload of
+appsettings are logged once, and the last valid settings stay in use until they are fixed.
 
 Heartbeats and acks go through `IAckTransport`, which keeps them in the database by default. It is
 a seam of its own, separate from the mapping store (`ICacheTagStore`), so a site can replace either.

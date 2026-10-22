@@ -22,6 +22,13 @@ internal static class LedgerSql
             $"SELECT * FROM {Constants.Tables.Events} WHERE Status = @0 ORDER BY CreatedUtc",
             stage.ToString()));
 
+    /// <summary>The changes released since a time without every server's acknowledgement, newest first.</summary>
+    public static List<EventRow> ReleasedWithoutAll(IDatabase database, DateTime sinceUtc, int take)
+        => database.SkipTake<EventRow>(0, take, new Sql(
+            $"SELECT * FROM {Constants.Tables.Events} WHERE Status <> @0 AND Missing IS NOT NULL AND ReleasedUtc >= @1 ORDER BY ReleasedUtc DESC",
+            nameof(ChangeStage.Pending),
+            sinceUtc));
+
     public static List<EventRow> Latest(IDatabase database, int take)
         => database.SkipTake<EventRow>(0, take, new Sql($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC"));
 

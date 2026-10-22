@@ -34,8 +34,38 @@ public sealed class AckMatchTests
     [Fact]
     public void A_refresh_seen_moments_before_its_change_is_recorded_still_counts()
     {
-        LedgerEntry change = Change(Noon.AddSeconds(2));
+        LedgerEntry change = Change(Noon.AddSeconds(1));
 
         Assert.Single(AckProcessor.Match([change], [Publish(Noon)], new HashSet<ObservedRefresh>()));
+    }
+
+    [Fact]
+    public void A_refresh_seen_seconds_before_a_change_does_not_acknowledge_it()
+    {
+        LedgerEntry change = Change(Noon.AddSeconds(5));
+
+        Assert.Empty(AckProcessor.Match([change], [Publish(Noon)], new HashSet<ObservedRefresh>()));
+    }
+
+    [Fact]
+    public void One_refresh_after_two_changes_to_an_item_acknowledges_both()
+    {
+        LedgerEntry first = Change(Noon);
+        LedgerEntry second = Change(Noon.AddSeconds(1));
+
+        var completed = AckProcessor.Match([first, second], [Publish(Noon.AddSeconds(2))], new HashSet<ObservedRefresh>()).ToList();
+
+        Assert.Equal([first.Id, second.Id], completed.Select(change => change.Id));
+    }
+
+    [Fact]
+    public void A_refresh_between_two_changes_to_an_item_acknowledges_only_the_one_before_it()
+    {
+        LedgerEntry first = Change(Noon);
+        LedgerEntry second = Change(Noon.AddMilliseconds(500));
+
+        var completed = AckProcessor.Match([first, second], [Publish(Noon.AddMilliseconds(200))], new HashSet<ObservedRefresh>()).ToList();
+
+        Assert.Equal([first.Id], completed.Select(change => change.Id));
     }
 }

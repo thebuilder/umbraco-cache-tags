@@ -21,17 +21,7 @@ public sealed class DeliverySqlTests : IDisposable
         _connection.Open();
         _database = new Database(_connection, DatabaseType.SQLite);
 
-        // The schema the package's migrations create, written out for SQLite.
-        _database.Execute("""
-            CREATE TABLE theBuilderCacheTagsEvent (Id TEXT PRIMARY KEY, CreatedUtc TEXT NOT NULL, Kind TEXT NOT NULL, Server TEXT NOT NULL,
-                Change TEXT NOT NULL, Plan TEXT NOT NULL, Signal TEXT NULL, Status TEXT NULL, ReleasedUtc TEXT NULL, Missing TEXT NULL);
-            CREATE TABLE theBuilderCacheTagsOutbox (Id TEXT PRIMARY KEY, EventId TEXT NOT NULL, Target TEXT NOT NULL, Keys TEXT NOT NULL,
-                State TEXT NOT NULL, Attempts INTEGER NOT NULL, CreatedUtc TEXT NOT NULL, NotBeforeUtc TEXT NOT NULL, SentUtc TEXT NULL,
-                LastError TEXT NULL, LeaseOwner TEXT NULL, LeaseUntilUtc TEXT NULL);
-            CREATE TABLE theBuilderCacheTagsServer (Server TEXT PRIMARY KEY, FirstSeenUtc TEXT NOT NULL, LastSeenUtc TEXT NOT NULL);
-            CREATE TABLE theBuilderCacheTagsAck (Id INTEGER PRIMARY KEY AUTOINCREMENT, EventId TEXT NOT NULL, Server TEXT NOT NULL, AckedUtc TEXT NOT NULL, IndexedUtc TEXT NULL);
-            CREATE UNIQUE INDEX IX_AckPair ON theBuilderCacheTagsAck (EventId, Server);
-            """);
+        _database.Execute(TestDatabase.Schema);
         _database.Insert(new EventRow { Id = Change, CreatedUtc = Now, Kind = "Published", Server = "backoffice", Change = "{}", Plan = "{}", Status = nameof(ChangeStage.Pending) });
     }
 

@@ -32,11 +32,23 @@ internal sealed class DeliveryWorker(
     {
         while (stoppingToken.IsCancellationRequested is false)
         {
-            CacheTagsOptions settings = options.CurrentValue;
-            var busy = settings.Enabled && database.IsInstalled() && await RunOnceAsync(stoppingToken);
+            TimeSpan wait = IdleInterval;
+            try
+            {
+                CacheTagsOptions settings = options.CurrentValue;
+                if (settings.Enabled && database.IsInstalled() && await RunOnceAsync(stoppingToken))
+                {
+                    wait = settings.PollInterval;
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException || stoppingToken.IsCancellationRequested is false)
+            {
+                // A throw here would stop the host. Settings that fail validation, say, are logged and read again.
+                logger.LogError(exception, "Cache tags delivery could not run; it is tried again shortly.");
+            }
 
             // While there is work, look again soon; otherwise sleep until a change or refresh wakes us.
-            await signal.WaitAsync(busy ? settings.PollInterval : IdleInterval, stoppingToken);
+            await signal.WaitAsync(wait, stoppingToken);
         }
     }
 

@@ -49,6 +49,11 @@ internal enum ChangeStage
 ///     For <see cref="ChangeKind.Custom" />: the signal every server reports once it has applied the
 ///     change (<c>ICacheTagsChanges.Applied</c>), or <c>null</c> to purge at once.
 /// </param>
+/// <param name="Sources">
+///     For <see cref="ChangeKind.TypesChanged" /> and <see cref="ChangeKind.Everything" />: the cache
+///     refreshes Umbraco sends for it (<c>language:5</c>, see <c>AckSignal.Source</c>), which are the
+///     only ones that acknowledge it.
+/// </param>
 internal sealed record Change(
     Guid Id,
     DateTime CreatedUtc,
@@ -58,7 +63,8 @@ internal sealed record Change(
     IReadOnlyList<string>? Cultures,
     string? Reason = null,
     IReadOnlyList<string>? Keys = null,
-    string? WaitFor = null);
+    string? WaitFor = null,
+    IReadOnlyList<string>? Sources = null);
 
 /// <param name="Key">The document or media key.</param>
 /// <param name="TypeAlias">Its content or media type alias.</param>

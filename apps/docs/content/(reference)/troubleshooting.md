@@ -18,7 +18,7 @@ Start in **Settings > Advanced > Cache tags**. **Changes** shows every change, t
 
 Open the change in **Changes**.
 
-- **Waiting for servers.** A server has not applied the change yet. A server that just started applies changes about a minute after start. The package sends the purge anyway after `AckTimeout`.
+- **Waiting for servers.** A server has not applied the change yet. A server that just started applies changes about a minute after start, and a server whose clock is more than 2 seconds behind is never acknowledged in time. The package sends the purge anyway after `AckTimeout`.
 - **No purges.** No target is configured, or every target is disabled.
 - **A purge with an error.** The target answered with an error, or the package could not reach it. The package retries with backoff, and lists the purge under **Failed purges** after its last attempt. **Retry** sends it again.
 - **401 from the webhook.** The secrets differ, the clocks are more than 5 minutes apart, or a proxy changes the path, which is part of the signature.

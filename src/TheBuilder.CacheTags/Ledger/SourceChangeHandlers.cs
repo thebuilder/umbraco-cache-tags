@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using TheBuilder.CacheTags.Delivery;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Models;
@@ -133,10 +134,10 @@ internal sealed class SourceChangeHandlers(
         => Guard(() => Record(ChangeKind.MediaDeleted, notification.DeletedEntities.Where(media => media.Trashed is false).Select(media => Item(media)).ToList()));
 
     public void Handle(ContentTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "content types changed"));
+        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item), "content types changed"));
 
     public void Handle(MediaTypeChangedNotification notification)
-        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item.Alias), "media types changed"));
+        => Guard(() => RecordTypes(notification.Changes.Select(change => change.Item), "media types changed"));
 
     // A data type's configuration changes how every property using it renders.
     public void Handle(DataTypeSavedNotification notification)
@@ -148,22 +149,26 @@ internal sealed class SourceChangeHandlers(
                 .Concat(mediaTypeService.GetAll())
                 .Where(type => type.CompositionPropertyTypes.Any(property => keys.Contains(property.DataTypeKey)))
                 .Select(type => type.Alias);
-            RecordTypes(aliases, "data types saved");
+            RecordTypes(aliases, "data types saved", keys.Select(key => AckSignal.Source(AckSignal.DataTypes, key)));
         });
     }
 
-    public void Handle(DomainSavedNotification notification) => Guard(() => RecordEverything("domains saved"));
+    public void Handle(DomainSavedNotification notification)
+        => Guard(() => RecordEverything("domains saved", notification.SavedEntities.Select(domain => AckSignal.Source(AckSignal.Domains, domain.Id))));
 
-    public void Handle(DomainDeletedNotification notification) => Guard(() => RecordEverything("domains deleted"));
+    public void Handle(DomainDeletedNotification notification)
+        => Guard(() => RecordEverything("domains deleted", notification.DeletedEntities.Select(domain => AckSignal.Source(AckSignal.Domains, domain.Id))));
 
-    public void Handle(LanguageSavedNotification notification) => Guard(() => RecordEverything("languages saved"));
+    public void Handle(LanguageSavedNotification notification)
+        => Guard(() => RecordEverything("languages saved", notification.SavedEntities.Select(language => AckSignal.Source(AckSignal.Languages, language.Id))));
 
-    public void Handle(LanguageDeletedNotification notification) => Guard(() => RecordEverything("languages deleted"));
+    public void Handle(LanguageDeletedNotification notification)
+        => Guard(() => RecordEverything("languages deleted", notification.DeletedEntities.Select(language => AckSignal.Source(AckSignal.Languages, language.Id))));
 
     // Protecting a page changes what the Delivery API returns for it and every page under it.
-    public void Handle(PublicAccessEntrySavedNotification notification) => Guard(() => RecordEverything("public access saved"));
+    public void Handle(PublicAccessEntrySavedNotification notification) => Guard(() => RecordEverything("public access saved", [AckSignal.Source(AckSignal.PublicAccess)]));
 
-    public void Handle(PublicAccessEntryDeletedNotification notification) => Guard(() => RecordEverything("public access removed"));
+    public void Handle(PublicAccessEntryDeletedNotification notification) => Guard(() => RecordEverything("public access removed", [AckSignal.Source(AckSignal.PublicAccess)]));
 
     // A throwing handler would stop Umbraco from publishing the operation's remaining notifications,
     // including the one that refreshes every server's cache. Missing a purge is the lesser failure.
@@ -187,17 +192,24 @@ internal sealed class SourceChangeHandlers(
         }
     }
 
-    private void RecordTypes(IEnumerable<string> aliases, string reason)
+    // Umbraco refreshes each changed content or media type by its id.
+    private void RecordTypes(IEnumerable<IContentTypeBase> types, string reason)
+    {
+        var changed = types.ToList();
+        RecordTypes(changed.Select(type => type.Alias), reason, changed.Select(type => AckSignal.Source(AckSignal.ContentTypes, type.Id)));
+    }
+
+    private void RecordTypes(IEnumerable<string> aliases, string reason, IEnumerable<string> sources)
     {
         var distinct = aliases.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
         if (distinct.Count > 0)
         {
-            recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.TypesChanged, [], distinct, null, reason));
+            recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.TypesChanged, [], distinct, null, reason, Sources: sources.Distinct().ToList()));
         }
     }
 
-    private void RecordEverything(string reason)
-        => recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.Everything, [], [], null, reason));
+    private void RecordEverything(string reason, IEnumerable<string> sources)
+        => recorder.Record(new Change(Guid.CreateVersion7(), Now(), ChangeKind.Everything, [], [], null, reason, Sources: sources.Distinct().ToList()));
 
     private DateTime Now() => time.GetUtcNow().UtcDateTime;
 

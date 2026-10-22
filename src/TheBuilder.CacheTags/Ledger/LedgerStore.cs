@@ -80,6 +80,13 @@ internal sealed class LedgerStore(PackageDatabase database)
     public IReadOnlyList<LedgerEntry> InStage(ChangeStage stage, int take)
         => database.Read(db => LedgerSql.InStage(db, stage, take)).Select(Entry).ToList();
 
+    /// <summary>The changes released since a time without <paramref name="server" />'s acknowledgement, after the ack timeout.</summary>
+    public IReadOnlyList<LedgerEntry> ReleasedWithout(string server, DateTime sinceUtc, int take)
+        => database.Read(db => LedgerSql.ReleasedWithoutAll(db, sinceUtc, take))
+            .Select(Entry)
+            .Where(change => change.NotAcknowledgedBy.Contains(server, StringComparer.Ordinal))
+            .ToList();
+
     public IReadOnlyList<LedgerEntry> Latest(int take)
         => database.Read(db => LedgerSql.Latest(db, take)).Select(Entry).ToList();
 
