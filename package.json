@@ -1,0 +1,9 @@
+{
+  "name": "thebuilder-cache-tags-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.13.1",
+  "scripts": {
+    "build": "pnpm --dir src/TheBuilder.CacheTags/Client build",
+    "typecheck": "pnpm --dir src/TheBuilder.CacheTags/Client typecheck"
+  }
+}

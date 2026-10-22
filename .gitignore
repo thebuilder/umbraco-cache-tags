@@ -21,3 +21,6 @@ spike/**/umbraco-package-schema.json
 spike/results/raw/
 /artifacts/
 .DS_Store
+# The backoffice client's build output; `dotnet pack` builds it.
+src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/*
+!src/TheBuilder.CacheTags/wwwroot/App_Plugins/TheBuilder.CacheTags/.gitkeep

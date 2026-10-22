@@ -3,6 +3,7 @@ using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.Storage;
+using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
 
 namespace TheBuilder.CacheTags.ManagementApi;
@@ -16,7 +17,15 @@ public interface ICacheTagsLookup
     internal Task<KeyLookup?> LookupAsync(string key, CancellationToken cancellationToken);
 
     internal Task<IReadOnlyList<ChangeLookup>> ChangesAsync(int take, CancellationToken cancellationToken);
+
+    internal Task<SearchLookup> SearchAsync(string text, CancellationToken cancellationToken);
 }
+
+/// <summary>What a search found: items by name, recorded keys, and recorded responses.</summary>
+internal sealed record SearchLookup(IReadOnlyList<SearchItem> Items, IReadOnlyList<NamedKey> Keys, IReadOnlyList<ResponseSummary> Responses);
+
+/// <summary>A document or media item found by name, with its key.</summary>
+internal sealed record SearchItem(string Key, string Name, string Kind);
 
 internal sealed record KeyLookup(
     string Key,
@@ -60,9 +69,25 @@ internal sealed class CacheTagsLookup(
     LedgerStore ledger,
     PurgeResolver resolver,
     IAckTransport transport,
-    IEntityService entityService) : ICacheTagsLookup
+    IEntityService entityService,
+    IEntitySearchService entitySearch) : ICacheTagsLookup
 {
     private const int MaxResponses = 200;
+    private const int MaxSearchResults = 20;
+
+    /// <summary>Documents and media by name, and recorded keys and responses containing the text.</summary>
+    public async Task<SearchLookup> SearchAsync(string text, CancellationToken cancellationToken)
+    {
+        var items = new (UmbracoObjectTypes Type, string Prefix, string Kind)[] { (UmbracoObjectTypes.Document, CacheKeys.ContentPrefix, "content"), (UmbracoObjectTypes.Media, CacheKeys.MediaPrefix, "media") }
+            .SelectMany(search => entitySearch.Search(search.Type, text, 0, MaxSearchResults / 2).Items
+                .Select(entity => new SearchItem(search.Prefix + entity.Key.ToString("D"), entity.Name ?? string.Empty, search.Kind)))
+            .ToList();
+        CacheSearchResult found = await store.SearchAsync(text, MaxSearchResults, cancellationToken);
+        return new SearchLookup(
+            items,
+            found.Keys.Select(key => new NamedKey(key, NameOf(key))).ToList(),
+            found.Responses.Select(response => new ResponseSummary(response.ResponseKey, response.Path, response.Query, response.Culture, response.SeenUtc)).ToList());
+    }
 
     /// <summary>
     ///     A <c>response-</c> key: the request it stands for and the keys it covers. Any other key: the
@@ -138,6 +163,7 @@ internal sealed class CacheTagsLookup(
         _ when key.StartsWith(CacheKeys.ChildrenPrefix, StringComparison.Ordinal) => "children",
         _ when key.StartsWith(CacheKeys.SearchPrefix, StringComparison.Ordinal) => "search",
         _ when key.StartsWith(CacheKeys.SchemaPrefix, StringComparison.Ordinal) => "schema",
+        _ when key.StartsWith(CacheKeys.CustomPrefix, StringComparison.Ordinal) => "custom",
         CacheKeys.All => "everything",
         _ => "unknown",
     };

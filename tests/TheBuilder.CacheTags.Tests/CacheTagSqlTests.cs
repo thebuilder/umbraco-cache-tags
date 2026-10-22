@@ -50,6 +50,23 @@ public sealed class CacheTagSqlTests : IDisposable
             SeenUtc = at,
         };
 
+    private static CachedResponse Request(string responseKey, DateTime at, string path, string query)
+    {
+        CachedResponse response = Render(responseKey, at, "", "content-1");
+        return new CachedResponse
+        {
+            ResponseKey = response.ResponseKey,
+            Path = path,
+            Query = query,
+            Culture = response.Culture,
+            Segment = response.Segment,
+            StartItem = response.StartItem,
+            Keys = response.Keys,
+            RenderedUtc = at,
+            SeenUtc = at,
+        };
+    }
+
     [Fact]
     public void A_response_is_found_by_any_key_it_covers()
     {
@@ -123,5 +140,43 @@ public sealed class CacheTagSqlTests : IDisposable
         Assert.Empty(CacheTagSql.FindResponseKeys(_database, ["content-1"], null));
         Assert.Equal(["response-a"], CacheTagSql.FindResponseKeys(_database, ["content-2"], null));
         Assert.Equal(["response-a"], CacheTagSql.FindResponseKeys(_database, ["content-3"], null));
+    }
+
+    [Fact]
+    public void A_search_finds_keys_by_part_of_the_key_once_each()
+    {
+        CacheTagSql.Record(_database, Render("response-a", Monday, "", "content-e0000000-0000-0000-0000-000000000003", "type-article"));
+        CacheTagSql.Record(_database, Render("response-b", Monday, "", "content-e0000000-0000-0000-0000-000000000003", "content-e0000000-0000-0000-0000-000000000004"));
+
+        CacheSearchResult found = CacheTagSql.Search(_database, "0000003", 10);
+
+        Assert.Equal(["content-e0000000-0000-0000-0000-000000000003"], found.Keys);
+        Assert.Empty(found.Responses);
+    }
+
+    [Fact]
+    public void A_search_finds_responses_by_path_or_by_a_query_value_as_typed_newest_served_first()
+    {
+        CacheTagSql.Record(_database, Request("response-a", Monday, "/umbraco/delivery/api/v2/content/item/articles/forest-walks/", ""));
+        CacheTagSql.Record(_database, Request("response-b", Tuesday, "/umbraco/delivery/api/v2/content", "fetch=descendants%3A%2Fguides%2F&sort=name%3Aasc"));
+        CacheTagSql.Record(_database, Request("response-c", Tuesday, "/umbraco/delivery/api/v2/media", ""));
+
+        Assert.Equal(["response-a"], CacheTagSql.Search(_database, "Forest-Walks", 10).Responses.Select(response => response.ResponseKey));
+        Assert.Equal(["response-b"], CacheTagSql.Search(_database, "descendants:/guides/", 10).Responses.Select(response => response.ResponseKey));
+        Assert.Equal(["response-c"], CacheTagSql.Search(_database, "nse-c", 10).Responses.Select(response => response.ResponseKey));
+        CachedResponse[] content = [.. CacheTagSql.Search(_database, "v2/content", 10).Responses];
+        Assert.Equal(["response-b", "response-a"], content.Select(response => response.ResponseKey));
+        Assert.Equal("fetch=descendants%3A%2Fguides%2F&sort=name%3Aasc", content[0].Query);
+    }
+
+    [Fact]
+    public void A_search_takes_its_wildcards_literally_and_returns_at_most_take()
+    {
+        CacheTagSql.Record(_database, Render("response-a", Monday, "", "x-dictionary-en-us", "x-dictionary-da-dk", "x-dictionary-de-de"));
+
+        Assert.Empty(CacheTagSql.Search(_database, "%", 10).Keys);
+        Assert.Empty(CacheTagSql.Search(_database, "x_dictionary", 10).Keys);
+        Assert.Equal(["x-dictionary-da-dk", "x-dictionary-de-de"], CacheTagSql.Search(_database, "dictionary-d", 2).Keys);
+        Assert.Equal(["x-dictionary-da-dk", "x-dictionary-de-de"], CacheTagSql.Search(_database, "x-dictionary", 2).Keys);
     }
 }

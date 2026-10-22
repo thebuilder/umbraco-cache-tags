@@ -33,6 +33,14 @@ public interface ICacheTagStore
     Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Recorded keys, and responses, whose key, path or query contain <paramref name="text" />, for
+    ///     the backoffice's search, at most <paramref name="take" /> of each. The responses' keys are
+    ///     left empty. Optional: a store that cannot search finds nothing, which is the default.
+    /// </summary>
+    Task<CacheSearchResult> SearchAsync(string text, int take, CancellationToken cancellationToken = default)
+        => Task.FromResult(CacheSearchResult.Empty);
+
+    /// <summary>
     ///     Removes responses not served since <paramref name="cutoffUtc" />, and keys that a response
     ///     stopped covering before then. Returns how many responses and keys were removed together, for
     ///     logging only.
@@ -72,4 +80,17 @@ public sealed class CachedResponse
 
     /// <summary>When it was last served. Equal to <see cref="RenderedUtc" /> on record.</summary>
     public required DateTime SeenUtc { get; init; }
+}
+
+/// <summary>What <see cref="ICacheTagStore.SearchAsync" /> found.</summary>
+public sealed class CacheSearchResult
+{
+    /// <summary>Nothing found.</summary>
+    public static CacheSearchResult Empty { get; } = new() { Keys = [], Responses = [] };
+
+    /// <summary>Recorded keys containing the text.</summary>
+    public required IReadOnlyList<string> Keys { get; init; }
+
+    /// <summary>Recorded responses whose key, path or query contain the text, most recently served first, without their keys.</summary>
+    public required IReadOnlyList<CachedResponse> Responses { get; init; }
 }

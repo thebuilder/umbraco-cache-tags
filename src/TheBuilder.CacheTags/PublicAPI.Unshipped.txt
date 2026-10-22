@@ -109,6 +109,7 @@ TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.CacheTagsLookupController(TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup! lookup) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Changes(int take = 20, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Lookup(string! key, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Search(string? q, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.CacheTagsPurgesController(TheBuilder.CacheTags.ICacheTagsChanges! changes, TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox! outbox, Umbraco.Cms.Core.Security.IBackOfficeSecurityAccessor! security) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Discard(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
@@ -117,6 +118,12 @@ TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purges(string! stat
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Retry(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup
 TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox
+TheBuilder.CacheTags.Storage.CacheSearchResult
+TheBuilder.CacheTags.Storage.CacheSearchResult.CacheSearchResult() -> void
+TheBuilder.CacheTags.Storage.CacheSearchResult.Keys.get -> System.Collections.Generic.IReadOnlyList<string!>!
+TheBuilder.CacheTags.Storage.CacheSearchResult.Keys.init -> void
+TheBuilder.CacheTags.Storage.CacheSearchResult.Responses.get -> System.Collections.Generic.IReadOnlyList<TheBuilder.CacheTags.Storage.CachedResponse!>!
+TheBuilder.CacheTags.Storage.CacheSearchResult.Responses.init -> void
 TheBuilder.CacheTags.Storage.CachedResponse
 TheBuilder.CacheTags.Storage.CachedResponse.CachedResponse() -> void
 TheBuilder.CacheTags.Storage.CachedResponse.Culture.get -> string!
@@ -142,6 +149,7 @@ TheBuilder.CacheTags.Storage.ICacheTagStore.FindResponseKeysAsync(System.Collect
 TheBuilder.CacheTags.Storage.ICacheTagStore.GetAsync(string! responseKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TheBuilder.CacheTags.Storage.CachedResponse?>!
 TheBuilder.CacheTags.Storage.ICacheTagStore.PruneAsync(System.DateTime cutoffUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 TheBuilder.CacheTags.Storage.ICacheTagStore.RecordAsync(System.Collections.Generic.IReadOnlyCollection<TheBuilder.CacheTags.Storage.CachedResponse!>! responses, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+TheBuilder.CacheTags.Storage.ICacheTagStore.SearchAsync(string! text, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TheBuilder.CacheTags.Storage.CacheSearchResult!>!
 TheBuilder.CacheTags.Storage.ICacheTagStore.TouchAsync(System.Collections.Generic.IReadOnlyCollection<string!>! responseKeys, System.DateTime seenUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 const TheBuilder.CacheTags.Configuration.CacheTagsOptions.SectionName = "CacheTags" -> string!
 override TheBuilder.CacheTags.Delivery.ServerAck.Equals(object? obj) -> bool
@@ -154,3 +162,4 @@ static TheBuilder.CacheTags.Delivery.ServerAck.operator !=(TheBuilder.CacheTags.
 static TheBuilder.CacheTags.Delivery.ServerAck.operator ==(TheBuilder.CacheTags.Delivery.ServerAck? left, TheBuilder.CacheTags.Delivery.ServerAck? right) -> bool
 static TheBuilder.CacheTags.Delivery.ServerPresence.operator !=(TheBuilder.CacheTags.Delivery.ServerPresence? left, TheBuilder.CacheTags.Delivery.ServerPresence? right) -> bool
 static TheBuilder.CacheTags.Delivery.ServerPresence.operator ==(TheBuilder.CacheTags.Delivery.ServerPresence? left, TheBuilder.CacheTags.Delivery.ServerPresence? right) -> bool
+static TheBuilder.CacheTags.Storage.CacheSearchResult.Empty.get -> TheBuilder.CacheTags.Storage.CacheSearchResult!
