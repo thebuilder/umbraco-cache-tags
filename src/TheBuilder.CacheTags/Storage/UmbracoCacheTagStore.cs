@@ -78,11 +78,16 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
         => Task.FromResult(database.Read(db => CacheTagSql.Search(db, text, take)));
 
     // Each step in its own short transaction, so a publish waiting for the write lock is not held up
-    // by one long delete. A render can skip rewriting keys written within the writer's touch interval,
-    // so a dropped key gets that much longer.
+    // by one long delete. The writer skips rewriting keys, and touching a response, within its touch
+    // interval, so a stored time can be that much behind the last render or request: every row gets
+    // that much longer, or a response served just after its last touch could be forgotten while a
+    // frontend still keeps it for the full retention.
     public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
-        => Task.FromResult(
-            database.Write(db => CacheTagSql.PruneDroppedKeys(db, cutoffUtc - MappingWriter.TouchInterval))
-            + database.Write(db => CacheTagSql.PruneUnseenKeys(db, cutoffUtc))
-            + database.Write(db => CacheTagSql.PruneUnseenResponses(db, cutoffUtc)));
+    {
+        DateTime cutoff = cutoffUtc - MappingWriter.TouchInterval;
+        return Task.FromResult(
+            database.Write(db => CacheTagSql.PruneDroppedKeys(db, cutoff))
+            + database.Write(db => CacheTagSql.PruneUnseenKeys(db, cutoff))
+            + database.Write(db => CacheTagSql.PruneUnseenResponses(db, cutoff)));
+    }
 }
