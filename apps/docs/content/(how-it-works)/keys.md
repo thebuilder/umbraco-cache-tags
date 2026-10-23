@@ -66,7 +66,7 @@ Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops
 
 ## Item keys mode
 
-With `CacheTags:KeyMode` set to `ItemKeys`, every header lists the item keys as well as the response key. Use it for a CDN in front of Umbraco that purges by tag itself, with no way to look up response keys.
+With `CacheTags:KeyMode` set to `ItemKeys`, every header lists the item keys as well as the response key. Use it for a CDN in front of Umbraco that purges by tag itself, with no way to look up response keys. The limits above still apply: past `MaxItemKeys`, or when the items would push the header past `MaxHeaderKeys`, it lists their `type-` keys instead.
 
 ## A prefix
 

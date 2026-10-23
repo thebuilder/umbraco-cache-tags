@@ -132,10 +132,12 @@ listed as their `type-` keys instead. A response with more listing, `x-` or `typ
 limit loses the last of those too. Umbraco's output cache has no limit, so its entry is tagged
 with every key. Set `MaxHeaderKeys` to the limit of a target that keeps fewer tags, and raise it
 for one that limits tags by size, such as Cloudflare in front of Umbraco, which keeps 16 KB of
-`Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`.
+`Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. Such a header is about 15 KB, which
+a proxy in front of Umbraco must allow (nginx needs a `proxy_buffer_size` of 16k or more).
 
 With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
 itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.
+Items that would push the header past `MaxHeaderKeys` are listed as their `type-` keys too.
 The header name is `CacheTags:HeaderName`.
 
 No keys, and the given `Cache-Control`, on:
