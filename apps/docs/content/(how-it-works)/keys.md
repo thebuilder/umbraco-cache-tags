@@ -48,7 +48,7 @@ The record of what a response covers is written in the background, within moment
 The package does not record a listing selected by a search, a name filter, or any filter other than a content type, or a listing with no parent or content type to select it, such as all descendants of a path. Such listings vary with input without end. Recording them would store a row for each variation, and every publish would purge every one. Each such response carries its keys in its own header instead:
 
 ```http
-X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco
+X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000..., schema-article
 ```
 
 Every publish plans the `search-` key, which purges all of them at once, however many are cached. The same goes for a `fetch` of an item that does not exist (by path or by id), a content type filter naming a type that does not exist or more than 2 types, and an `items?id=` request naming more than one item or one that does not exist yet. A request in a culture that is not one of the site's languages is not recorded either, and carries its own keys.
@@ -62,7 +62,7 @@ Every publish plans the `search-` key, which purges all of them at once, however
 
 ## Limits
 
-Next.js keeps at most 128 tags per entry, each at most 256 characters. A header lists at most `MaxItemKeys` (64) item keys, and lists their `type-` keys instead past that. With its schema and listing keys added, a header stays under Next.js's limit.
+Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most 128 keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. It lists at most `MaxItemKeys` (64) item keys, and their `type-` keys instead past that. Its `schema-` keys come last, so on a response that renders very many types, a header past 128 keys loses only some of those. Umbraco's own output cache keeps every key.
 
 ## Item keys mode
 

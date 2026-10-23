@@ -4,10 +4,17 @@ using TheBuilder.CacheTags.Keys;
 namespace TheBuilder.CacheTags.Collection;
 
 /// <summary>How a response is tagged: the keys in its header, and whether it is recorded in the mapping.</summary>
-/// <param name="Keys">The header's keys, without the configured prefix.</param>
+/// <param name="Keys">The header's keys, without the configured prefix, at most <see cref="MaxHeaderKeys" />.</param>
 /// <param name="Recorded">Whether the response is recorded, so a purge reaches it through its <c>response-</c> key.</param>
-internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded)
+/// <param name="AllKeys">Every key the response carries, for Umbraco's output cache, which keeps any number of tags.</param>
+internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded, IReadOnlyList<string> AllKeys)
 {
+    /// <summary>
+    ///     The most keys a header carries. Next.js keeps 128 tags per cache entry and silently drops the
+    ///     rest, so a longer header would lose whichever keys came last.
+    /// </summary>
+    public const int MaxHeaderKeys = 128;
+
     /// <summary>
     ///     A response normally carries its <c>response-</c> key, recorded with what it covers. A listing
     ///     only the catch-all <c>search-</c> key selects (a search, a name filter, any other query) is
@@ -28,18 +35,24 @@ internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded)
         var catchAll = recordable is false || keys.Any(CacheKeys.IsSearch);
         if (mode == CacheKeyMode.ResponseKey && catchAll is false)
         {
-            return new ResponseTags([responseKey, CacheKeys.All], Recorded: true);
+            string[] recorded = [responseKey, CacheKeys.All];
+            return new ResponseTags(recorded, Recorded: true, recorded);
         }
 
+        // The keys purges need most come first, so a frontend that drops tags past its limit drops the
+        // least needed: umbraco (a change to everything), the selectors a publish reaches listings by,
+        // the site's own x- keys, then the items. Schema keys come last, because only a type or data
+        // type change purges them.
         var items = keys.Where(CacheKeys.IsItem).Order(StringComparer.Ordinal).ToList();
         IEnumerable<string> own = catchAll ? [] : [responseKey];
-        return new ResponseTags(
-            own
-                .Concat(items.Count <= maxItemKeys ? items : typesOf(items))
-                .Concat(keys.Where(key => CacheKeys.IsSelector(key) || CacheKeys.IsSchema(key) || CacheKeys.IsCustom(key)).Order(StringComparer.Ordinal))
-                .Append(CacheKeys.All)
-                .Distinct(StringComparer.Ordinal)
-                .ToList(),
-            Recorded: catchAll is false);
+        var all = own
+            .Append(CacheKeys.All)
+            .Concat(keys.Where(CacheKeys.IsSelector).Order(StringComparer.Ordinal))
+            .Concat(keys.Where(CacheKeys.IsCustom).Order(StringComparer.Ordinal))
+            .Concat(items.Count <= maxItemKeys ? items : typesOf(items))
+            .Concat(keys.Where(CacheKeys.IsSchema).Order(StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return new ResponseTags([.. all.Take(MaxHeaderKeys)], Recorded: catchAll is false, all);
     }
 }

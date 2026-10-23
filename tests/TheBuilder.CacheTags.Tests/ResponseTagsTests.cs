@@ -30,7 +30,7 @@ public sealed class ResponseTagsTests
             new HashSet<string> { Forest, Harbour, "schema-article", "search-deliveryapicontentindex" },
             Types);
 
-        Assert.Equal([Harbour, Forest, "schema-article", "search-deliveryapicontentindex", "umbraco"], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", Harbour, Forest, "schema-article"], tags.Keys);
         Assert.False(tags.Recorded);
     }
 
@@ -39,7 +39,7 @@ public sealed class ResponseTagsTests
     {
         ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 1, Response, new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" }, Types);
 
-        Assert.Equal(["type-article", "search-deliveryapicontentindex", "umbraco"], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], tags.Keys);
     }
 
     [Fact]
@@ -47,8 +47,25 @@ public sealed class ResponseTagsTests
     {
         ResponseTags tags = ResponseTags.For(CacheKeyMode.ItemKeys, 64, Response, new HashSet<string> { Harbour, "type-article" }, Types);
 
-        Assert.Equal([Response, Harbour, "type-article", "umbraco"], tags.Keys);
+        Assert.Equal([Response, "umbraco", "type-article", Harbour], tags.Keys);
         Assert.True(tags.Recorded);
+    }
+
+    [Fact]
+    public void A_header_past_the_tag_limit_keeps_the_keys_purges_need_and_drops_schema_keys_last()
+    {
+        // A search page showing 64 items that render 70 different types: 136 keys, more than the 128
+        // tags Next.js keeps. Before, umbraco came last and was the first key a frontend dropped.
+        var items = Enumerable.Range(1, 64).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
+        var schemas = Enumerable.Range(0, 70).Select(i => $"schema-type{i:D2}").ToList();
+        var keys = new HashSet<string>([.. items, .. schemas, "search-deliveryapicontentindex"]);
+
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, Response, keys, Types);
+
+        Assert.Equal(128, tags.Keys.Count);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex"], tags.Keys.Take(2));
+        Assert.Equal(items, tags.Keys.Skip(2).Take(64));
+        Assert.Equal(schemas.Take(62), tags.Keys.Skip(66));
     }
 }
 

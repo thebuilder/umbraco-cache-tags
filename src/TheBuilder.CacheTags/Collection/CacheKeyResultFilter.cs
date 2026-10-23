@@ -123,8 +123,8 @@ internal sealed class CacheKeyResultFilter(
         http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Keys.Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
 
         // Umbraco's output cache is evicted by the same keys a purge names: the response key, or the
-        // keys a response that is not recorded carries itself.
-        http.Items[OutputCacheTagsItem] = tags.Recorded ? new[] { responseKey } : tags.Keys;
+        // keys a response that is not recorded carries itself, all of them, since it has no tag limit.
+        http.Items[OutputCacheTagsItem] = tags.Recorded ? new[] { responseKey } : tags.AllKeys;
     }
 
     /// <summary>Queues the record of what the response covers, before its key goes out. False when it could not be queued.</summary>
