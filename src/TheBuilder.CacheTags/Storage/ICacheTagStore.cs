@@ -10,9 +10,10 @@ namespace TheBuilder.CacheTags.Storage;
 ///     Writes are additive: recording a response adds or refreshes its keys and never removes one.
 ///     A key a response no longer covers ages out after <c>MappingRetention</c>. A spare key costs an
 ///     extra purge; a missing one leaves a cached response stale, so implementations must never drop
-///     keys on write. The package skips rewriting a render whose keys it wrote within the last hour, so
-///     a key's last render time can be up to an hour behind; the default store prunes dropped keys an
-///     hour later than <c>PruneAsync</c>'s cutoff for that reason.
+///     keys on write. The package skips rewriting a render whose keys it wrote within the last hour, and
+///     touches a response at most once an hour, so a key's last render time and a response's last seen
+///     time can each be up to an hour behind; the default store prunes everything an hour later than
+///     <c>PruneAsync</c>'s cutoff for that reason, and a custom store should do the same.
 /// </remarks>
 public interface ICacheTagStore
 {

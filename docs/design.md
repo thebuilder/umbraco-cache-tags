@@ -105,7 +105,7 @@ purge every one of them, so a purge would grow with every variation ever cached.
 carries its keys itself instead, as in item keys mode below:
 
 ```http
-X-Umbraco-Cache-Keys: content-e000..., schema-article, search-deliveryapicontentindex, umbraco
+X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000..., schema-article
 ```
 
 and the planned `search-` key purges every such response at once, however many are cached. Being
@@ -124,12 +124,20 @@ A response in a culture that is no language of the site (Umbraco takes `Accept-L
 reached by the item and selector keys a purge sends. Languages are read at most once a minute too.
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
-characters) and ignores the rest. A header carries at most `MaxItemKeys` (64) item keys, plus schema
-and selector keys and `umbraco`, which stays under that; lowering `MaxItemKeys` makes room for a
-target with a smaller limit.
+characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128) keys, most needed
+first: its own `response-` key, `umbraco`, its selector keys, its `x-` keys, its item keys, then its
+`schema-` keys, which are the first to go past the limit because only a type or data type change
+purges them. Items past `MaxItemKeys` (64), or items that would push the header past the limit, are
+listed as their `type-` keys instead. A response with more listing, `x-` or `type-` keys than the
+limit loses the last of those too. Umbraco's output cache has no limit, so its entry is tagged
+with every key. Set `MaxHeaderKeys` to the limit of a target that keeps fewer tags, and raise it
+for one that limits tags by size, such as Cloudflare in front of Umbraco, which keeps 16 KB of
+`Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. Such a header is about 15 KB, which
+a proxy in front of Umbraco must allow (nginx needs a `proxy_buffer_size` of 16k or more).
 
 With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
 itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.
+Items that would push the header past `MaxHeaderKeys` are listed as their `type-` keys too.
 The header name is `CacheTags:HeaderName`.
 
 No keys, and the given `Cache-Control`, on:

@@ -141,7 +141,7 @@ The `cloudflare` type purges a Cloudflare zone by cache tag. Create an API token
 
 Cloudflare reads tags from a `Cache-Tag` response header:
 
-- If Cloudflare caches Umbraco's Delivery API directly, set `CacheTags:HeaderName` to `Cache-Tag`.
+- If Cloudflare caches Umbraco's Delivery API directly, set `CacheTags:HeaderName` to `Cache-Tag`, and raise `CacheTags:MaxHeaderKeys` (128 by default, Next.js's limit) to about 300, since Cloudflare keeps 16 KB of tags per response instead of a number of tags. A 300-key header is about 15 KB, so a proxy between Cloudflare and Umbraco must allow response headers that large. Nginx, for example, refuses it with a 502 unless `proxy_buffer_size` is 16k or more.
 - If Cloudflare caches your frontend, the frontend must copy the keys into its own `Cache-Tag` header.
 
 The package posts the keys to `POST /client/v4/zones/{zone}/purge_cache` as `tags`, at most 100 per call. If a call fails, for example because of a bad token or a rate limit, the package retries it like any purge, and the backoffice shows the error with the purge.

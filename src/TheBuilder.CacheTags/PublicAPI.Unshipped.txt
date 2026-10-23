@@ -35,6 +35,8 @@ TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxAttempts.get -> int
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxAttempts.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxDescendants.get -> int
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxDescendants.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxHeaderKeys.get -> int
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxHeaderKeys.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxItemKeys.get -> int
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxItemKeys.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.PollInterval.get -> System.TimeSpan

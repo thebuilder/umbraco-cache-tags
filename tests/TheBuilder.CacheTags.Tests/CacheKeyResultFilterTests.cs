@@ -62,7 +62,7 @@ public sealed class CacheKeyResultFilterTests
             writer.Record(Writers.Response($"response-{i}"));
         }
 
-        Assert.Equal(["x-dictionary-en", "umbraco"], await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary")));
+        Assert.Equal(["umbraco", "x-dictionary-en"], await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary")));
     }
 
     [Fact]
@@ -70,7 +70,33 @@ public sealed class CacheKeyResultFilterTests
     {
         using MappingWriter writer = Writers.Create(new NoStore(), installed: false);
 
-        Assert.Equal(["x-dictionary-en", "umbraco"], await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary")));
+        Assert.Equal(["umbraco", "x-dictionary-en"], await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary")));
+    }
+
+    [Fact]
+    public async Task A_header_stops_at_the_tag_limit_but_Umbracos_output_cache_keeps_every_key()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore(), installed: false);
+        var named = Enumerable.Range(0, 200).Select(i => $"x-label-{i:D3}").ToList();
+
+        HttpContext http = await RunAsync(writer, new Request(typeof(DictionaryController), "/api/labels", Named: named));
+
+        var header = http.Response.Headers[Settings.HeaderName].ToString().Split(", ");
+        Assert.Equal(128, header.Length);
+        Assert.Equal("umbraco", header[0]);
+        Assert.Equal(["umbraco", .. named], (IReadOnlyList<string>)http.Items[CacheKeyResultFilter.OutputCacheTagsItem]!);
+    }
+
+    [Fact]
+    public async Task The_header_stops_at_the_configured_limit()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore(), installed: false);
+        var named = Enumerable.Range(0, 20).Select(i => $"x-label-{i:D2}").ToList();
+
+        HttpContext http = await RunAsync(writer, new Request(typeof(DictionaryController), "/api/labels", Named: named, Options: new CacheTagsOptions { MaxHeaderKeys = 10 }));
+
+        Assert.Equal(["umbraco", .. named.Take(9)], http.Response.Headers[Settings.HeaderName].ToString().Split(", "));
+        Assert.Equal(["umbraco", .. named], (IReadOnlyList<string>)http.Items[CacheKeyResultFilter.OutputCacheTagsItem]!);
     }
 
     [Fact]
@@ -128,7 +154,7 @@ public sealed class CacheKeyResultFilterTests
         Assert.StartsWith("response-", english[0], StringComparison.Ordinal);
         Assert.StartsWith("response-", danish[0], StringComparison.Ordinal);
         Assert.NotEqual(english, danish);
-        Assert.Equal(["type-article", "umbraco"], await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article", Culture: "x8f3e1c2")));
+        Assert.Equal(["umbraco", "type-article"], await HeaderAsync(writer, new Request(typeof(QueryContentApiController), Listing, "?filter=contentType:article", Culture: "x8f3e1c2")));
     }
 
     [Fact]
@@ -156,17 +182,24 @@ public sealed class CacheKeyResultFilterTests
         Assert.NotEqual(home, await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, Culture: "en-us", StartItem: "shop")));
     }
 
-    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? StartItem = null, object? Value = null);
+    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? StartItem = null, object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null);
 
     /// <summary>Runs the filter over a 200 response to the request, and returns its header's keys.</summary>
     private static async Task<string[]> HeaderAsync(MappingWriter writer, Request request)
+        => (await RunAsync(writer, request)).Response.Headers[Settings.HeaderName].ToString().Split(", ");
+
+    /// <summary>Runs the filter over a 200 response to the request.</summary>
+    private static async Task<HttpContext> RunAsync(MappingWriter writer, Request request)
     {
         var named = new CacheTagsResponse();
-        named.Add("x-dictionary-en");
+        foreach (var key in request.Named ?? ["x-dictionary-en"])
+        {
+            named.Add(key);
+        }
         KnownNames names = Names.Of(["article"], cultures: ["en-US", "da-DK"]);
         IVariationContextAccessor variation = Fake.Of<IVariationContextAccessor>((method, _) => method.Name == "get_VariationContext" && request.Culture is not null ? new VariationContext(request.Culture, request.Segment) : null);
         var filter = new CacheKeyResultFilter(
-            new TestOptions(Settings),
+            new TestOptions(request.Options ?? Settings),
             Fake.Of<IRequestPreviewService>(),
             Fake.Of<IRequestCultureService>((method, _) => method.Name == "GetRequestedCulture" ? request.Culture : null),
             Fake.Of<IRequestStartItemProvider>((method, _) => method.Name switch
@@ -205,7 +238,7 @@ public sealed class CacheKeyResultFilterTests
 
         await filter.OnResultExecutionAsync(context, () => Task.FromResult(new ResultExecutedContext(context, [], context.Result, context.Controller)));
 
-        return http.Response.Headers[Settings.HeaderName].ToString().Split(", ");
+        return http;
     }
 
     [CacheTagged]

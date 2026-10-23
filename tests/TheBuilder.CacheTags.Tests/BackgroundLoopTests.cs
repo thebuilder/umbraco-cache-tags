@@ -127,6 +127,16 @@ public sealed class BackgroundLoopTests
     }
 
     [Fact]
+    public void A_header_limit_must_leave_room_past_a_response_key_and_umbraco()
+    {
+        (_, IOptionsMonitor<CacheTagsOptions> tooSmall) = Settings(("CacheTags:MaxHeaderKeys", "2"));
+        (_, IOptionsMonitor<CacheTagsOptions> smallest) = Settings(("CacheTags:MaxHeaderKeys", "3"));
+
+        Assert.Throws<OptionsValidationException>(() => tooSmall.CurrentValue);
+        Assert.Equal(3, smallest.CurrentValue.MaxHeaderKeys);
+    }
+
+    [Fact]
     public void Settings_that_are_invalid_from_the_start_still_fail()
     {
         (_, IOptionsMonitor<CacheTagsOptions> options) = Settings(("CacheTags:MaxAttempts", "0"));

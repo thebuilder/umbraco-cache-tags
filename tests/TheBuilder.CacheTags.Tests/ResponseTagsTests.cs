@@ -14,7 +14,7 @@ public sealed class ResponseTagsTests
     [Fact]
     public void A_response_carries_its_response_key_and_the_key_of_everything_and_is_recorded()
     {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, Response, new HashSet<string> { Harbour, "children-e0000000-0000-0000-0000-000000000002" }, Types);
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, Response, new HashSet<string> { Harbour, "children-e0000000-0000-0000-0000-000000000002" }, Types);
 
         Assert.Equal([Response, "umbraco"], tags.Keys);
         Assert.True(tags.Recorded);
@@ -26,28 +26,66 @@ public sealed class ResponseTagsTests
         ResponseTags tags = ResponseTags.For(
             CacheKeyMode.ResponseKey,
             64,
+            128,
             Response,
             new HashSet<string> { Forest, Harbour, "schema-article", "search-deliveryapicontentindex" },
             Types);
 
-        Assert.Equal([Harbour, Forest, "schema-article", "search-deliveryapicontentindex", "umbraco"], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", Harbour, Forest, "schema-article"], tags.Keys);
         Assert.False(tags.Recorded);
     }
 
     [Fact]
     public void A_catch_all_listing_showing_more_items_than_the_header_holds_carries_their_types()
     {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 1, Response, new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" }, Types);
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 1, 128, Response, new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" }, Types);
 
-        Assert.Equal(["type-article", "search-deliveryapicontentindex", "umbraco"], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], tags.Keys);
     }
 
     [Fact]
     public void In_item_keys_mode_a_recorded_response_carries_its_response_key_too()
     {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ItemKeys, 64, Response, new HashSet<string> { Harbour, "type-article" }, Types);
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ItemKeys, 64, 128, Response, new HashSet<string> { Harbour, "type-article" }, Types);
 
-        Assert.Equal([Response, Harbour, "type-article", "umbraco"], tags.Keys);
+        Assert.Equal([Response, "umbraco", "type-article", Harbour], tags.Keys);
+        Assert.True(tags.Recorded);
+    }
+
+    [Fact]
+    public void The_keys_purges_need_come_first_and_schema_keys_last()
+    {
+        // A search page showing 64 items that render 70 different types: 136 keys, more than the 128
+        // tags Next.js keeps, which the header cuts from the end.
+        var items = Enumerable.Range(1, 64).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
+        var schemas = Enumerable.Range(0, 70).Select(i => $"schema-type{i:D2}").ToList();
+        var keys = new HashSet<string>([.. items, .. schemas, "search-deliveryapicontentindex"]);
+
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, Response, keys, Types);
+
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", .. items, .. schemas], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", .. items, .. schemas.Take(62)], tags.Header);
+    }
+
+    [Fact]
+    public void Items_that_would_push_the_header_past_its_limit_are_listed_as_their_types()
+    {
+        var items = Enumerable.Range(1, 150).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
+        var keys = new HashSet<string>([.. items, "schema-article", "search-deliveryapicontentindex"]);
+
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 200, 128, Response, keys, Types);
+
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article", "schema-article"], tags.Keys);
+    }
+
+    [Fact]
+    public void In_item_keys_mode_a_recorded_response_lists_the_types_of_items_that_would_not_fit()
+    {
+        var items = Enumerable.Range(1, 127).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
+
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ItemKeys, 200, 128, Response, new HashSet<string>(items), Types);
+
+        Assert.Equal([Response, "umbraco", "type-article"], tags.Keys);
         Assert.True(tags.Recorded);
     }
 }
