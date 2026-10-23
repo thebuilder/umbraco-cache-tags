@@ -62,7 +62,7 @@ Every publish plans the `search-` key, which purges all of them at once, however
 
 ## Limits
 
-Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Its `schema-` keys come last, so on a response that renders very many types, a header at its limit loses only some of those. Umbraco's own output cache keeps every key.
+Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Its `schema-` keys come last, so on a response that renders very many types, a header at its limit loses some of those first. Only a response with more listing, `x-` or `type-` keys than the limit loses any of those, from the end. Umbraco's own output cache keeps every key.
 
 ## Item keys mode
 

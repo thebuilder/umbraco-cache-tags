@@ -128,9 +128,11 @@ characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128)
 first: its own `response-` key, `umbraco`, its selector keys, its `x-` keys, its item keys, then its
 `schema-` keys, which are the first to go past the limit because only a type or data type change
 purges them. Items past `MaxItemKeys` (64), or items that would push the header past the limit, are
-listed as their `type-` keys instead. Umbraco's output cache has no limit, so its entry is tagged
+listed as their `type-` keys instead. A response with more listing, `x-` or `type-` keys than the
+limit loses the last of those too. Umbraco's output cache has no limit, so its entry is tagged
 with every key. Set `MaxHeaderKeys` to the limit of a target that keeps fewer tags, and raise it
-for one that limits tags by size, such as Cloudflare in front of Umbraco.
+for one that limits tags by size, such as Cloudflare in front of Umbraco, which keeps 16 KB of
+`Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`.
 
 With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
 itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.

@@ -64,6 +64,7 @@ public sealed class ResponseTagsTests
         ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, Response, keys, Types);
 
         Assert.Equal(["umbraco", "search-deliveryapicontentindex", .. items, .. schemas], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", .. items, .. schemas.Take(62)], tags.Header);
     }
 
     [Fact]

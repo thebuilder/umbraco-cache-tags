@@ -88,6 +88,18 @@ public sealed class CacheKeyResultFilterTests
     }
 
     [Fact]
+    public async Task The_header_stops_at_the_configured_limit()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore(), installed: false);
+        var named = Enumerable.Range(0, 20).Select(i => $"x-label-{i:D2}").ToList();
+
+        HttpContext http = await RunAsync(writer, new Request(typeof(DictionaryController), "/api/labels", Named: named, Options: new CacheTagsOptions { MaxHeaderKeys = 10 }));
+
+        Assert.Equal(["umbraco", .. named.Take(9)], http.Response.Headers[Settings.HeaderName].ToString().Split(", "));
+        Assert.Equal(["umbraco", .. named], (IReadOnlyList<string>)http.Items[CacheKeyResultFilter.OutputCacheTagsItem]!);
+    }
+
+    [Fact]
     public async Task An_item_request_by_route_keys_by_none_of_the_query_since_it_reads_none()
     {
         using MappingWriter writer = Writers.Create(new NoStore());
@@ -170,7 +182,7 @@ public sealed class CacheKeyResultFilterTests
         Assert.NotEqual(home, await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, Culture: "en-us", StartItem: "shop")));
     }
 
-    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? StartItem = null, object? Value = null, IReadOnlyList<string>? Named = null);
+    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? StartItem = null, object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null);
 
     /// <summary>Runs the filter over a 200 response to the request, and returns its header's keys.</summary>
     private static async Task<string[]> HeaderAsync(MappingWriter writer, Request request)
@@ -187,7 +199,7 @@ public sealed class CacheKeyResultFilterTests
         KnownNames names = Names.Of(["article"], cultures: ["en-US", "da-DK"]);
         IVariationContextAccessor variation = Fake.Of<IVariationContextAccessor>((method, _) => method.Name == "get_VariationContext" && request.Culture is not null ? new VariationContext(request.Culture, request.Segment) : null);
         var filter = new CacheKeyResultFilter(
-            new TestOptions(Settings),
+            new TestOptions(request.Options ?? Settings),
             Fake.Of<IRequestPreviewService>(),
             Fake.Of<IRequestCultureService>((method, _) => method.Name == "GetRequestedCulture" ? request.Culture : null),
             Fake.Of<IRequestStartItemProvider>((method, _) => method.Name switch

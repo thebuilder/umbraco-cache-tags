@@ -112,17 +112,15 @@ internal sealed class CacheKeyResultFilter(
         // A culture that is no language is not recorded: a purge limited to a language would miss it,
         // and its values would make a mapping row each. It carries its keys itself.
         recordable = recordable && (string.IsNullOrEmpty(culture) || names.IsCulture(culture));
-        ResponseTags tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, settings.MaxHeaderKeys, responseKey, keys, collector.TypeKeys, recordable);
+        ResponseTags tags = ResponseTags.For(settings.KeyMode, maxItemKeys: settings.MaxItemKeys, maxHeaderKeys: settings.MaxHeaderKeys, responseKey, keys, collector.TypeKeys, recordable);
         if (tags.Recorded && Record(identity, responseKey, keys) is false)
         {
             // The mapping write could not be queued, so no purge would find the response by its key:
             // it carries its keys itself instead, like a response that is never recorded.
-            tags = ResponseTags.For(settings.KeyMode, settings.MaxItemKeys, settings.MaxHeaderKeys, responseKey, keys, collector.TypeKeys, recordable: false);
+            tags = ResponseTags.For(settings.KeyMode, maxItemKeys: settings.MaxItemKeys, maxHeaderKeys: settings.MaxHeaderKeys, responseKey, keys, collector.TypeKeys, recordable: false);
         }
 
-        // A frontend keeps only so many tags per entry and drops the rest, so the header stops at the
-        // limit. The keys are ordered most needed first.
-        http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Keys.Take(settings.MaxHeaderKeys).Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
+        http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Header.Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
 
         // Umbraco's output cache is evicted by the same keys a purge names: the response key, or the
         // keys a response that is not recorded carries itself, all of them, since it has no tag limit.
