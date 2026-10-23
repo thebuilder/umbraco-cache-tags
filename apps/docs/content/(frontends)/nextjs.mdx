@@ -38,6 +38,7 @@ export async function deliveryApi<T>(request: string, culture?: string): Promise
 ```
 
 - Pass everything that changes the response as an argument: the path with its query, and the culture. `"use cache"` keys the entry by its arguments.
+- Keep each Delivery API response in its own `"use cache"` function, as here. Next.js keeps 128 tags per entry, and the header puts the keys purges need first within that limit. An entry that collects several responses' keys could lose some of them.
 - Cache a response for at most `CacheTags:MappingRetention`, 7 days by default. After that, the package forgets which keys a response covers.
 - The package sends no `Vary` header. If you forward `Accept-Language`, `Accept-Segment` or `Start-Item`, make them arguments too, as `culture` is here.
 

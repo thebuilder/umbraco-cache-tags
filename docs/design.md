@@ -124,11 +124,13 @@ A response in a culture that is no language of the site (Umbraco takes `Accept-L
 reached by the item and selector keys a purge sends. Languages are read at most once a minute too.
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
-characters) and ignores the rest. A header carries at most 128 keys, most needed first: its own
-`response-` key, `umbraco`, its selector keys, its `x-` keys, at most `MaxItemKeys` (64) item keys,
-then its `schema-` keys, which are the first to go past the limit because only a type or data type
-change purges them. Umbraco's output cache has no limit, so its entry is tagged with every key.
-Lowering `MaxItemKeys` makes room for a target with a smaller limit.
+characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128) keys, most needed
+first: its own `response-` key, `umbraco`, its selector keys, its `x-` keys, its item keys, then its
+`schema-` keys, which are the first to go past the limit because only a type or data type change
+purges them. Items past `MaxItemKeys` (64), or items that would push the header past the limit, are
+listed as their `type-` keys instead. Umbraco's output cache has no limit, so its entry is tagged
+with every key. Set `MaxHeaderKeys` to the limit of a target that keeps fewer tags, and raise it
+for one that limits tags by size, such as Cloudflare in front of Umbraco.
 
 With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
 itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.

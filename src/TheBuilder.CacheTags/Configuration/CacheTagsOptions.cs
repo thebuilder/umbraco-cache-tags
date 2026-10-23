@@ -30,6 +30,13 @@ public sealed class CacheTagsOptions
     public int MaxItemKeys { get; set; } = 64;
 
     /// <summary>
+    ///     The most keys one response header lists, most needed first. Defaults to 128, the most tags
+    ///     Next.js keeps per cache entry. Raise it for a target that limits tags by size instead, such as
+    ///     Cloudflare in front of Umbraco.
+    /// </summary>
+    public int MaxHeaderKeys { get; set; } = 128;
+
+    /// <summary>
     ///     The most descendants a route change (rename, move, unpublish) purges one by one before it
     ///     purges every response instead. Defaults to 500.
     /// </summary>

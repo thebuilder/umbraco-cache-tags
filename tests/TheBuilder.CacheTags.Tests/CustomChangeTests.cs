@@ -107,7 +107,7 @@ public sealed class CustomChangeTests
     [Fact]
     public void An_action_that_records_nothing_carries_its_custom_keys_itself()
     {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, "response-83dcadcd6bbb144ef252035d66d20df5", new HashSet<string> { "x-dictionary-da-dk" }, _ => [], recordable: false);
+        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, "response-83dcadcd6bbb144ef252035d66d20df5", new HashSet<string> { "x-dictionary-da-dk" }, _ => [], recordable: false);
 
         Assert.Equal(["umbraco", "x-dictionary-da-dk"], tags.Keys);
         Assert.False(tags.Recorded);
