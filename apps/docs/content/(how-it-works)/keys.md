@@ -62,17 +62,7 @@ Every publish plans the `search-` key, which purges all of them at once, however
 
 ## How long a response may be cached
 
-A frontend or CDN can keep a response until a purge reaches it, for at most `MappingRetention`, 90 days by default. The package forgets a recorded response nobody has asked for in that time, and no purge reaches a copy kept longer. A recorded response says so in a header:
-
-```http
-CDN-Cache-Control: max-age=7776000
-```
-
-CDNs such as Cloudflare read `CDN-Cache-Control`, and browsers ignore it. Next.js sets an entry's lifetime with `cacheLife` only, so keep its `expire` within the retention. Some responses get no such header:
-
-- A response that carries its own keys, such as a catch-all listing, since its keys never age out.
-- A response to a request with an `Api-Key`, since a CDN keys its cache by URL and would serve it to anyone.
-- A response whose action set its own `Cache-Control` or `CDN-Cache-Control`.
+A frontend or CDN can keep a response until a purge reaches it, for at most `MappingRetention`, 90 days by default. The package forgets a recorded response nobody has asked for in that time, and no purge reaches a copy kept longer. In Next.js, keep `cacheLife`'s `expire` within it.
 
 ## Call the Delivery API from your server
 

@@ -96,13 +96,7 @@ Once a day, on one server, the package removes a response nobody has asked for i
 `MappingRetention` (90 days), and a key a later render dropped. The writer skips rewriting a render,
 and touching a response, within an hour of the last, so every row gets an extra hour.
 
-A recorded response says how long a cache may keep it, `CDN-Cache-Control: max-age=<MappingRetention>`.
-CDNs read that header (RFC 9213) and browsers ignore it. Next.js sets an entry's lifetime with
-`cacheLife` only, so a frontend keeps its `expire` within the retention. Some responses get no such
-header. A response that carries its keys itself needs none, since nothing about it is forgotten. A
-response to a request with an `Api-Key` must not be shared, and a CDN keys its cache by URL. An action
-that set its own `Cache-Control` or `CDN-Cache-Control` keeps it: a CDN reads `CDN-Cache-Control`
-first, so it would override a `private` or `no-store` the action chose.
+A frontend or CDN must not keep a recorded response longer than `MappingRetention`.
 
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
