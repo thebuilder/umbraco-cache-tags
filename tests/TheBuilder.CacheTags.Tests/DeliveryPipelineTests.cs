@@ -139,6 +139,15 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_response_to_an_API_key_carries_its_keys_but_no_CDN_lifetime_since_a_CDN_would_share_it()
+    {
+        using HttpResponseMessage response = await GetAsync(Item, ("Api-Key", "a-delivery-api-key"));
+
+        Assert.StartsWith("response-", Keys(response), StringComparison.Ordinal);
+        Assert.Null(CdnCacheControl(response));
+    }
+
+    [Fact]
     public async Task A_preview_request_is_never_stored_and_carries_no_keys()
     {
         using HttpResponseMessage response = await GetAsync(Item, ("Preview", "true"));

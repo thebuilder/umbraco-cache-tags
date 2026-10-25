@@ -10,7 +10,7 @@ namespace TheBuilder.CacheTags.Storage;
 internal static class CacheTagSql
 {
     // SQL Server allows 2100 parameters per command; stay well under.
-    public const int ChunkSize = 500;
+    private const int ChunkSize = 500;
 
     public static void Record(IDatabase database, CachedResponse response)
     {
@@ -140,18 +140,6 @@ internal static class CacheTagSql
     /// <summary>Responses nobody has asked for since the cutoff; their keys go first.</summary>
     public static int PruneUnseenResponses(IDatabase database, DateTime cutoffUtc)
         => database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
-
-    /// <summary>
-    ///     Of at most <see cref="ChunkSize" /> responses, those neither rendered nor served since the
-    ///     cutoff (a render sets the seen time too); their keys go first.
-    /// </summary>
-    public static int Forget(IDatabase database, IReadOnlyCollection<string> responseKeys, DateTime cutoffUtc)
-        => database.Execute(new Sql(
-               $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey IN (SELECT ResponseKey FROM {Constants.Tables.Responses} WHERE SeenUtc < @cutoff AND ResponseKey IN (@keys))",
-               new { cutoff = cutoffUtc, keys = responseKeys }))
-           + database.Execute(new Sql(
-               $"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @cutoff AND ResponseKey IN (@keys)",
-               new { cutoff = cutoffUtc, keys = responseKeys }));
 
     private static CachedResponse Response(ResponseRow row, IReadOnlyCollection<string> keys) => new()
     {

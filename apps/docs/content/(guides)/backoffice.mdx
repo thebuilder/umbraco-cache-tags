@@ -54,4 +54,4 @@ A document's or media item's **Info** tab has a **Cache** box. It shows how many
 ![The Cache box on Harbour mornings' Info tab: how many served responses include it, the first five of them, a link to the rest, the item's key and Purge this item](../screenshots/info.png)
 </Frame>
 
-The list is what the package has recorded, not what a cache holds right now. Once every purge of a change was sent, the daily cleanup forgets the responses it expired, so the list shrinks until a frontend fetches those responses again.
+The list is what the package has recorded, not what a cache holds right now. A purge doesn't empty it, because the next render of each response includes the item again.

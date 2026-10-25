@@ -92,29 +92,17 @@ The package records which `content-`, `media-`, `schema-` and selector keys (`ty
 their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
 cover them, and sent with both.
 
-A response's mapping is removed once a day, on one server, in two ways:
-
-- Once every purge of a change was sent, the responses it named are forgotten where they were
-  neither rendered nor served in the hour before the change, or since. A purge expired every copy
-  from before then, and the next request records the response again. The hour matches the writer's
-  touch interval: it does not rewrite a render, or touch a response, within an hour of the last, so
-  a request shortly after the change may not show in the row yet. A response served after the change
-  is kept: a server that applied the change late may have replayed an old copy from its output
-  cache. A change still waiting for the index, released less than 15 minutes ago (while a server
-  released without it can still evict its responses late), or with a purge not yet sent, dead or
-  discarded, is skipped for now. The cleanup looks at changes released in the last two days, so one
-  missed run is still covered, and leaves older ones to the retention. If it fails, the job logs it
-  and goes on. The backoffice then lists fewer responses for the item until frontends fetch them
-  again.
-- A response nobody has asked for in `MappingRetention` (90 days) is removed, and a key a later
-  render dropped too. Every row gets an extra hour, for the same reason.
+Once a day, on one server, the package removes a response nobody has asked for in
+`MappingRetention` (90 days), and a key a later render dropped. The writer skips rewriting a render,
+and touching a response, within an hour of the last, so every row gets an extra hour.
 
 A recorded response says how long a cache may keep it, `CDN-Cache-Control: max-age=<MappingRetention>`.
 CDNs read that header (RFC 9213) and browsers ignore it. Next.js sets an entry's lifetime with
-`cacheLife` only, so a frontend keeps its `expire` within the retention. A response that carries its
-keys itself gets no such header, since nothing about it is forgotten. Nor does one whose action set
-its own `Cache-Control` or `CDN-Cache-Control`: a CDN reads `CDN-Cache-Control` first, so it would
-override a `private` or `no-store` the action chose.
+`cacheLife` only, so a frontend keeps its `expire` within the retention. Some responses get no such
+header. A response that carries its keys itself needs none, since nothing about it is forgotten. A
+response to a request with an `Api-Key` must not be shared, and a CDN keys its cache by URL. An action
+that set its own `Cache-Control` or `CDN-Cache-Control` keeps it: a CDN reads `CDN-Cache-Control`
+first, so it would override a `private` or `no-store` the action chose.
 
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is

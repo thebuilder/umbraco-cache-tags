@@ -36,18 +36,6 @@ internal static class LedgerSql
     private static string EscapeLike(string value)
         => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_").Replace("[", @"\[");
 
-    /// <summary>
-    ///     The keys of every purge of the changes released in the window whose purges were all sent,
-    ///     with the change each belongs to.
-    /// </summary>
-    public static List<DeliveredRow> Delivered(IDatabase database, DateTime releasedFromUtc, DateTime releasedBeforeUtc)
-        => database.Fetch<DeliveredRow>(
-            $"SELECT e.Id AS EventId, e.CreatedUtc, o.Keys FROM {Constants.Tables.Outbox} o INNER JOIN {Constants.Tables.Events} e ON e.Id = o.EventId WHERE e.Status = @0 AND e.ReleasedUtc >= @1 AND e.ReleasedUtc < @2 AND NOT EXISTS (SELECT 1 FROM {Constants.Tables.Outbox} x WHERE x.EventId = e.Id AND x.State <> @3)",
-            nameof(ChangeStage.Released),
-            releasedFromUtc,
-            releasedBeforeUtc,
-            OutboxStates.Sent);
-
     public static List<EventRow> Latest(IDatabase database, int take)
         => database.SkipTake<EventRow>(0, take, new Sql($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC"));
 

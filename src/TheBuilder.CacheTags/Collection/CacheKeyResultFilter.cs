@@ -127,8 +127,12 @@ internal sealed class CacheKeyResultFilter(
         // A recorded response is reached through its mapping, which is forgotten once nobody has asked
         // for the response in MappingRetention, so a cache must not keep it longer. CDN-Cache-Control
         // (RFC 9213) is read by CDNs only: a browser, which no purge reaches, does not keep it for that.
-        // A CDN reads it before Cache-Control, so an action that set either (private, no-store) keeps its own.
-        if (tags.Recorded && http.Response.Headers.ContainsKey(HeaderNames.CacheControl) is false && http.Response.Headers.ContainsKey(CdnCacheControl) is false)
+        // A CDN reads it before Cache-Control, so an action that set either (private, no-store) keeps its
+        // own. A response to an API key gets none: a CDN keys its cache by URL and would serve it to anyone.
+        if (tags.Recorded
+            && http.Request.Headers.ContainsKey(Umbraco.Cms.Core.Constants.DeliveryApi.HeaderNames.ApiKey) is false
+            && http.Response.Headers.ContainsKey(HeaderNames.CacheControl) is false
+            && http.Response.Headers.ContainsKey(CdnCacheControl) is false)
         {
             http.Response.Headers[CdnCacheControl] = $"max-age={(long)settings.MappingRetention.TotalSeconds}";
         }

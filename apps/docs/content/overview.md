@@ -31,8 +31,7 @@ Listings, such as an article list or a search, come from each server's Delivery 
 - Umbraco CMS 17.4 or later, Umbraco 18 included, on .NET 10, with the Delivery API enabled.
 - SQL Server, or SQLite for a single server. Every Umbraco server, delivery servers included, needs write access to the package's tables.
 - A frontend or CDN that can tag its cache entries and purge by tag. The [Next.js guide](/nextjs) has a complete receiver.
-
-Where you can, call the Delivery API from your frontend's server rather than from browsers. See [Call the Delivery API from your server](/keys#call-the-delivery-api-from-your-server).
+- Recommended: call the Delivery API from your frontend's server, not from browsers. See [Call the Delivery API from your server](/keys#call-the-delivery-api-from-your-server).
 
 ## Where to go next
 

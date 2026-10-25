@@ -33,7 +33,7 @@ public sealed class DictionaryController(ILanguageService languages, ICacheTagsR
 }
 ```
 
-Like a Delivery API response, the response gets a `response-` key and `umbraco`, and the package records the keys it covers. It finds Delivery API items in the result by itself. It also gets `CDN-Cache-Control: max-age=<MappingRetention>`, unless the action set its own `Cache-Control` or `CDN-Cache-Control`.
+Like a Delivery API response, the response gets a `response-` key and `umbraco`, and the package records the keys it covers. It finds Delivery API items in the result by itself. A recorded response also gets `CDN-Cache-Control: max-age=<MappingRetention>`, unless the action set its own `Cache-Control` or `CDN-Cache-Control`. See [How long a response may be cached](/keys#how-long-a-response-may-be-cached).
 
 - **Custom keys** start with `x-` and use lowercase letters, digits and hyphens, at most 200 characters. An item's `content-` or `media-` key works too.
 - **`QueryParameters`** lists the parameters that select what a response covers. Only those are part of its key, and there are none by default.

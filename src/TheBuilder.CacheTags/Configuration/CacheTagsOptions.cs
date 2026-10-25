@@ -45,8 +45,7 @@ public sealed class CacheTagsOptions
     /// <summary>
     ///     How long a response's mapping (which keys it covers) is kept after the response was last
     ///     served. Defaults to 90 days. A frontend must not cache a response longer than this, and a
-    ///     recorded response says so in its <c>CDN-Cache-Control</c> header. A purge that expires a
-    ///     response removes its mapping sooner, since no frontend keeps a copy that needs it.
+    ///     recorded response says so in its <c>CDN-Cache-Control</c> header.
     /// </summary>
     public TimeSpan MappingRetention { get; set; } = TimeSpan.FromDays(90);
 

@@ -41,7 +41,7 @@ The segment is left out, so a response's segment variants share its key. Nothing
 
 The other Delivery API parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how Umbraco presents a response, and the package ignores any other parameter. Requests that differ only in those, or in the case, form or order of a value, share a key. The shared key covers everything any of them showed, so a purge reaches each, and input such as `?skip=<n>` cannot make new keys.
 
-The record of what a response covers is written in the background, within moments. A response carries its response key only once that write is queued. When the queue is full, or while writes are failing, the response carries its item and listing keys itself instead, as a catch-all listing does, so a purge reaches it without the record. A failed write is retried one response at a time, so one bad response does not hold up the rest; one the database keeps rejecting while others go through is given up after three tries and logged.
+The record of what a response covers is written in the background, within moments. A response carries its response key only once that write is queued. When the queue is full, or while writes are failing, the response carries its item and listing keys itself instead, as a catch-all listing does, so a purge reaches it without the record. A failed write is retried one response at a time, so one bad response does not hold up the rest. One the database keeps rejecting while others go through is given up after three tries and logged.
 
 ## Catch-all listings
 
@@ -68,9 +68,11 @@ A frontend or CDN can keep a response until a purge reaches it, for at most `Map
 CDN-Cache-Control: max-age=7776000
 ```
 
-CDNs such as Cloudflare read `CDN-Cache-Control`, and browsers ignore it. Next.js sets an entry's lifetime with `cacheLife` only, so keep its `expire` within the retention. A response that carries its own keys, such as a catch-all listing, gets no such header, since its keys never age out. Neither does a response whose action set its own `Cache-Control` or `CDN-Cache-Control`.
+CDNs such as Cloudflare read `CDN-Cache-Control`, and browsers ignore it. Next.js sets an entry's lifetime with `cacheLife` only, so keep its `expire` within the retention. Some responses get no such header:
 
-Once every purge of a change was sent, the package also forgets the responses it expired, in its daily cleanup. The next request records each of them again.
+- A response that carries its own keys, such as a catch-all listing, since its keys never age out.
+- A response to a request with an `Api-Key`, since a CDN keys its cache by URL and would serve it to anyone.
+- A response whose action set its own `Cache-Control` or `CDN-Cache-Control`.
 
 ## Call the Delivery API from your server
 

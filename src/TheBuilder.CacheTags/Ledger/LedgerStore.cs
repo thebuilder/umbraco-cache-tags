@@ -40,11 +40,6 @@ internal sealed record Purge(
     DateTime? SentUtc,
     string? LastError);
 
-/// <summary>A change whose every purge was sent.</summary>
-/// <param name="CreatedUtc">When the change was recorded.</param>
-/// <param name="Keys">The keys its purges sent, as sent (with the configured prefix).</param>
-internal sealed record DeliveredChange(DateTime CreatedUtc, IReadOnlyList<string> Keys);
-
 /// <summary>A purge to queue when a change is released.</summary>
 internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateTime NotBeforeUtc)
 {
@@ -122,15 +117,6 @@ internal sealed class LedgerStore(PackageDatabase database)
     public IReadOnlyList<Purge> PurgesOf(Guid changeId)
         => database.Read(db => db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId))
             .Select(Purge)
-            .ToList();
-
-    /// <summary>The changes released in the window whose purges were all sent.</summary>
-    public IReadOnlyList<DeliveredChange> Delivered(DateTime releasedFromUtc, DateTime releasedBeforeUtc)
-        => database.Read(db => LedgerSql.Delivered(db, releasedFromUtc, releasedBeforeUtc))
-            .GroupBy(row => (row.EventId, row.CreatedUtc))
-            .Select(change => new DeliveredChange(
-                change.Key.CreatedUtc,
-                change.SelectMany(row => JsonSerializer.Deserialize<string[]>(row.Keys, Json) ?? []).Distinct(StringComparer.Ordinal).ToList()))
             .ToList();
 
     /// <summary>The purges in a state (Pending, Sent, Dead, Discarded), newest first.</summary>
