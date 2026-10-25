@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Ledger;
 using Umbraco.Cms.Core.Sync;
 using Umbraco.Cms.Infrastructure.BackgroundJobs;
@@ -36,28 +37,51 @@ internal sealed class MappingPruneJob(
             return;
         }
 
+        CacheTagsOptions settings = options.CurrentValue;
         DateTime now = time.GetUtcNow().UtcDateTime;
+        await ForgetAsync(settings.KeyPrefix, now);
 
-        // Once every purge of a change was sent, no frontend keeps a copy of its responses rendered
-        // before the change, so their rows are not needed until they are rendered again. Not while a
-        // server released without the change can still evict its responses late by their keys. The
-        // writer skips rewriting a render it wrote within its touch interval, so a response rendered
-        // in the interval before the change may have been rendered again after it without its row
-        // showing that: those rows stay until a later change or the retention removes them.
-        var forgotten = 0;
-        foreach (DeliveredChange change in ledger.Delivered(now - AckProcessor.LateWindow, options.CurrentValue.KeyPrefix))
-        {
-            forgotten += await store.ForgetAsync(change.ResponseKeys, change.CreatedUtc - MappingWriter.TouchInterval);
-        }
-
-        logger.LogInformation("Forgot {Count} cache tag mapping rows of responses that sent purges expired.", forgotten);
-
-        DateTime mappingCutoff = now - options.CurrentValue.MappingRetention;
+        // The writer touches a response at most once per touch interval, so its seen time can be that
+        // much behind the last request.
+        DateTime mappingCutoff = now - settings.MappingRetention - MappingWriter.TouchInterval;
         var removed = await store.PruneAsync(mappingCutoff);
         logger.LogInformation("Pruned {Count} cache tag mapping rows older than {Cutoff:u}.", removed, mappingCutoff);
 
-        DateTime ledgerCutoff = now - options.CurrentValue.LedgerRetention;
+        DateTime ledgerCutoff = now - settings.LedgerRetention;
         await transport.PruneAsync(ledgerCutoff);
         ledger.Prune(ledgerCutoff);
+    }
+
+    /// <summary>
+    ///     Forgets the responses a sent purge expired: no frontend keeps a copy from before the change
+    ///     (docs/design.md). Not before a server released without the change has stopped evicting late
+    ///     (<see cref="AckProcessor.LateWindow" />), and only rows a writer's touch interval older than
+    ///     the change (<see cref="MappingWriter.TouchInterval" />). Changes released in the last two
+    ///     runs, so one missed run is still covered. Forgetting only saves rows the retention would
+    ///     remove anyway, so a failure is logged and the job goes on.
+    /// </summary>
+    private async Task ForgetAsync(string prefix, DateTime now)
+    {
+        try
+        {
+            var forgotten = 0;
+            foreach (DeliveredChange change in ledger.Delivered(now - 2 * Period, now - AckProcessor.LateWindow))
+            {
+                var responseKeys = change.Keys
+                    .Select(key => CacheKeys.WithoutPrefix(prefix, key))
+                    .Where(CacheKeys.IsResponse)
+                    .ToList();
+                if (responseKeys.Count > 0)
+                {
+                    forgotten += await store.ForgetAsync(responseKeys, change.CreatedUtc - MappingWriter.TouchInterval);
+                }
+            }
+
+            logger.LogInformation("Forgot {Count} cache tag mapping rows of responses that sent purges expired.", forgotten);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Forgetting cache tag mapping rows that sent purges expired failed.");
+        }
     }
 }

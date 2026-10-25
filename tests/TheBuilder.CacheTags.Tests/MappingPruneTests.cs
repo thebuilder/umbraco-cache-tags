@@ -28,14 +28,13 @@ public sealed class MappingPruneTests : IDisposable
     public void Dispose() => _database.Dispose();
 
     [Fact]
-    public async Task A_response_last_touched_just_inside_the_writers_hour_survives_a_prune_at_the_cutoff()
+    public async Task A_response_last_touched_just_inside_the_writers_hour_survives_the_retention()
     {
         // Touched at Monday noon. A request at 12:59 skips its touch (the writer touches at most once an
-        // hour), so a frontend may keep that copy until 12:59 a week later. A prune whose cutoff is
-        // 12:30 must still find the response.
+        // hour), so a frontend may keep that copy until 12:59 ninety days later.
         await _store.RecordAsync([Render("response-a", Monday, "content-1")]);
 
-        await _store.PruneAsync(Monday.AddMinutes(30));
+        await RunJobAsync(Monday.AddDays(90).AddMinutes(30));
 
         Assert.Equal(["response-a"], await _store.FindResponseKeysAsync(["content-1"], null));
     }
@@ -45,7 +44,7 @@ public sealed class MappingPruneTests : IDisposable
     {
         await _store.RecordAsync([Render("response-a", Monday, "content-1")]);
 
-        await _store.PruneAsync(Monday.AddHours(1).AddMinutes(1));
+        await RunJobAsync(Monday.AddDays(90).AddHours(1).AddMinutes(1));
 
         Assert.Empty(await _store.FindResponseKeysAsync(["content-1"], null));
     }
@@ -60,6 +59,50 @@ public sealed class MappingPruneTests : IDisposable
         await RunJobAsync(Monday.AddDays(1));
 
         Assert.Empty(await _store.FindResponseKeysAsync(["content-1"], null));
+        Assert.Equal(0, KeyRows("response-a"));
+    }
+
+    [Fact]
+    public async Task A_response_is_still_forgotten_when_the_run_after_its_purge_was_missed()
+    {
+        await _store.RecordAsync([Render("response-a", Monday.AddHours(-2), "content-1")]);
+        Guid change = Change(Monday, ["response-a", "content-1"], ["webhook"]);
+        SendAll(change, Monday);
+
+        // Tuesday's run did not happen: the next is Wednesday, an hour short of two days after the purge.
+        await RunJobAsync(Monday.AddDays(2).AddHours(-1));
+
+        Assert.Empty(await _store.FindResponseKeysAsync(["content-1"], null));
+    }
+
+    [Fact]
+    public async Task A_response_served_from_an_output_cache_after_the_change_is_kept()
+    {
+        // A server that applied the change late replays its old copy from Umbraco's output cache, which
+        // only touches the row. A frontend caches that copy after the purge, so a later change needs it.
+        await _store.RecordAsync([Render("response-a", Monday.AddHours(-2), "content-1")]);
+        Guid change = Change(Monday, ["response-a", "content-1"], ["webhook"]);
+        SendAll(change, Monday);
+        await _store.TouchAsync(["response-a"], Monday.AddMinutes(30));
+
+        await RunJobAsync(Monday.AddDays(1));
+
+        Assert.Equal(["response-a"], await _store.FindResponseKeysAsync(["content-1"], null));
+    }
+
+    [Fact]
+    public async Task The_retention_still_prunes_when_forgetting_fails()
+    {
+        await _store.RecordAsync([Render("response-old", Monday, "content-1")]);
+        DateTime now = Monday.AddDays(91);
+        await _store.RecordAsync([Render("response-a", now.AddDays(-1).AddHours(-2), "content-2")]);
+        Guid change = Change(now.AddDays(-1), ["response-a"], ["webhook"]);
+        SendAll(change, now.AddDays(-1));
+
+        await RunJobAsync(now, store: new ForgetFails(_store));
+
+        Assert.Empty(await _store.FindResponseKeysAsync(["content-1"], null));
+        Assert.Equal(["response-a"], await _store.FindResponseKeysAsync(["content-2"], null));
     }
 
     [Fact]
@@ -161,10 +204,31 @@ public sealed class MappingPruneTests : IDisposable
         }
     }
 
-    private Task RunJobAsync(DateTime at, CacheTagsOptions? options = null)
+    private Task RunJobAsync(DateTime at, CacheTagsOptions? options = null, ICacheTagStore? store = null)
     {
         _time.UtcNow = at;
-        return new MappingPruneJob(_store, new DatabaseAckTransport(_database.Package), _ledger, _database.Package, new TestOptions(options ?? new CacheTagsOptions()), _time, NullLogger<MappingPruneJob>.Instance).RunJobAsync();
+        return new MappingPruneJob(store ?? _store, new DatabaseAckTransport(_database.Package), _ledger, _database.Package, new TestOptions(options ?? new CacheTagsOptions()), _time, NullLogger<MappingPruneJob>.Instance).RunJobAsync();
+    }
+
+    private int KeyRows(string responseKey)
+        => _database.Package.Read(db => db.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey = @0", responseKey));
+
+    /// <summary>The default store, except that forgetting fails, as a site's own store might.</summary>
+    private sealed class ForgetFails(ICacheTagStore store) : ICacheTagStore
+    {
+        public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default) => store.RecordAsync(responses, cancellationToken);
+
+        public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default) => store.TouchAsync(responseKeys, seenUtc, cancellationToken);
+
+        public Task<IReadOnlyCollection<string>> FindResponseKeysAsync(IReadOnlyCollection<string> keys, IReadOnlyCollection<string>? cultures, CancellationToken cancellationToken = default)
+            => store.FindResponseKeysAsync(keys, cultures, cancellationToken);
+
+        public Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default) => store.GetAsync(responseKey, cancellationToken);
+
+        public Task<int> ForgetAsync(IReadOnlyCollection<string> responseKeys, DateTime cutoffUtc, CancellationToken cancellationToken = default)
+            => throw new TimeoutException("The store timed out.");
+
+        public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default) => store.PruneAsync(cutoffUtc, cancellationToken);
     }
 
     private static CachedResponse Render(string responseKey, DateTime at, params string[] keys)

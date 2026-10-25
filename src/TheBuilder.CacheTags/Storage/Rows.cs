@@ -95,6 +95,17 @@ internal sealed class OutboxRow
     [Column(nameof(LeaseUntilUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? LeaseUntilUtc { get; set; }
 }
 
+/// <summary>A sent purge's keys and the change it was for: a projection of the outbox and events, not a table.</summary>
+internal sealed class DeliveredRow
+{
+    public Guid EventId { get; set; }
+
+    public DateTime CreatedUtc { get; set; }
+
+    /// <summary>The keys the purge sent, as JSON.</summary>
+    public string Keys { get; set; } = "[]";
+}
+
 internal static class OutboxStates
 {
     public const string Pending = "Pending";

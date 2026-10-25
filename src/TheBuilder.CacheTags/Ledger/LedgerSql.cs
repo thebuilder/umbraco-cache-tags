@@ -37,13 +37,14 @@ internal static class LedgerSql
         => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_").Replace("[", @"\[");
 
     /// <summary>
-    ///     The keys of every purge of the changes released before the cutoff whose purges were all sent,
+    ///     The keys of every purge of the changes released in the window whose purges were all sent,
     ///     with the change each belongs to.
     /// </summary>
-    public static List<DeliveredRow> Delivered(IDatabase database, DateTime releasedBeforeUtc)
+    public static List<DeliveredRow> Delivered(IDatabase database, DateTime releasedFromUtc, DateTime releasedBeforeUtc)
         => database.Fetch<DeliveredRow>(
-            $"SELECT e.Id AS EventId, e.CreatedUtc, o.Keys FROM {Constants.Tables.Outbox} o INNER JOIN {Constants.Tables.Events} e ON e.Id = o.EventId WHERE e.Status = @0 AND e.ReleasedUtc < @1 AND NOT EXISTS (SELECT 1 FROM {Constants.Tables.Outbox} x WHERE x.EventId = e.Id AND x.State <> @2)",
+            $"SELECT e.Id AS EventId, e.CreatedUtc, o.Keys FROM {Constants.Tables.Outbox} o INNER JOIN {Constants.Tables.Events} e ON e.Id = o.EventId WHERE e.Status = @0 AND e.ReleasedUtc >= @1 AND e.ReleasedUtc < @2 AND NOT EXISTS (SELECT 1 FROM {Constants.Tables.Outbox} x WHERE x.EventId = e.Id AND x.State <> @3)",
             nameof(ChangeStage.Released),
+            releasedFromUtc,
             releasedBeforeUtc,
             OutboxStates.Sent);
 
@@ -179,15 +180,4 @@ internal static class LedgerSql
             nameof(ChangeStage.Released),
             cutoffUtc);
     }
-}
-
-/// <summary>A sent purge's keys, and the change it was for.</summary>
-internal sealed class DeliveredRow
-{
-    public Guid EventId { get; set; }
-
-    public DateTime CreatedUtc { get; set; }
-
-    /// <summary>The keys the purge sent, as JSON.</summary>
-    public string Keys { get; set; } = "[]";
 }

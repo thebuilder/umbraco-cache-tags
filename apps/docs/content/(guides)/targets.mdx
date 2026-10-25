@@ -139,16 +139,25 @@ The [Next.js guide](/nextjs#the-purge-webhook) has a receiver to copy.
 
 The `cloudflare` type purges a Cloudflare zone by cache tag. Create an API token with the **Zone > Cache Purge** permission for the zone.
 
-Cloudflare reads tags from a `Cache-Tag` response header:
-
-- If Cloudflare caches your frontend, the frontend must copy the keys into its own `Cache-Tag` header. This is the setup to prefer, with the Delivery API called from the frontend's server only.
-- If Cloudflare caches Umbraco's Delivery API directly, the API must be public. Cloudflare keys its cache by URL, so it would serve a response fetched with an API key to anyone. Set `CacheTags:HeaderName` to `Cache-Tag`, and raise `CacheTags:MaxHeaderKeys` (128 by default, Next.js's limit) to about 300, since Cloudflare keeps 16 KB of tags per response instead of a number of tags. A 300-key header is about 15 KB, so a proxy between Cloudflare and Umbraco must allow response headers that large. Nginx, for example, refuses it with a 502 unless `proxy_buffer_size` is 16k or more. Cloudflare keeps a response for the `max-age` in the package's `CDN-Cache-Control` header (`MappingRetention`), unless a Cache Rule sets the edge TTL, which must then stay within it. Browsers ignore that header, but they can still reach a public API directly, and no purge reaches their copies.
-
-The package posts the keys to `POST /client/v4/zones/{zone}/purge_cache` as `tags`, at most 100 per call. If a call fails, for example because of a bad token or a rate limit, the package retries it like any purge, and the backoffice shows the error with the purge.
+Cloudflare reads tags from a `Cache-Tag` response header. The package posts the keys to `POST /client/v4/zones/{zone}/purge_cache` as `tags`, at most 100 per call. If a call fails, for example because of a bad token or a rate limit, the package retries it like any purge, and the backoffice shows the error with the purge.
 
 :::note
 Cloudflare has no "serve stale" purge, so the package purges the `stale` keys at once too.
 :::
+
+### Cloudflare in front of your frontend
+
+This is the setup to prefer, with the Delivery API called from the frontend's server only. The frontend copies each response's keys into its own `Cache-Tag` header.
+
+### Cloudflare in front of the Delivery API
+
+This suits a public Delivery API only. Cloudflare keys its cache by URL, so it would serve a response fetched with an API key to anyone.
+
+- Cloudflare does not cache JSON by default. Add a Cache Rule that makes the Delivery API eligible for cache.
+- Set `CacheTags:HeaderName` to `Cache-Tag`, and raise `CacheTags:MaxHeaderKeys` (128 by default, Next.js's limit) to about 300. Cloudflare limits tags to 16 KB per response, not to a number of tags.
+- A 300-key header is about 15 KB, so a proxy between Cloudflare and Umbraco must allow response headers that large. Nginx, for example, refuses it with a 502 unless `proxy_buffer_size` is 16k or more.
+- Cloudflare keeps a recorded response for the `max-age` in its `CDN-Cache-Control` header, `MappingRetention`. An Edge TTL in the Cache Rule overrides that header, so keep it within the retention. A catch-all listing carries no `CDN-Cache-Control`, so it gets the rule's Edge TTL, or Cloudflare's default of 2 hours.
+- Browsers ignore `CDN-Cache-Control`, but they can still call a public API directly, and no purge reaches their copies.
 
 ## Your own target
 

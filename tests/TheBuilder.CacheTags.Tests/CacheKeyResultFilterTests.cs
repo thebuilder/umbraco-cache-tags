@@ -88,9 +88,19 @@ public sealed class CacheKeyResultFilterTests
     {
         using MappingWriter writer = Writers.Create(new NoStore());
 
-        HttpContext http = await RunAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary", CdnCacheControl: "max-age=60"));
+        HttpContext http = await RunAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary", Set: ("CDN-Cache-Control", "max-age=60")));
 
         Assert.Equal("max-age=60", http.Response.Headers["CDN-Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public async Task A_response_the_action_made_private_is_given_no_CDN_lifetime_since_a_CDN_would_read_it_first()
+    {
+        using MappingWriter writer = Writers.Create(new NoStore());
+
+        HttpContext http = await RunAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary", Set: ("Cache-Control", "private")));
+
+        Assert.False(http.Response.Headers.ContainsKey("CDN-Cache-Control"));
     }
 
     [Fact]
@@ -202,7 +212,7 @@ public sealed class CacheKeyResultFilterTests
         Assert.NotEqual(home, await HeaderAsync(writer, new Request(typeof(ByRouteContentApiController), Item, Culture: "en-us", StartItem: "shop")));
     }
 
-    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? StartItem = null, object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null, string? CdnCacheControl = null);
+    private sealed record Request(Type Controller, string Path, string Query = "", string? Culture = null, string? Segment = null, string? StartItem = null, object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null, (string Name, string Value)? Set = null);
 
     /// <summary>Runs the filter over a 200 response to the request, and returns its header's keys.</summary>
     private static async Task<string[]> HeaderAsync(MappingWriter writer, Request request)
@@ -245,9 +255,10 @@ public sealed class CacheKeyResultFilterTests
         var http = new DefaultHttpContext();
         http.Request.Path = request.Path;
         http.Request.QueryString = new QueryString(request.Query);
-        if (request.CdnCacheControl is not null)
+        if (request.Set is ({ } name, { } value))
         {
-            http.Response.Headers["CDN-Cache-Control"] = request.CdnCacheControl;
+            // A header the action set itself.
+            http.Response.Headers[name] = value;
         }
 
         var action = new ControllerActionDescriptor

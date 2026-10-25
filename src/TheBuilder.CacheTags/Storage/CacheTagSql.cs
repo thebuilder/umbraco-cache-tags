@@ -141,14 +141,17 @@ internal static class CacheTagSql
     public static int PruneUnseenResponses(IDatabase database, DateTime cutoffUtc)
         => database.Execute($"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @0", cutoffUtc);
 
-    /// <summary>Responses last rendered before the time, out of at most <see cref="ChunkSize" /> response keys; their keys go first.</summary>
-    public static int Forget(IDatabase database, IReadOnlyCollection<string> responseKeys, DateTime renderedBeforeUtc)
+    /// <summary>
+    ///     Of at most <see cref="ChunkSize" /> responses, those neither rendered nor served since the
+    ///     cutoff (a render sets the seen time too); their keys go first.
+    /// </summary>
+    public static int Forget(IDatabase database, IReadOnlyCollection<string> responseKeys, DateTime cutoffUtc)
         => database.Execute(new Sql(
-               $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey IN (SELECT ResponseKey FROM {Constants.Tables.Responses} WHERE RenderedUtc < @before AND ResponseKey IN (@keys))",
-               new { before = renderedBeforeUtc, keys = responseKeys }))
+               $"DELETE FROM {Constants.Tables.ResponseKeys} WHERE ResponseKey IN (SELECT ResponseKey FROM {Constants.Tables.Responses} WHERE SeenUtc < @cutoff AND ResponseKey IN (@keys))",
+               new { cutoff = cutoffUtc, keys = responseKeys }))
            + database.Execute(new Sql(
-               $"DELETE FROM {Constants.Tables.Responses} WHERE RenderedUtc < @before AND ResponseKey IN (@keys)",
-               new { before = renderedBeforeUtc, keys = responseKeys }));
+               $"DELETE FROM {Constants.Tables.Responses} WHERE SeenUtc < @cutoff AND ResponseKey IN (@keys)",
+               new { cutoff = cutoffUtc, keys = responseKeys }));
 
     private static CachedResponse Response(ResponseRow row, IReadOnlyCollection<string> keys) => new()
     {

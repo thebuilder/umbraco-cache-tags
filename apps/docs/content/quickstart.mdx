@@ -18,9 +18,10 @@ Start the site. The package creates its tables on the first start. From then on,
 GET /umbraco/delivery/api/v2/content/item/articles/harbour-mornings/
 
 X-Umbraco-Cache-Keys: response-2de23a3a68340e675d917313029cab2e, umbraco
+CDN-Cache-Control: max-age=7776000
 ```
 
-Preview requests, signed-in requests and responses other than 200 get no keys.
+Preview requests, signed-in requests and responses other than 200 get no keys. `CDN-Cache-Control` tells a CDN how long it may keep the response. See [How long a response may be cached](/keys#how-long-a-response-may-be-cached).
 
 </Step>
 <Step title="Tag your cache entries">

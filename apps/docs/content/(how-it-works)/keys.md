@@ -60,6 +60,36 @@ Every publish plans the `search-` key, which purges all of them at once, however
 - **Requests from a signed-in member or backoffice user** get `private` and no keys.
 - **Other responses**, such as not found and redirects, get `no-store`, because no item covers them and no purge would reach them.
 
+## How long a response may be cached
+
+A frontend or CDN can keep a response until a purge reaches it, for at most `MappingRetention`, 90 days by default. The package forgets a recorded response nobody has asked for in that time, and no purge reaches a copy kept longer. A recorded response says so in a header:
+
+```http
+CDN-Cache-Control: max-age=7776000
+```
+
+CDNs such as Cloudflare read `CDN-Cache-Control`, and browsers ignore it. Next.js sets an entry's lifetime with `cacheLife` only, so keep its `expire` within the retention. A response that carries its own keys, such as a catch-all listing, gets no such header, since its keys never age out. Neither does a response whose action set its own `Cache-Control` or `CDN-Cache-Control`.
+
+Once every purge of a change was sent, the package also forgets the responses it expired, in its daily cleanup. The next request records each of them again.
+
+## Call the Delivery API from your server
+
+Fetch from your frontend's server, not from browsers. No purge reaches a browser's copy, and every distinct request a browser or bot makes is recorded. To enforce it, turn off public access:
+
+```json appsettings.json
+{
+  "Umbraco": {
+    "CMS": {
+      "DeliveryApi": {
+        "PublicAccess": false
+      }
+    }
+  }
+}
+```
+
+Set the key in `Umbraco__CMS__DeliveryApi__ApiKey` (an environment variable or user secret, not source control), and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`. The same key unlocks preview, so keep it on the server.
+
 ## Limits
 
 Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Its `schema-` keys come last, so on a response that renders very many types, a header at its limit loses some of those first. Only a response with more listing, `x-` or `type-` keys than the limit loses any of those, from the end. Umbraco's own output cache keeps every key.

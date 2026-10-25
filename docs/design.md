@@ -94,21 +94,27 @@ cover them, and sent with both.
 
 A response's mapping is removed once a day, on one server, in two ways:
 
-- Once every purge of a change was sent, the responses it named are forgotten where they were last
-  rendered more than an hour before the change. No frontend keeps a copy of those that a purge has
-  not expired, and the next request records the response again. The hour is the writer's: it skips
-  rewriting a render it wrote within the hour, so a render after the change may not show in the row
-  yet. A change still waiting for the index, or released less than 15 minutes ago (while a server
-  released without it can still evict its responses late), is left for the next day. So is one with
-  a purge that failed or was discarded, since a copy may still be cached. Until a frontend asks
-  again, the backoffice shows no responses for the item.
+- Once every purge of a change was sent, the responses it named are forgotten where they were
+  neither rendered nor served in the hour before the change, or since. A purge expired every copy
+  from before then, and the next request records the response again. The hour matches the writer's
+  touch interval: it does not rewrite a render, or touch a response, within an hour of the last, so
+  a request shortly after the change may not show in the row yet. A response served after the change
+  is kept: a server that applied the change late may have replayed an old copy from its output
+  cache. A change still waiting for the index, released less than 15 minutes ago (while a server
+  released without it can still evict its responses late), or with a purge not yet sent, dead or
+  discarded, is skipped for now. The cleanup looks at changes released in the last two days, so one
+  missed run is still covered, and leaves older ones to the retention. If it fails, the job logs it
+  and goes on. The backoffice then lists fewer responses for the item until frontends fetch them
+  again.
 - A response nobody has asked for in `MappingRetention` (90 days) is removed, and a key a later
   render dropped too. Every row gets an extra hour, for the same reason.
 
 A recorded response says how long a cache may keep it, `CDN-Cache-Control: max-age=<MappingRetention>`.
-CDNs read that header (RFC 9213) and browsers ignore it. Next.js ignores response headers in
-`"use cache"`, so a frontend keeps `cacheLife`'s `expire` within it. A response that carries its keys
-itself gets no such header, since nothing about it is forgotten.
+CDNs read that header (RFC 9213) and browsers ignore it. Next.js sets an entry's lifetime with
+`cacheLife` only, so a frontend keeps its `expire` within the retention. A response that carries its
+keys itself gets no such header, since nothing about it is forgotten. Nor does one whose action set
+its own `Cache-Control` or `CDN-Cache-Control`: a CDN reads `CDN-Cache-Control` first, so it would
+override a `private` or `no-store` the action chose.
 
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
@@ -229,9 +235,9 @@ caches the responses that carry the package's keys:
 }
 ```
 
-- Cloudflare reads tags from a `Cache-Tag` response header. Where it caches Umbraco's Delivery API
-  directly, set `CacheTags:HeaderName` to `Cache-Tag`; where it caches a frontend, the frontend must
-  pass the keys on in its own `Cache-Tag` header.
+- Cloudflare reads tags from a `Cache-Tag` response header. Where it caches a frontend, the
+  frontend must pass the keys on in its own `Cache-Tag` header. Where it caches Umbraco's Delivery
+  API directly, which suits a public API only, set `CacheTags:HeaderName` to `Cache-Tag`.
 - Each purge posts the keys as `tags` to `POST /client/v4/zones/{zone}/purge_cache`, at most 100 per
   call (Cloudflare's limit). Cloudflare has no "serve stale" purge, so `stale` keys are purged too.
 - Tags are case-insensitive at Cloudflare; the package's keys are lowercase already. A `Cache-Tag`

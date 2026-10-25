@@ -133,7 +133,11 @@ async function cachedUmbraco<T>(path: string, request: string, culture: Culture 
   let response: Response;
   try {
     response = await fetch(`${umbracoUrl}${path}`, {
-      headers: culture ? { "Accept-Language": culture } : {},
+      headers: {
+        // Needed once the Delivery API's public access is off. Keep the key on the server.
+        ...(process.env.UMBRACO_API_KEY ? { "Api-Key": process.env.UMBRACO_API_KEY } : {}),
+        ...(culture ? { "Accept-Language": culture } : {}),
+      },
     });
   } catch {
     // Thrown, so the failure is not cached. app/error.tsx shows it and tries again.

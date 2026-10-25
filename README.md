@@ -5,7 +5,7 @@
 <h1 align="center">Cache Tags for Umbraco</h1>
 
 <p align="center">
-  Cache Umbraco Delivery API responses at the frontend for as long as you like,<br />
+  Cache Umbraco Delivery API responses at the frontend for months,<br />
   and purge exactly the right ones once every server has applied a change.
 </p>
 

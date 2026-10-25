@@ -27,7 +27,12 @@ Open the change in **Changes**.
 
 - **The page was not cached with the keys.** Check that your fetch tags the entry with every key in the header. Next.js keeps at most 128 tags per entry.
 - **Something else caches the page too**, such as a CDN in front of the frontend. Add that cache as a target as well.
+- **The entry outlived `MappingRetention`** (90 days). The package had forgotten which keys the response covers, so no purge named it. Keep `cacheLife`'s `expire`, or a CDN's edge TTL, within the retention.
 - **The request varies by a header** that is not part of your cache key. The package sends no `Vary` header, so if you forward `Accept-Language`, `Accept-Segment` or `Start-Item`, include them in your own cache key.
+
+## Look up shows no responses for an item
+
+Once every purge of a change was sent, the daily cleanup forgets the responses it expired. Fetch the page from the frontend again and its responses reappear.
 
 ## A listing stays old
 

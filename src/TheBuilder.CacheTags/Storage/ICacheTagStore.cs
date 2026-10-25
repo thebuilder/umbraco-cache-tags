@@ -12,8 +12,8 @@ namespace TheBuilder.CacheTags.Storage;
 ///     extra purge; a missing one leaves a cached response stale, so implementations must never drop
 ///     keys on write. The package skips rewriting a render whose keys it wrote within the last hour, and
 ///     touches a response at most once an hour, so a key's last render time and a response's last seen
-///     time can each be up to an hour behind; the default store prunes everything an hour later than
-///     <c>PruneAsync</c>'s cutoff for that reason, and a custom store should do the same.
+///     time can each be up to an hour behind. The cutoffs the package passes to <c>PruneAsync</c> and
+///     <c>ForgetAsync</c> already allow for that, so a store compares against them as they are.
 /// </remarks>
 public interface ICacheTagStore
 {
@@ -49,13 +49,13 @@ public interface ICacheTagStore
         => Task.FromResult(CacheSearchResult.Empty);
 
     /// <summary>
-    ///     Removes these responses, and their keys, where they were last rendered before
-    ///     <paramref name="renderedBeforeUtc" />. A purge has expired every copy rendered before then,
-    ///     so no frontend keeps one that needs the mapping. Returns how many responses and keys were
-    ///     removed together, for logging only. Optional: a store that keeps them until
-    ///     <see cref="PruneAsync" /> removes them only purges more than it needs to, which is the default.
+    ///     Removes these responses, and their keys, where they were neither rendered nor served since
+    ///     <paramref name="cutoffUtc" />. A purge has expired every copy from before then, so no frontend
+    ///     keeps one that needs the mapping. Returns how many responses and keys were removed together,
+    ///     for logging only. Optional: a store that keeps them until <see cref="PruneAsync" /> removes
+    ///     them only purges more than it needs to, which is the default.
     /// </summary>
-    Task<int> ForgetAsync(IReadOnlyCollection<string> responseKeys, DateTime renderedBeforeUtc, CancellationToken cancellationToken = default)
+    Task<int> ForgetAsync(IReadOnlyCollection<string> responseKeys, DateTime cutoffUtc, CancellationToken cancellationToken = default)
         => Task.FromResult(0);
 
     /// <summary>
