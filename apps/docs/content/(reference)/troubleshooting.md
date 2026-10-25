@@ -30,9 +30,9 @@ Open the change in **Changes**.
 - **The entry outlived `MappingRetention`** (90 days). The package had forgotten which keys the response covers, so no purge named it. Keep `cacheLife`'s `expire`, or a CDN's edge TTL, within the retention.
 - **The request varies by a header** that is not part of your cache key. The package sends no `Vary` header, so if you forward `Accept-Language`, `Accept-Segment` or `Start-Item`, include them in your own cache key.
 
-## Look up shows no responses for an item
+## Look up shows fewer responses for an item after a publish
 
-Once every purge of a change was sent, the daily cleanup forgets the responses it expired. Fetch the page from the frontend again and its responses reappear.
+Once every purge of a change was sent, the daily cleanup forgets the responses it expired. It keeps those rendered or served in the hour before the change, or since. Fetch the page from the frontend again and its responses reappear.
 
 ## A listing stays old
 

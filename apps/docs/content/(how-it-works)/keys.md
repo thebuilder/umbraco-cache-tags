@@ -88,7 +88,7 @@ Fetch from your frontend's server, not from browsers. No purge reaches a browser
 }
 ```
 
-Set the key in `Umbraco__CMS__DeliveryApi__ApiKey` (an environment variable or user secret, not source control), and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`. The same key unlocks preview, so keep it on the server.
+Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environment (`Umbraco__CMS__DeliveryApi__ApiKey`), not source control, and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`. The same key unlocks preview, so keep it on the server.
 
 ## Limits
 

@@ -23,7 +23,7 @@ export async function deliveryApi<T>(request: string, culture?: string): Promise
   const response = await fetch(url, {
     headers: {
       // Needed once public access is off. See the notes below.
-      "Api-Key": process.env.UMBRACO_API_KEY ?? "",
+      ...(process.env.UMBRACO_API_KEY ? { "Api-Key": process.env.UMBRACO_API_KEY } : {}),
       ...(culture ? { "Accept-Language": culture } : {}),
     },
   });
