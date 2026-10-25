@@ -43,26 +43,28 @@ public sealed class PurgePlannerTests
     }
 
     [Fact]
-    public void A_publish_that_changes_the_route_reaches_every_descendant()
+    public void A_publish_that_changes_the_route_reaches_every_descendant_and_its_type()
     {
         PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "newsPage", Site, RouteChanged: true));
 
         Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
         Assert.Contains("content-10000000-0000-0000-0000-000000000014", plan.Keys);
 
-        // They stay in the same listings, and their content keys reach the ones that show them.
-        Assert.DoesNotContain("type-guidepage", plan.Keys);
+        // A response past MaxItemKeys lists its items' types, not the items, so only these reach it.
+        Assert.Contains("type-guidepage", plan.Keys);
+        Assert.Contains("type-parkingpage", plan.Keys);
     }
 
     [Theory]
     [InlineData(nameof(ChangeKind.Unpublished))]
     [InlineData(nameof(ChangeKind.Trashed))]
     [InlineData(nameof(ChangeKind.Moved))]
-    public void Unpublishing_trashing_and_moving_always_reach_the_descendants(string kind)
+    public void Unpublishing_trashing_and_moving_always_reach_the_descendants_and_their_types(string kind)
     {
         PurgePlan plan = Plan(Enum.Parse<ChangeKind>(kind), new ChangedItem(C, "newsPage", Site));
 
         Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
+        Assert.Contains("type-guidepage", plan.Keys);
     }
 
     [Fact]
@@ -71,7 +73,7 @@ public sealed class PurgePlannerTests
         // Unpublishing C takes its guide and parking page out of every listing of their types, also
         // out of pages of them that do not show them. (Publishing C again, Umbraco publishes them
         // again too, which plans their types as any publish does.)
-        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site, RouteChanged: true, Unpublished: true));
+        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site, RouteChanged: true));
 
         Assert.Equal(
             [
@@ -91,25 +93,16 @@ public sealed class PurgePlannerTests
     public void Unpublishing_one_culture_reaches_the_listings_the_descendants_leave_in_it()
     {
         // Raised as a publish of the other cultures.
-        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "category", Site, RouteChanged: true, Unpublished: true), cultures: ["da-DK"]);
+        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "category", Site, RouteChanged: true), cultures: ["da-DK"]);
 
         Assert.Contains("type-guidepage", plan.Keys);
         Assert.Contains("type-parkingpage", plan.Keys);
     }
 
     [Fact]
-    public void A_move_leaves_the_descendants_types_to_umbracos_own_list_of_moved_items()
+    public void A_route_change_whose_descendants_types_cannot_be_read_purges_everything()
     {
-        PurgePlan plan = Plan(ChangeKind.Moved, new ChangedItem(C, "category", Site, OldParentKey: Image));
-
-        Assert.Contains("content-10000000-0000-0000-0000-000000000013", plan.Keys);
-        Assert.DoesNotContain("type-guidepage", plan.Keys);
-    }
-
-    [Fact]
-    public void An_unpublish_whose_descendants_types_cannot_be_read_purges_everything()
-    {
-        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site, RouteChanged: true, Unpublished: true), tree: new Tree(typesFail: true));
+        PurgePlan plan = Plan(ChangeKind.Unpublished, new ChangedItem(C, "category", Site, RouteChanged: true), tree: new Tree(typesFail: true));
 
         Assert.True(plan.Everything);
     }

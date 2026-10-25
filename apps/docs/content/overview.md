@@ -17,7 +17,7 @@ Every cacheable response carries its cache keys in a header. The frontend tags i
 
 ## How it fits together
 
-1. A frontend fetches from the Delivery API. The response carries `X-Umbraco-Cache-Keys: response-3f9a..., umbraco`.
+1. A frontend fetches from the Delivery API. The response carries the keys of what it shows: `X-Umbraco-Cache-Keys: response-3f9a..., umbraco, content-e000...`.
 2. The frontend caches the response, tagged with those keys.
 3. An editor publishes. The package records the change and plans which keys it touches.
 4. Every Umbraco server applies the change and acknowledges it.

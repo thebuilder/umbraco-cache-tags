@@ -20,8 +20,8 @@ public sealed class CacheTagsOptions
     /// </summary>
     public string KeyPrefix { get; set; } = string.Empty;
 
-    /// <summary>Which keys the response header carries. Defaults to <see cref="CacheKeyMode.ResponseKey" />.</summary>
-    public CacheKeyMode KeyMode { get; set; } = CacheKeyMode.ResponseKey;
+    /// <summary>Which keys the response header carries. Defaults to <see cref="CacheKeyMode.ItemKeys" />.</summary>
+    public CacheKeyMode KeyMode { get; set; } = CacheKeyMode.ItemKeys;
 
     /// <summary>
     ///     In <see cref="CacheKeyMode.ItemKeys" />, the most item keys one response lists before it lists
@@ -135,13 +135,16 @@ public sealed class CacheTagsTargetOptions
 /// </summary>
 public enum CacheKeyMode
 {
-    /// <summary>One <c>response-</c> key per response; the package records what it covers.</summary>
+    /// <summary>
+    ///     Only a <c>response-</c> key (and <c>umbraco</c>), for a frontend that keeps few tags per entry: a
+    ///     purge reaches the response through what the package recorded it covers.
+    /// </summary>
     ResponseKey = 0,
 
     /// <summary>
-    ///     The <c>content-</c> and <c>media-</c> keys of every item the response shows (up to
-    ///     <see cref="CacheTagsOptions.MaxItemKeys" />), and its listing selectors, for a CDN in front of
-    ///     Umbraco that purges by tag itself.
+    ///     The default. The <c>response-</c> key, the listing selectors, and the <c>content-</c> and
+    ///     <c>media-</c> keys of every item the response shows (up to <see cref="CacheTagsOptions.MaxItemKeys" />,
+    ///     past that their types), so a purge reaches the response by the keys it carries.
     /// </summary>
     ItemKeys = 1,
 }

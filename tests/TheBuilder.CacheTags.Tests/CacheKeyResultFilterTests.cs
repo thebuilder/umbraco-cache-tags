@@ -42,15 +42,14 @@ public sealed class CacheKeyResultFilterTests
     private static IPublishedContent Item(Guid key) => Fake.Of<IPublishedContent>((method, _) => method.Name == "get_Key" ? key : null);
 
     [Fact]
-    public async Task A_response_whose_record_is_queued_carries_its_response_key()
+    public async Task By_default_a_recorded_response_carries_its_response_key_and_the_keys_it_covers()
     {
         using MappingWriter writer = Writers.Create(new NoStore());
 
         var keys = await HeaderAsync(writer, new Request(typeof(DictionaryController), "/api/dictionary"));
 
-        Assert.Equal(2, keys.Length);
         Assert.StartsWith("response-", keys[0], StringComparison.Ordinal);
-        Assert.Equal("umbraco", keys[1]);
+        Assert.Equal(["umbraco", "x-dictionary-en"], keys[1..]);
     }
 
     [Fact]

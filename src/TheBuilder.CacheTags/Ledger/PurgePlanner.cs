@@ -38,7 +38,6 @@ internal sealed class PurgePlanner(IDescendants descendants)
 
         var media = change.Kind is ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted;
         var routeDescendants = new HashSet<Guid>();
-        var leavingDescendants = new HashSet<Guid>();
         foreach (ChangedItem item in change.Items)
         {
             if (change.Kind == ChangeKind.Sorted)
@@ -70,23 +69,18 @@ internal sealed class PurgePlanner(IDescendants descendants)
                 {
                     return new PurgePlan([], Everything: true, change.Cultures);
                 }
-
-                // An unpublish takes the descendants out of the listings of their types too, including
-                // pages of them that do not show them. Umbraco lists a moved or trashed item's
-                // descendants itself, and a rename leaves them where they are.
-                if (item.Unpublished)
-                {
-                    leavingDescendants.UnionWith(below);
-                }
             }
         }
 
+        // The descendants' types too: a response that lists types instead of its items (past
+        // MaxItemKeys) reaches them only that way, and an unpublish takes them out of their type
+        // listings, including pages of them that do not show them.
         keys.UnionWith(routeDescendants.Select(CacheKeys.Content));
-        if (leavingDescendants.Count > 0)
+        if (routeDescendants.Count > 0)
         {
             try
             {
-                keys.UnionWith(descendants.TypesOf(leavingDescendants).Select(CacheKeys.Type));
+                keys.UnionWith(descendants.TypesOf(routeDescendants).Select(CacheKeys.Type));
             }
             catch (Exception)
             {
