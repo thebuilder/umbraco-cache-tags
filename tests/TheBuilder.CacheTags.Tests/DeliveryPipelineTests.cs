@@ -114,6 +114,9 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
 
     private static string? CacheControl(HttpResponseMessage response) => response.Headers.CacheControl?.ToString();
 
+    private static string? CdnCacheControl(HttpResponseMessage response)
+        => response.Headers.TryGetValues("CDN-Cache-Control", out var values) ? string.Join(", ", values) : null;
+
     [Fact]
     public async Task A_published_item_carries_its_response_key_and_umbraco()
     {
@@ -124,6 +127,15 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
         Assert.StartsWith("response-", keys[0], StringComparison.Ordinal);
         Assert.Equal(["umbraco"], keys[1..]);
         Assert.Null(CacheControl(response));
+    }
+
+    [Fact]
+    public async Task A_recorded_response_tells_a_CDN_to_keep_it_no_longer_than_its_mapping_is_kept()
+    {
+        using HttpResponseMessage response = await GetAsync(Item);
+
+        // 90 days, the default MappingRetention.
+        Assert.Equal("max-age=7776000", CdnCacheControl(response));
     }
 
     [Fact]
@@ -160,6 +172,7 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
 
         Assert.Equal(404, (int)response.StatusCode);
         Assert.Equal("no-store", CacheControl(response));
+        Assert.Null(CdnCacheControl(response));
         Assert.Null(Keys(response));
     }
 

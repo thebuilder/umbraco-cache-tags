@@ -36,6 +36,8 @@ internal sealed class CacheKeyResultFilter(
     /// <summary>Where the response's keys for Umbraco's output cache are kept for the rest of the request.</summary>
     public const string OutputCacheTagsItem = "TheBuilder.CacheTags.OutputCacheTags";
 
+    private const string CdnCacheControl = "CDN-Cache-Control";
+
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         CacheTagsOptions settings = options.CurrentValue;
@@ -121,6 +123,14 @@ internal sealed class CacheKeyResultFilter(
         }
 
         http.Response.Headers[settings.HeaderName] = string.Join(", ", tags.Header.Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
+
+        // A recorded response is reached through its mapping, which is forgotten once nobody has asked
+        // for the response in MappingRetention, so a cache must not keep it longer. CDN-Cache-Control
+        // (RFC 9213) is read by CDNs only: a browser, which no purge reaches, does not keep it for that.
+        if (tags.Recorded && http.Response.Headers.ContainsKey(CdnCacheControl) is false)
+        {
+            http.Response.Headers[CdnCacheControl] = $"max-age={(long)settings.MappingRetention.TotalSeconds}";
+        }
 
         // Umbraco's output cache is evicted by the same keys a purge names: the response key, or the
         // keys a response that is not recorded carries itself, all of them, since it has no tag limit.

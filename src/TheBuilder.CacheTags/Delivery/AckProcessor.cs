@@ -37,7 +37,7 @@ internal sealed class AckProcessor(
     // How long after a change is released without this server a refresh of it still evicts its
     // responses here, and how long refreshes are kept for that. Minutes, not the ack timeout: a server
     // whose instruction processing stalled can apply a change long after it was released.
-    private static readonly TimeSpan LateWindow = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan LateWindow = TimeSpan.FromMinutes(15);
 
     // How often changes released without this server are looked for, while it has seen refreshes.
     private static readonly TimeSpan LateInterval = TimeSpan.FromSeconds(5);

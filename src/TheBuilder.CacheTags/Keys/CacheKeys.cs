@@ -49,9 +49,12 @@ internal static class CacheKeys
     /// </summary>
     public static bool Expires(string key, string prefix)
     {
-        var bare = key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
-        return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare) || IsCustom(bare);
+        var bare = WithoutPrefix(prefix, key);
+        return IsResponse(bare) || IsItem(bare) || IsCustom(bare);
     }
+
+    /// <summary>Whether a key names one response (<c>response-</c>).</summary>
+    public static bool IsResponse(string key) => key.StartsWith(ResponsePrefix, StringComparison.Ordinal);
 
     /// <summary>Whether a key is one a site named for its own output (<c>x-</c>).</summary>
     public static bool IsCustom(string key) => key.StartsWith(CustomPrefix, StringComparison.Ordinal);
@@ -89,4 +92,7 @@ internal static class CacheKeys
 
     /// <summary>Applies the configured prefix to a key, for the header and the purge payload.</summary>
     public static string WithPrefix(string prefix, string key) => prefix.Length == 0 ? key : prefix + key;
+
+    /// <summary>A key as sent, with the configured prefix taken off.</summary>
+    public static string WithoutPrefix(string prefix, string key) => key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
 }

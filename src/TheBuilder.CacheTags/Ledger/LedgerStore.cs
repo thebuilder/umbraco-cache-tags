@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Storage;
 using TheBuilder.CacheTags.Targets;
 
@@ -39,6 +40,11 @@ internal sealed record Purge(
     DateTime NotBeforeUtc,
     DateTime? SentUtc,
     string? LastError);
+
+/// <summary>A change whose every purge was sent.</summary>
+/// <param name="CreatedUtc">When the change was recorded.</param>
+/// <param name="ResponseKeys">The <c>response-</c> keys its purges expired, without the configured prefix.</param>
+internal sealed record DeliveredChange(DateTime CreatedUtc, IReadOnlyList<string> ResponseKeys);
 
 /// <summary>A purge to queue when a change is released.</summary>
 internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateTime NotBeforeUtc)
@@ -117,6 +123,21 @@ internal sealed class LedgerStore(PackageDatabase database)
     public IReadOnlyList<Purge> PurgesOf(Guid changeId)
         => database.Read(db => db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId))
             .Select(Purge)
+            .ToList();
+
+    /// <summary>The changes released before the cutoff whose purges were all sent and named a response.</summary>
+    public IReadOnlyList<DeliveredChange> Delivered(DateTime releasedBeforeUtc, string prefix)
+        => database.Read(db => LedgerSql.Delivered(db, releasedBeforeUtc))
+            .GroupBy(row => (row.EventId, row.CreatedUtc))
+            .Select(change => new DeliveredChange(
+                change.Key.CreatedUtc,
+                change
+                    .SelectMany(row => JsonSerializer.Deserialize<string[]>(row.Keys, Json) ?? [])
+                    .Select(key => CacheKeys.WithoutPrefix(prefix, key))
+                    .Where(CacheKeys.IsResponse)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList()))
+            .Where(change => change.ResponseKeys.Count > 0)
             .ToList();
 
     /// <summary>The purges in a state (Pending, Sent, Dead, Discarded), newest first.</summary>

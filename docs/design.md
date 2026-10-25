@@ -92,6 +92,24 @@ The package records which `content-`, `media-`, `schema-` and selector keys (`ty
 their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
 cover them, and sent with both.
 
+A response's mapping is removed once a day, on one server, in two ways:
+
+- Once every purge of a change was sent, the responses it named are forgotten where they were last
+  rendered more than an hour before the change. No frontend keeps a copy of those that a purge has
+  not expired, and the next request records the response again. The hour is the writer's: it skips
+  rewriting a render it wrote within the hour, so a render after the change may not show in the row
+  yet. A change still waiting for the index, or released less than 15 minutes ago (while a server
+  released without it can still evict its responses late), is left for the next day. So is one with
+  a purge that failed or was discarded, since a copy may still be cached. Until a frontend asks
+  again, the backoffice shows no responses for the item.
+- A response nobody has asked for in `MappingRetention` (90 days) is removed, and a key a later
+  render dropped too. Every row gets an extra hour, for the same reason.
+
+A recorded response says how long a cache may keep it, `CDN-Cache-Control: max-age=<MappingRetention>`.
+CDNs read that header (RFC 9213) and browsers ignore it. Next.js ignores response headers in
+`"use cache"`, so a frontend keeps `cacheLife`'s `expire` within it. A response that carries its keys
+itself gets no such header, since nothing about it is forgotten.
+
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
 selected; a listing with no parent or type to select it; a `fetch` without an axis (`children`,

@@ -77,6 +77,13 @@ internal sealed class UmbracoCacheTagStore(PackageDatabase database, ILogger<Umb
     public Task<CacheSearchResult> SearchAsync(string text, int take, CancellationToken cancellationToken = default)
         => Task.FromResult(database.Read(db => CacheTagSql.Search(db, text, take)));
 
+    // A transaction per chunk, so a publish waiting for the write lock is not held up by a long delete.
+    public Task<int> ForgetAsync(IReadOnlyCollection<string> responseKeys, DateTime renderedBeforeUtc, CancellationToken cancellationToken = default)
+        => Task.FromResult(responseKeys
+            .Distinct(StringComparer.Ordinal)
+            .Chunk(CacheTagSql.ChunkSize)
+            .Sum(chunk => database.Write(db => CacheTagSql.Forget(db, chunk, renderedBeforeUtc))));
+
     // Each step in its own short transaction, so a publish waiting for the write lock is not held up
     // by one long delete. The writer skips rewriting keys, and touching a response, within its touch
     // interval, so a stored time can be that much behind the last render or request: every row gets

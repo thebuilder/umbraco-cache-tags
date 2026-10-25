@@ -49,6 +49,16 @@ public interface ICacheTagStore
         => Task.FromResult(CacheSearchResult.Empty);
 
     /// <summary>
+    ///     Removes these responses, and their keys, where they were last rendered before
+    ///     <paramref name="renderedBeforeUtc" />. A purge has expired every copy rendered before then,
+    ///     so no frontend keeps one that needs the mapping. Returns how many responses and keys were
+    ///     removed together, for logging only. Optional: a store that keeps them until
+    ///     <see cref="PruneAsync" /> removes them only purges more than it needs to, which is the default.
+    /// </summary>
+    Task<int> ForgetAsync(IReadOnlyCollection<string> responseKeys, DateTime renderedBeforeUtc, CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
+
+    /// <summary>
     ///     Removes responses not served since <paramref name="cutoffUtc" />, and keys that a response
     ///     stopped covering before then. Returns how many responses and keys were removed together, for
     ///     logging only.
