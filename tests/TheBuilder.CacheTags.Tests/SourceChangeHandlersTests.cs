@@ -101,7 +101,8 @@ public sealed class SourceChangeHandlersTests : IDisposable
         LedgerEntry recorded = Assert.Single(_ledger.Latest(10));
         Assert.Equal(["article", "post"], recorded.Change.TypeAliases);
         Assert.Equal(["article"], recorded.Change.RenamedAliases);
-        Assert.Equal(["schema-article", "schema-post", "type-article", "type-post"], recorded.Plan.Keys);
+        Assert.True(recorded.Plan.Everything);
+        Assert.Equal(["type-article", "type-post"], recorded.Plan.Keys);
     }
 
     [Fact]

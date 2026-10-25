@@ -56,7 +56,7 @@ export const requestTemplate = (path: string, query: string) => {
 
 /** What a key names, from its prefix. */
 export const describeKey = (key: string) => {
-  const bare = key.replace(/^[a-z0-9-]*?(?=(response|content|media|type|children|search|schema|x)-|umbraco$)/, "");
+  const bare = key.replace(/^[a-z0-9-]*?(?=(response|content|media|type|children|search|x)-|umbraco$)/, "");
   const kinds: [string, string][] = [
     ["response-", "Response"],
     ["content-", "Document"],
@@ -64,7 +64,6 @@ export const describeKey = (key: string) => {
     ["type-", "Listings of type"],
     ["children-", "Children of"],
     ["search-", "Other listings"],
-    ["schema-", "Renders type"],
     ["x-", "Custom"],
   ];
   if (bare === "umbraco") {

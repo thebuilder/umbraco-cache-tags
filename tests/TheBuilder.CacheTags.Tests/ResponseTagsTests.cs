@@ -28,10 +28,10 @@ public sealed class ResponseTagsTests
             64,
             128,
             Response,
-            new HashSet<string> { Forest, Harbour, "schema-article", "search-deliveryapicontentindex" },
+            new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" },
             Types);
 
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", Harbour, Forest, "schema-article"], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", Harbour, Forest], tags.Keys);
         Assert.False(tags.Recorded);
     }
 
@@ -53,29 +53,14 @@ public sealed class ResponseTagsTests
     }
 
     [Fact]
-    public void The_keys_purges_need_come_first_and_schema_keys_last()
-    {
-        // A search page showing 64 items that render 70 different types: 136 keys, more than the 128
-        // tags Next.js keeps, which the header cuts from the end.
-        var items = Enumerable.Range(1, 64).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
-        var schemas = Enumerable.Range(0, 70).Select(i => $"schema-type{i:D2}").ToList();
-        var keys = new HashSet<string>([.. items, .. schemas, "search-deliveryapicontentindex"]);
-
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, Response, keys, Types);
-
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", .. items, .. schemas], tags.Keys);
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", .. items, .. schemas.Take(62)], tags.Header);
-    }
-
-    [Fact]
     public void Items_that_would_push_the_header_past_its_limit_are_listed_as_their_types()
     {
         var items = Enumerable.Range(1, 150).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
-        var keys = new HashSet<string>([.. items, "schema-article", "search-deliveryapicontentindex"]);
+        var keys = new HashSet<string>([.. items, "search-deliveryapicontentindex"]);
 
         ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 200, 128, Response, keys, Types);
 
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article", "schema-article"], tags.Keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], tags.Keys);
     }
 
     [Fact]
@@ -101,6 +86,23 @@ public sealed class ResolvedPurgeTests
             Listings: []);
 
         Assert.Equal(["shop-search-deliveryapicontentindex", "shop-type-article"], purge.ListingKeys("shop-"));
+    }
+
+    [Fact]
+    public async Task A_plan_of_everything_purges_everything_at_once_and_its_recorded_listings_again_later()
+    {
+        // A renamed content type: every response now, then the listings of both aliases once every
+        // index has the rename, the recorded ones by their response keys.
+        var store = Fake.Of<TheBuilder.CacheTags.Storage.ICacheTagStore>((method, arguments) =>
+            method.Name == nameof(TheBuilder.CacheTags.Storage.ICacheTagStore.FindResponseKeysAsync)
+                ? Task.FromResult<IReadOnlyCollection<string>>(((IReadOnlyCollection<string>)arguments[0]!).Contains("type-post") ? ["response-posts"] : [])
+                : null);
+
+        TheBuilder.CacheTags.Delivery.ResolvedPurge purge = await new TheBuilder.CacheTags.Delivery.PurgeResolver(store).ResolveAsync(
+            new TheBuilder.CacheTags.Ledger.PurgePlan(["type-article", "type-post"], Everything: true, Cultures: null));
+
+        Assert.Equal(["umbraco"], purge.Keys(""));
+        Assert.Equal(["response-posts", "type-article", "type-post"], purge.ListingKeys(""));
     }
 }
 

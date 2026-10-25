@@ -38,12 +38,9 @@ internal sealed class PurgeResolver(ICacheTagStore store)
 {
     public async Task<ResolvedPurge> ResolveAsync(PurgePlan plan, CancellationToken cancellationToken = default)
     {
-        if (plan.Everything)
-        {
-            return new ResolvedPurge(plan, [], []);
-        }
-
-        IReadOnlyCollection<string> responses = await store.FindResponseKeysAsync(plan.Keys, plan.Cultures, cancellationToken);
+        // A plan of everything purges every response at once, and names only the listings it purges
+        // again once the index has the change.
+        IReadOnlyCollection<string> responses = plan.Everything ? [] : await store.FindResponseKeysAsync(plan.Keys, plan.Cultures, cancellationToken);
         var selectors = plan.Keys.Where(CacheKeys.IsSelector).ToList();
         IReadOnlyCollection<string> listings = selectors.Count == 0 ? [] : await store.FindResponseKeysAsync(selectors, plan.Cultures, cancellationToken);
         return new ResolvedPurge(plan, responses.Order(StringComparer.Ordinal).ToList(), listings.Order(StringComparer.Ordinal).ToList());
