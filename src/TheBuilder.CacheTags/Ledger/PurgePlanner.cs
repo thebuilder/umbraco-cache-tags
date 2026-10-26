@@ -30,10 +30,10 @@ internal sealed class PurgePlanner(IDescendants descendants)
         var keys = new SortedSet<string>(StringComparer.Ordinal);
         if (change.Kind == ChangeKind.TypesChanged)
         {
-            // Listings of the type, and every response that renders an item of it.
+            // Any response may render an item of the type, so everything. Its listings are named too, so
+            // they are purged again once every index has a renamed type (IndexCheck).
             keys.UnionWith(change.TypeAliases.Select(CacheKeys.Type));
-            keys.UnionWith(change.TypeAliases.Select(CacheKeys.Schema));
-            return new PurgePlan(keys, Everything: false, change.Cultures);
+            return new PurgePlan(keys, Everything: true, change.Cultures);
         }
 
         var media = change.Kind is ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted;

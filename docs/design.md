@@ -19,7 +19,6 @@ case-sensitively, so a key that differed only in case would behave differently p
 | `content-<guid>` | One document | expire now |
 | `media-<guid>` | One media item | expire now |
 | `type-<alias>` | Every listing filtered by a content or media type (alias lowercased) | stale, refresh in background |
-| `schema-<alias>` | Every response that renders a document, media or block element of a type, whose shape a type or data type change alters | stale, refresh in background |
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale, refresh in background |
 | `search-<index>` | Every other query against an index (`search-deliveryapicontentindex`) | stale, refresh in background |
 | `umbraco` | Everything | stale, refresh in background |
@@ -87,7 +86,7 @@ key only once its record is queued:
   records (the last moment's renders): until a frontend fetches those responses again, only `umbraco`
   reaches them.
 
-The package records which `content-`, `media-`, `schema-` and selector keys (`type-`, `children-`,
+The package records which `content-`, `media-` and selector keys (`type-`, `children-`,
 `search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
 their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
 cover them, and sent with both.
@@ -111,7 +110,7 @@ purge every one of them, so a purge would grow with every variation ever cached.
 carries its keys itself instead, as in item keys mode below:
 
 ```http
-X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000..., schema-article
+X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
 ```
 
 and the planned `search-` key purges every such response at once, however many are cached. Being
@@ -131,9 +130,7 @@ reached by the item and selector keys a purge sends. Languages are read at most 
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
 characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128) keys, most needed
-first: its own `response-` key, `umbraco`, its selector keys, its `x-` keys, its item keys, then its
-`schema-` keys, which are the first to go past the limit because only a type or data type change
-purges them. Items past `MaxItemKeys` (64), or items that would push the header past the limit, are
+first: its own `response-` key, `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past `MaxItemKeys` (64), or items that would push the header past the limit, are
 listed as their `type-` keys instead. A response with more listing, `x-` or `type-` keys than the
 limit loses the last of those too. Umbraco's output cache has no limit, so its entry is tagged
 with every key. Set `MaxHeaderKeys` to the limit of a target that keeps fewer tags, and raise it
@@ -176,7 +173,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 ```
 
 - `expire` holds `response-`, `content-`, `media-` and `x-` keys: one response, item or custom
-  output, purged at once. `stale` holds `type-`, `children-`, `search-`, `schema-` and `umbraco`:
+  output, purged at once. `stale` holds `type-`, `children-`, `search-` and `umbraco`:
   listings, types or everything, served stale while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
   A change sends several purges: one per `MaxKeysPerRequest` keys, and its listing purge.
@@ -245,8 +242,12 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 - A sort plans no item keys, since the items did not change, but every listing that can show them
   in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
   `search-` key. It waits for the index like any listing.
-- Renaming a content or media type's alias plans the `type-` and `schema-` keys of the old alias as
-  well as the new one: responses rendered before the rename are recorded under the old one. Umbraco's
+- A content type, media type or data type change purges everything (`umbraco`), since any response
+  may render an item of the type. Type changes are rare and usually ship with a deploy, so a key per
+  type is not worth its place in every header. The plan also names the `type-` keys of the types it
+  alters, for the listing purge below.
+- Renaming a content or media type's alias names the `type-` keys of the old alias as well as the
+  new one: listings rendered before the rename are recorded under the old one. Umbraco's
   changed notification carries only the new alias, so the old one is read when the type is saving.
   A content type's rename waits for the index (Delivery, step 4), which moves its documents from
   one `filter=contentType:` to the other up to a minute later.

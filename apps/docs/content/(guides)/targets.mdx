@@ -124,7 +124,7 @@ Keys that name one response or one item: `response-`, `content-`, `media-` and `
 </ParamField>
 
 <ParamField body="stale" type="string[]">
-Listing keys (`type-`, `children-`, `search-`), `schema-` keys and `umbraco`. Serve them stale while they refresh if the receiver can, or purge them too.
+Listing keys (`type-`, `children-`, `search-`) and `umbraco`. Serve them stale while they refresh if the receiver can, or purge them too.
 </ParamField>
 
 Any 2xx answer counts as delivered. Anything else, or no answer within 10 seconds, counts as a failure, and the package tries again after 2, 4, 8 and more seconds.

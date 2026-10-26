@@ -58,9 +58,6 @@ public sealed class OutputWalkerTests
                 "content-10000000-0000-0000-0000-000000000010",
                 "media-20000000-0000-0000-0000-000000000001",
                 "media-20000000-0000-0000-0000-000000000003",
-                "schema-image",
-                "schema-linkblock",
-                "schema-page",
             ],
             keys.Order(StringComparer.Ordinal));
     }
@@ -73,6 +70,6 @@ public sealed class OutputWalkerTests
         var keys = new HashSet<string>();
         OutputWalker.Collect(listing, keys);
 
-        Assert.Equal(["content-10000000-0000-0000-0000-00000000000a", "content-10000000-0000-0000-0000-00000000000d", "schema-page"], keys.Order(StringComparer.Ordinal));
+        Assert.Equal(["content-10000000-0000-0000-0000-00000000000a", "content-10000000-0000-0000-0000-00000000000d"], keys.Order(StringComparer.Ordinal));
     }
 }

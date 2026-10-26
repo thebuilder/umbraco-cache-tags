@@ -32,16 +32,13 @@ internal static partial class OutputWalker
                 return;
             case IApiContent content:
                 keys.Add(CacheKeys.Content(content.Id));
-                keys.Add(CacheKeys.Schema(content.ContentType));
                 WalkProperties(content.Properties, keys, depth);
                 return;
             case IApiMedia media:
                 keys.Add(CacheKeys.Media(media.Id));
-                keys.Add(CacheKeys.Schema(media.MediaType));
                 WalkProperties(media.Properties, keys, depth);
                 return;
             case IApiElement element:
-                keys.Add(CacheKeys.Schema(element.ContentType));
                 WalkProperties(element.Properties, keys, depth);
                 return;
             case ApiLink link:

@@ -38,9 +38,8 @@ internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded, i
 
         // The keys purges need most come first, so a header cut at its limit loses the least needed:
         // umbraco (a change to everything), the selectors a publish reaches listings by, the site's own
-        // x- keys, then the items. Schema keys come last, because only a type or data type change purges
-        // them. Items that would not fit are listed as their types, as past maxItemKeys; if even those do
-        // not fit, the header loses the last of them too.
+        // x- keys, then the items. Items that would not fit are listed as their types, as past
+        // maxItemKeys; if even those do not fit, the header loses the last of them too.
         var items = keys.Where(CacheKeys.IsItem).Order(StringComparer.Ordinal).ToList();
         var first = (catchAll ? [] : new[] { responseKey })
             .Append(CacheKeys.All)
@@ -51,7 +50,6 @@ internal sealed record ResponseTags(IReadOnlyList<string> Keys, bool Recorded, i
         return new ResponseTags(
             first
                 .Concat(fits ? items : typesOf(items))
-                .Concat(keys.Where(CacheKeys.IsSchema).Order(StringComparer.Ordinal))
                 .Distinct(StringComparer.Ordinal)
                 .ToList(),
             Recorded: catchAll is false,

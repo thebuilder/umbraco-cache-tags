@@ -13,7 +13,6 @@ Every key is lowercase ASCII, because Cloudflare matches tags case-insensitively
 | `content-<guid>` | One document | expire |
 | `media-<guid>` | One media item | expire |
 | `type-<alias>` | Every listing filtered by a content or media type | stale |
-| `schema-<alias>` | Every response that renders an item of a type, whose shape a type or data type change alters | stale |
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale |
 | `search-<index>` | Every other query against an index, such as a search | stale |
 | `x-<name>` | Whatever a site's own API names. See [Your own APIs](/your-apis) | expire |
@@ -48,7 +47,7 @@ The record of what a response covers is written in the background, within moment
 The package does not record a listing selected by a search, a name filter, or any filter other than a content type, or a listing with no parent or content type to select it, such as all descendants of a path. Such listings vary with input without end. Recording them would store a row for each variation, and every publish would purge every one. Each such response carries its keys in its own header instead:
 
 ```http
-X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000..., schema-article
+X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
 ```
 
 Every publish plans the `search-` key, which purges all of them at once, however many are cached. The same goes for a `fetch` of an item that does not exist (by path or by id), a content type filter naming a type that does not exist or more than 2 types, and an `items?id=` request naming more than one item or one that does not exist yet. A request in a culture that is not one of the site's languages is not recorded either, and carries its own keys.
@@ -84,7 +83,7 @@ Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environ
 
 ## Limits
 
-Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Its `schema-` keys come last, so on a response that renders very many types, a header at its limit loses some of those first. Only a response with more listing, `x-` or `type-` keys than the limit loses any of those, from the end. Umbraco's own output cache keeps every key.
+Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Only a response with more listing, `x-` or `type-` keys than the limit loses any of those, from the end. Umbraco's own output cache keeps every key.
 
 ## Item keys mode
 

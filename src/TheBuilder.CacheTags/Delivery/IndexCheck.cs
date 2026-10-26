@@ -25,7 +25,7 @@ internal static class IndexCheck
 
     /// <summary>Whether a change's listing purge waits for every server's index: it changes content listings, and its plan reaches some.</summary>
     public static bool WaitsFor(Change change, PurgePlan plan)
-        => Waits(change) && plan.Everything is false && plan.Keys.Any(Keys.CacheKeys.IsSelector);
+        => Waits(change) && plan.Keys.Any(Keys.CacheKeys.IsSelector);
 
     /// <summary>
     ///     Whether the index has an item as it is in the database now, and so every change made to it
