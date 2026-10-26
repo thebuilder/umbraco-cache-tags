@@ -16,10 +16,10 @@ namespace TheBuilder.CacheTags.ManagementApi;
 [MapToApi(Constants.ApiName)]
 [ApiExplorerSettings(GroupName = Constants.PackageName)]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-public sealed class CacheTagsLookupController(ICacheTagsLookup lookup) : ControllerBase
+public sealed class CacheTagsChangesController(ICacheTagsChangeLog changeLog) : ControllerBase
 {
     /// <summary>The latest changes, newest first: what each planned, who applied and indexed it, and its purges.</summary>
     [HttpGet("changes")]
     public async Task<IActionResult> Changes([FromQuery] int take = 20, CancellationToken cancellationToken = default)
-        => Ok(await lookup.ChangesAsync(take, cancellationToken));
+        => Ok(await changeLog.ChangesAsync(take, cancellationToken));
 }

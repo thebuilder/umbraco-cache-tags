@@ -27,9 +27,6 @@ internal sealed class ResponseCollector(
     private const string ResolvedContentItemsKey = "Umbraco.DeliveryApi.OutputCache.ResolvedContentItems";
     private const string ResolvedMediaItemsKey = "Umbraco.DeliveryApi.OutputCache.ResolvedMediaItems";
 
-    /// <summary>The most keys one response is recorded with.</summary>
-    public const int MaxKeys = 1000;
-
     public IReadOnlySet<string> Collect(object? result, HttpContext http, DeliveryEndpoint endpoint)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -48,15 +45,6 @@ internal sealed class ResponseCollector(
                 target => ResolveTarget(target, endpoint.Media),
                 alias => names.IsType(alias, endpoint.Media),
                 endpoint.Media));
-        }
-
-        if (keys.Count > MaxKeys)
-        {
-            // A request can ask for many items (take, expand); past this, the items are kept as their
-            // types, which a change to any of them purges, to bound the tags on its output cache entry.
-            var items = keys.Where(CacheKeys.IsItem).ToList();
-            keys.ExceptWith(items);
-            keys.UnionWith(TypeKeys(items));
         }
 
         return keys;

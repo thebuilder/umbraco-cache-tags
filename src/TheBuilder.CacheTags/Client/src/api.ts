@@ -61,7 +61,7 @@ export interface Purge {
   lastError: string | null;
 }
 
-export interface ChangeLookup {
+export interface ChangeEntry {
   id: string;
   createdUtc: string;
   kind: string;
@@ -108,7 +108,7 @@ const request = async <T>(method: "GET" | "POST" | "PUT" | "DELETE", path: strin
 };
 
 export const api = {
-  changes: (take = 20) => request<ChangeLookup[]>("GET", `changes?take=${take}`),
+  changes: (take = 20) => request<ChangeEntry[]>("GET", `changes?take=${take}`),
   purges: (state: PurgeState, take = 50) => request<Purge[]>("GET", `purges?state=${state}&take=${take}`),
   purge: (keys: string[]) => request<{ changeId: string }>("POST", "purge", keys),
   retry: (id: string) => request<null>("POST", `purges/${id}/retry`),

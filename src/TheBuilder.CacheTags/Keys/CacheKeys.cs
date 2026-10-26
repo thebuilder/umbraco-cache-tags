@@ -76,9 +76,6 @@ internal static class CacheKeys
         return prefix is not null && Guid.TryParseExact(key[prefix.Length..], "D", out Guid id) && key == prefix + id.ToString("D");
     }
 
-    /// <summary>Whether a key is the catch-all selector of an index or of media listings (<c>search-</c>).</summary>
-    public static bool IsSearch(string key) => key.StartsWith(SearchPrefix, StringComparison.Ordinal);
-
     /// <summary>Applies the configured prefix to a key, for the header and the purge payload.</summary>
     public static string WithPrefix(string prefix, string key) => prefix.Length == 0 ? key : prefix + key;
 }

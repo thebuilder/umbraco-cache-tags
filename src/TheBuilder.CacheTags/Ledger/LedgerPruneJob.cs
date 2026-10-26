@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
-using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core.Sync;
 using Umbraco.Cms.Infrastructure.BackgroundJobs;
 
-namespace TheBuilder.CacheTags.Storage;
+namespace TheBuilder.CacheTags.Ledger;
 
 /// <summary>Removes released changes and sent purges older than <see cref="CacheTagsOptions.LedgerRetention" />, once a day, on one server.</summary>
 internal sealed class LedgerPruneJob(

@@ -100,9 +100,9 @@ TheBuilder.CacheTags.ICacheTagsChanges.Applied(string! signal) -> void
 TheBuilder.CacheTags.ICacheTagsChanges.Record(System.Collections.Generic.IEnumerable<string!>! keys, string? waitFor = null, string? reason = null) -> System.Guid
 TheBuilder.CacheTags.ICacheTagsResponse
 TheBuilder.CacheTags.ICacheTagsResponse.Add(params string![]! keys) -> void
-TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController
-TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.CacheTagsLookupController(TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup! lookup) -> void
-TheBuilder.CacheTags.ManagementApi.CacheTagsLookupController.Changes(int take = 20, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.CacheTagsChangesController
+TheBuilder.CacheTags.ManagementApi.CacheTagsChangesController.CacheTagsChangesController(TheBuilder.CacheTags.ManagementApi.ICacheTagsChangeLog! changeLog) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsChangesController.Changes(int take = 20, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.CacheTagsPurgesController(TheBuilder.CacheTags.ICacheTagsChanges! changes, TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox! outbox, Umbraco.Cms.Core.Security.IBackOfficeSecurityAccessor! security) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Discard(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
@@ -116,7 +116,7 @@ TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Delete(string! nam
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.List() -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Test(System.Text.Json.JsonElement body, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Update(string! name, System.Text.Json.JsonElement body) -> Microsoft.AspNetCore.Mvc.IActionResult!
-TheBuilder.CacheTags.ManagementApi.ICacheTagsLookup
+TheBuilder.CacheTags.ManagementApi.ICacheTagsChangeLog
 TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox
 TheBuilder.CacheTags.ManagementApi.ICacheTagsTargets
 const TheBuilder.CacheTags.Configuration.CacheTagsOptions.SectionName = "CacheTags" -> string!

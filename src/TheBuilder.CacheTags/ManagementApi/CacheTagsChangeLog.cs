@@ -7,12 +7,12 @@ namespace TheBuilder.CacheTags.ManagementApi;
 ///     What the lookup API answers. Public only because the controller's constructor takes it; its
 ///     members are internal, so nothing outside the package can implement or call it.
 /// </summary>
-public interface ICacheTagsLookup
+public interface ICacheTagsChangeLog
 {
-    internal Task<IReadOnlyList<ChangeLookup>> ChangesAsync(int take, CancellationToken cancellationToken);
+    internal Task<IReadOnlyList<ChangeEntry>> ChangesAsync(int take, CancellationToken cancellationToken);
 }
 
-internal sealed record ChangeLookup(
+internal sealed record ChangeEntry(
     Guid Id,
     DateTime CreatedUtc,
     string Kind,
@@ -27,15 +27,15 @@ internal sealed record ChangeLookup(
     PurgePlan Plan,
     IReadOnlyList<Purge> Purges);
 
-internal sealed class CacheTagsLookup(LedgerStore ledger, IAckTransport transport) : ICacheTagsLookup
+internal sealed class CacheTagsChangeLog(LedgerStore ledger, IAckTransport transport) : ICacheTagsChangeLog
 {
     /// <summary>The latest changes, newest first: what each planned, who applied and indexed it, and its purges.</summary>
-    public async Task<IReadOnlyList<ChangeLookup>> ChangesAsync(int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ChangeEntry>> ChangesAsync(int take, CancellationToken cancellationToken)
     {
         IReadOnlyList<LedgerEntry> changes = ledger.Latest(Math.Clamp(take, 1, 200));
         IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>> acks = await transport.GetAcksAsync(changes.Select(change => change.Id).ToList(), cancellationToken);
         return changes
-            .Select(change => new ChangeLookup(
+            .Select(change => new ChangeEntry(
                 change.Id,
                 change.CreatedUtc,
                 change.Change.Kind.ToString(),
