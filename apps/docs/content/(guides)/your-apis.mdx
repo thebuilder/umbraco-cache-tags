@@ -76,7 +76,6 @@ builder.AddNotificationHandler<DictionaryCacheRefresherNotification, DictionaryC
 
 - **`waitFor`** names a signal. The package sends the purge once every server has reported the signal with `Applied(signal)`. Call it wherever a server refreshes its copy of the data, usually in a cache refresher's notification handler. Signals use lowercase letters, digits, dots and hyphens.
 - **Without `waitFor`**, the package sends the purge at once. Use that for data that every server reads straight from the database.
-- **`cultures`** limits the purge to responses in those cultures, and to responses without a culture.
 - **`reason`** is shown with the change in the backoffice.
 
 ## Purge by hand

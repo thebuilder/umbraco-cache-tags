@@ -77,9 +77,8 @@ first: `umbraco`, its selector keys, its `x-` keys, then its item keys. Items pa
 (64), or items that would push the header past the limit, are listed as their `type-` keys instead.
 Every change to an item plans its `type-` key, and a route change plans its descendants' `type-` keys
 as well as their content keys, so such a header is still reached, only more often. A response with
-more selector, `x-` or `type-` keys than the limit loses the last of those. A request for more than
-1000 items keeps them as their types too, which bounds the tags on its output cache entry. Umbraco's
-output cache has no limit, so its entry is tagged with every key the header would carry. Raise
+more selector, `x-` or `type-` keys than the limit loses the last of those. Umbraco's output cache
+has no limit, so its entry is tagged with every key the header would carry. Raise
 `MaxHeaderKeys` for a target that limits tags by size, such as Cloudflare in front of Umbraco, which
 keeps 16 KB of `Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. A header of 128
 keys is about 6 KB and one of 300 about 15 KB, which a proxy in front of Umbraco must allow (nginx
@@ -192,8 +191,8 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
   changed notification carries only the new alias, so the old one is read when the type is saving.
   A content type's rename waits for the index (Delivery, step 4), which moves its documents from
   one `filter=contentType:` to the other up to a minute later.
-- Unpublishing always purges every culture, because Umbraco raises it only when the whole document
-  goes.
+- A purge reaches every culture of an item: a response's keys carry no culture, so publishing one
+  culture purges the item's responses in all of them.
 - A sort's re-publish of the sorted items is not recorded as a publish, and items deleted from the
   recycle bin are not recorded again.
 - A domain, language or public access change purges everything.
