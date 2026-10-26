@@ -41,7 +41,7 @@ The segment is left out, so a response's segment variants share its key. Nothing
 
 The other Delivery API parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how Umbraco presents a response, and the package ignores any other parameter. Requests that differ only in those, or in the case, form or order of a value, share a key. The shared key covers everything any of them showed, so a purge reaches each, and input such as `?skip=<n>` cannot make new keys.
 
-The record of what a response covers is written in the background, within moments. A response carries its response key only once that write is queued. When the queue is full, or while writes are failing, the response carries its item and listing keys itself instead, as a catch-all listing does, so a purge reaches it without the record. A failed write is retried one response at a time, so one bad response does not hold up the rest; one the database keeps rejecting while others go through is given up after three tries and logged.
+The record of what a response covers is written in the background, within moments. A response carries its response key only once that write is queued. When the queue is full, or while writes are failing, the response carries its item and listing keys itself instead, as a catch-all listing does, so a purge reaches it without the record. A failed write is retried one response at a time, so one bad response does not hold up the rest. One the database keeps rejecting while others go through is given up after three tries and logged.
 
 ## Catch-all listings
 
@@ -59,6 +59,28 @@ Every publish plans the `search-` key, which purges all of them at once, however
 - **Preview requests** get `no-store` and no keys.
 - **Requests from a signed-in member or backoffice user** get `private` and no keys.
 - **Other responses**, such as not found and redirects, get `no-store`, because no item covers them and no purge would reach them.
+
+## How long a response may be cached
+
+A frontend or CDN can keep a response until a purge reaches it, for at most `MappingRetention`, 90 days by default. The package forgets a recorded response nobody has asked for in that time, and no purge reaches a copy kept longer. In Next.js, keep `cacheLife`'s `expire` within it.
+
+## Call the Delivery API from your server
+
+Fetch from your frontend's server, not from browsers. No purge reaches a browser's copy, and every distinct request a browser or bot makes is recorded. To enforce it, turn off public access:
+
+```json appsettings.json
+{
+  "Umbraco": {
+    "CMS": {
+      "DeliveryApi": {
+        "PublicAccess": false
+      }
+    }
+  }
+}
+```
+
+Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environment (`Umbraco__CMS__DeliveryApi__ApiKey`), not source control, and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`. The same key unlocks preview, so keep it on the server.
 
 ## Limits
 

@@ -92,6 +92,12 @@ The package records which `content-`, `media-`, `schema-` and selector keys (`ty
 their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
 cover them, and sent with both.
 
+Once a day, on one server, the package removes a response nobody has asked for in
+`MappingRetention` (90 days), and a key a later render dropped. The writer skips rewriting a render,
+and touching a response, within an hour of the last, so every row gets an extra hour.
+
+A frontend or CDN must not keep a recorded response longer than `MappingRetention`.
+
 A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
 other than a content type filter (a search, a name filter, a custom filter), however else it is
 selected; a listing with no parent or type to select it; a `fetch` without an axis (`children`,
@@ -211,9 +217,9 @@ caches the responses that carry the package's keys:
 }
 ```
 
-- Cloudflare reads tags from a `Cache-Tag` response header. Where it caches Umbraco's Delivery API
-  directly, set `CacheTags:HeaderName` to `Cache-Tag`; where it caches a frontend, the frontend must
-  pass the keys on in its own `Cache-Tag` header.
+- Cloudflare reads tags from a `Cache-Tag` response header. Where it caches a frontend, the
+  frontend must pass the keys on in its own `Cache-Tag` header. Where it caches Umbraco's Delivery
+  API directly, which suits a public API only, set `CacheTags:HeaderName` to `Cache-Tag`.
 - Each purge posts the keys as `tags` to `POST /client/v4/zones/{zone}/purge_cache`, at most 100 per
   call (Cloudflare's limit). Cloudflare has no "serve stale" purge, so `stale` keys are purged too.
 - Tags are case-insensitive at Cloudflare; the package's keys are lowercase already. A `Cache-Tag`

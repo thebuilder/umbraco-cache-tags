@@ -7,7 +7,7 @@ seo:
   image: /og/overview.png
 ---
 
-Cache Tags lets a headless frontend cache Umbraco Delivery API responses for as long as it likes, and purges exactly the right ones when an editor publishes.
+Cache Tags lets a headless frontend cache Umbraco Delivery API responses for months, and purges exactly the right ones when an editor publishes.
 
 Every cacheable response carries its cache keys in a header. The frontend tags its cache entries with them. When content changes, the package works out which responses showed it, waits until every Umbraco server has applied the change, and sends those keys to the frontend or CDN to purge.
 
@@ -31,6 +31,7 @@ Listings, such as an article list or a search, come from each server's Delivery 
 - Umbraco CMS 17.4 or later, Umbraco 18 included, on .NET 10, with the Delivery API enabled.
 - SQL Server, or SQLite for a single server. Every Umbraco server, delivery servers included, needs write access to the package's tables.
 - A frontend or CDN that can tag its cache entries and purge by tag. The [Next.js guide](/nextjs) has a complete receiver.
+- Recommended: call the Delivery API from your frontend's server, not from browsers. See [Call the Delivery API from your server](/keys#call-the-delivery-api-from-your-server).
 
 ## Where to go next
 

@@ -36,9 +36,9 @@ CacheTags__Targets__nextjs__Secret=<at least 32 characters>
 | `KeyPrefix` | none | A prefix for every key, such as `shop-`, for a site that shares a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |
 | `KeyMode` | `ResponseKey` | `ItemKeys` lists the item keys in every header too, for a CDN that purges by tag itself. See [Keys](/keys#item-keys-mode). |
 | `MaxItemKeys` | `64` | The most item keys a header lists before it lists their `type-` keys instead. |
-| `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 3. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly, since Cloudflare limits tags by size: 16 KB per response, about `300` keys, fewer with a `KeyPrefix`. A proxy between Cloudflare and Umbraco must then allow response headers that large. |
+| `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 3. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare in front of the Delivery API](/targets#cloudflare-in-front-of-the-delivery-api). |
 | `MaxDescendants` | `500` | The most descendants a rename, move or unpublish purges one by one before it purges everything instead. |
-| `MappingRetention` | 7 days | How long the package remembers which keys a response covers after it was last served. Do not cache a response longer than this. |
+| `MappingRetention` | 90 days | How long the package remembers which keys a response covers after it was last served. Do not cache a response longer than this. See [How long a response may be cached](/keys#how-long-a-response-may-be-cached). |
 | `AckTimeout` | 60 seconds | How long a change waits for every server to apply it before the package sends it anyway. |
 | `IndexTimeout` | 5 minutes | How long a change's listing purge waits for every server's index. |
 | `ServerTimeout` | 2 minutes | How long since its last heartbeat a server still counts as running. Servers send one every 30 seconds. |
