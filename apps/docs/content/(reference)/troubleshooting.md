@@ -18,7 +18,7 @@ Start in **Settings > Advanced > Cache tags**. **Changes** shows every change, t
 
 Open the change in **Changes**.
 
-- **Waiting for servers.** A server has not applied the change yet. A server that just started applies changes about a minute after start, and a server whose clock is more than 2 seconds behind is never acknowledged in time. The package sends the purge anyway after `AckTimeout`, and such a server then evicts the change from its own output cache.
+- **Waiting for servers.** A server has not applied the change yet. A server that just started applies changes about a minute after start, and a server whose clock is more than 2 seconds behind is never acknowledged in time. The package sends the purge anyway after 60 seconds, and such a server then evicts the change from its own output cache.
 - **No purges.** No target is configured, or every target is disabled.
 - **A purge with an error.** The target answered with an error, or the package could not reach it. The package retries with backoff, and lists the purge under **Failed purges** after its last attempt. **Retry** sends it again.
 - **401 from the webhook.** The secrets differ, the clocks are more than 5 minutes apart, or a proxy changes the path, which is part of the signature.
@@ -31,7 +31,7 @@ Open the change in **Changes**.
 
 ## A listing stays old
 
-The package purges listings twice, with the change and again once every server's index has it. **Waiting for index** in **Changes** means a server's index has not caught up. Right after a restart that can take over a minute. The package sends the listing purge anyway after `IndexTimeout`.
+The package purges listings twice, with the change and again once every server's index has it. **Waiting for index** in **Changes** means a server's index has not caught up. Right after a restart that can take over a minute. The package sends the listing purge anyway after 5 minutes.
 
 ## SQLite says the database is locked
 

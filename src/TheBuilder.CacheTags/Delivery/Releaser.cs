@@ -20,6 +20,9 @@ internal sealed class Releaser(
     TimeProvider time,
     ILogger<Releaser> logger)
 {
+    /// <summary>How long a change waits for every server to apply it before it is released anyway.</summary>
+    public static readonly TimeSpan AckTimeout = TimeSpan.FromSeconds(60);
+
     /// <summary>Releases the changes that are ready. Returns how many are still waiting.</summary>
     public async Task<int> ReleaseAsync(CancellationToken cancellationToken)
     {
@@ -41,7 +44,7 @@ internal sealed class Releaser(
             // Umbraco raises some changes (unpublish, delete, sort, media save) before the refresh.
             StageBarrier barrier = change.Signal is { WaitsForServers: false }
                 ? StageBarrier.Opened
-                : StageBarrier.ForAcks(change.CreatedUtc, now, servers, acks.AcknowledgedBy(change.Id), settings.AckTimeout, settings.ServerTimeout);
+                : StageBarrier.ForAcks(change.CreatedUtc, now, servers, acks.AcknowledgedBy(change.Id), AckTimeout, Heartbeat.ServerTimeout);
             if (barrier.Open)
             {
                 await ReleaseAsync(change, barrier, settings, now, cancellationToken);
@@ -73,7 +76,7 @@ internal sealed class Releaser(
             logger.LogWarning(
                 "Cache tags change {ChangeId} was sent after {Timeout} without acknowledgement from {Servers}. Those servers may still serve the old content.",
                 change.Id,
-                settings.AckTimeout,
+                AckTimeout,
                 string.Join(", ", barrier.Waiting));
         }
 

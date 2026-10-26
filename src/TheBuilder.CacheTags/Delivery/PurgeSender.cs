@@ -19,6 +19,9 @@ internal sealed class PurgeSender(
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
 
+    /// <summary>How many times a purge is tried before it is kept as failed.</summary>
+    public const int MaxAttempts = 10;
+
     /// <summary>Sends the purges that are due. Returns how many are still pending, now or later.</summary>
     public async Task<int> SendAsync(CancellationToken cancellationToken)
     {
@@ -51,8 +54,8 @@ internal sealed class PurgeSender(
                 continue;
             }
 
-            var attempt = ledger.Failed(purge.Id, identity.Name, settings.MaxAttempts, error, finished);
-            logger.LogWarning("Cache tags purge {PurgeId} to {Target} failed (attempt {Attempt} of {Max}): {Error}", purge.Id, purge.Target, attempt ?? purge.Attempts + 1, settings.MaxAttempts, error);
+            var attempt = ledger.Failed(purge.Id, identity.Name, MaxAttempts, error, finished);
+            logger.LogWarning("Cache tags purge {PurgeId} to {Target} failed (attempt {Attempt} of {Max}): {Error}", purge.Id, purge.Target, attempt ?? purge.Attempts + 1, MaxAttempts, error);
         }
 
         return Math.Max(0, pending - due.Count);

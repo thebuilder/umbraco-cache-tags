@@ -34,17 +34,9 @@ CacheTags__Targets__nextjs__Secret=<at least 32 characters>
 | `AllowPrivateNetworkTargets` | `false` | Lets targets added in the backoffice connect to private and reserved addresses, such as `localhost`. See [Purge targets](/targets#in-the-backoffice). |
 | `HeaderName` | `X-Umbraco-Cache-Keys` | The response header that carries the keys. `Cache-Tag` for Cloudflare in front of Umbraco. |
 | `KeyPrefix` | none | A prefix for every key, such as `shop-`, for a site that shares a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |
-| `MaxItemKeys` | `64` | The most item keys a header lists before it lists their `type-` keys instead. |
-| `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 3. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare in front of the Delivery API](/targets#cloudflare-in-front-of-the-delivery-api). |
-| `MaxDescendants` | `500` | The most descendants a rename, move or unpublish purges one by one before it purges everything instead. |
-| `AckTimeout` | 60 seconds | How long a change waits for every server to apply it before the package sends it anyway. |
-| `IndexTimeout` | 5 minutes | How long a change's listing purge waits for every server's index. |
-| `ServerTimeout` | 2 minutes | How long since its last heartbeat a server still counts as running. Servers send one every 30 seconds. |
-| `PollInterval` | 1 second | How often each server looks for changes to release and purges to send while there are some. |
-| `MaxAttempts` | `10` | How many times the package tries a purge before it keeps it as failed. |
-| `LedgerRetention` | 7 days | How long the backoffice keeps released changes and sent purges. |
+| `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 2. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare in front of the Delivery API](/targets#cloudflare-in-front-of-the-delivery-api). |
 
-Write times as .NET time spans, such as `"00:01:00"` for a minute.
+The timings are fixed: a change waits at most 60 seconds for every server to apply it and 5 minutes for every server's index, a server counts as gone 2 minutes after its last heartbeat, and a failed purge is tried 10 times. [How a purge is timed](/timing) explains each.
 
 ## Target settings
 
@@ -55,7 +47,6 @@ Write times as .NET time spans, such as `"00:01:00"` for a minute.
 | `Url` | none | For a webhook, where the package posts purges. https, except on localhost. |
 | `Secret` | none | For a webhook, the signing secret, at least 32 characters. |
 | `Headers` | none | For a webhook, request headers to send with every purge. See [Purge targets](/targets#request-headers). |
-| `MaxKeysPerRequest` | `500` | The most keys in one request. The package splits a larger purge over several. |
 | `Settings` | none | Settings for other types, such as Cloudflare's `ZoneId` and `ApiToken`. |
 
 :::caution

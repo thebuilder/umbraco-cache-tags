@@ -43,13 +43,16 @@ internal sealed record Purge(
 /// <summary>A purge to queue when a change is released.</summary>
 internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateTime NotBeforeUtc)
 {
-    /// <summary>The purges of these keys to every enabled target, split at each target's <c>MaxKeysPerRequest</c>.</summary>
+    /// <summary>The most keys one purge request carries; more are split over several requests.</summary>
+    public const int MaxKeysPerRequest = 500;
+
+    /// <summary>The purges of these keys to every enabled target, split at <see cref="MaxKeysPerRequest" />.</summary>
     public static IReadOnlyList<NewPurge> ToTargets(IEnumerable<ResolvedTarget> targets, IReadOnlyList<string> keys, DateTime nowUtc)
         => keys.Count == 0
             ? []
             : targets
                 .Where(target => target.Options.Enabled)
-                .SelectMany(target => keys.Chunk(target.Options.MaxKeysPerRequest).Select(chunk => new NewPurge(target.Name, chunk, nowUtc)))
+                .SelectMany(target => keys.Chunk(MaxKeysPerRequest).Select(chunk => new NewPurge(target.Name, chunk, nowUtc)))
                 .ToList();
 }
 

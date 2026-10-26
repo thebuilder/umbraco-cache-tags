@@ -79,7 +79,7 @@ internal sealed class CacheKeyResultFilter(
             return;
         }
 
-        IReadOnlyList<string> keys = ResponseTags.For(settings.MaxItemKeys, settings.MaxHeaderKeys, collect(value), collector.TypeKeys);
+        IReadOnlyList<string> keys = ResponseTags.For(ResponseTags.MaxItemKeys, settings.MaxHeaderKeys, collect(value), collector.TypeKeys);
 
         // A frontend keeps only so many tags per entry and drops the rest, so the header stops at the
         // limit. Umbraco's output cache has no limit, so its entry is tagged with every key.

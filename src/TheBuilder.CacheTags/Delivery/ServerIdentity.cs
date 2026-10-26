@@ -27,6 +27,9 @@ internal sealed class Heartbeat(IAckTransport transport, Storage.PackageDatabase
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long since its last heartbeat a server still counts as running: four missed heartbeats.</summary>
+    public static readonly TimeSpan ServerTimeout = TimeSpan.FromMinutes(2);
+
     /// <summary>How often a server waiting for the package's tables on a first boot looks for them.</summary>
     private static readonly TimeSpan InstallInterval = TimeSpan.FromSeconds(1);
 

@@ -11,6 +11,9 @@ namespace TheBuilder.CacheTags.Ledger;
 /// </summary>
 internal sealed class PurgePlanner(IDescendants descendants)
 {
+    /// <summary>The most descendants a route change purges one by one before it purges everything instead.</summary>
+    public const int MaxDescendants = 500;
+
     public PurgePlan Plan(Change change, int descendantBudget)
     {
         if (change.Kind == ChangeKind.Everything)

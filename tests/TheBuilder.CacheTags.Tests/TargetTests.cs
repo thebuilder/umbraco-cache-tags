@@ -165,14 +165,6 @@ public sealed class TargetTests : IDisposable
         => Assert.NotNull(TargetValidator.Validate(Webhook() with { Settings = [new NamedValue("Token", "x")] }, Types));
 
     [Fact]
-    public void Keys_per_request_are_from_1_to_10000()
-    {
-        Assert.NotNull(TargetValidator.Validate(Webhook() with { MaxKeysPerRequest = 0 }, Types));
-        Assert.Null(TargetValidator.Validate(Webhook() with { MaxKeysPerRequest = 10_000 }, Types));
-        Assert.NotNull(TargetValidator.Validate(Webhook() with { MaxKeysPerRequest = 10_001 }, Types));
-    }
-
-    [Fact]
     public void A_configured_target_with_a_header_the_purge_sets_stops_startup_naming_the_target()
     {
         var options = new CacheTagsOptions();

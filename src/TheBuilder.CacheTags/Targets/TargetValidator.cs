@@ -21,7 +21,6 @@ internal static partial class TargetValidator
     ///     configuration key, so an administrator can only send values someone put here.
     /// </summary>
     public const string SecretsSection = "CacheTags:Secrets";
-    public const int MaxKeysPerRequestLimit = 10_000;
 
     /// <summary>Headers the purge request sets itself.</summary>
     private static readonly HashSet<string> ManagedHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -63,11 +62,6 @@ internal static partial class TargetValidator
         if (types.Contains(target.Type, StringComparer.OrdinalIgnoreCase) is false)
         {
             return $"No target type '{target.Type}' is registered.";
-        }
-
-        if (target.MaxKeysPerRequest is < 1 or > MaxKeysPerRequestLimit)
-        {
-            return $"Keys per request must be from 1 to {MaxKeysPerRequestLimit}.";
         }
 
         if (Is(target, WebhookTarget.TypeName))
