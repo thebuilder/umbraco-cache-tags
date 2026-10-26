@@ -8,12 +8,12 @@ namespace TheBuilder.CacheTags.Example.Dictionary;
 /// <summary>
 ///     A site's own API, outside the Delivery API: every dictionary item in one language,
 ///     <c>GET /api/dictionary?locale=da-DK</c>. <see cref="CacheTaggedAttribute" /> tags its responses
-///     like Delivery API responses, keyed by <c>locale</c> only, and each response names the key a
-///     dictionary change purges (<see cref="DictionaryCacheTags" />).
+///     like Delivery API responses, and each response names the key a dictionary change purges
+///     (<see cref="DictionaryCacheTags" />).
 /// </summary>
 [ApiController]
 [Route("api/dictionary")]
-[CacheTagged(QueryParameters = ["locale"])]
+[CacheTagged]
 public sealed class DictionaryController(IDictionaryItemService dictionaryItems, ILanguageService languages, ICacheTagsResponse cacheTags) : ControllerBase
 {
     [HttpGet]

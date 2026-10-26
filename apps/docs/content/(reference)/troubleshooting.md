@@ -5,7 +5,7 @@ seo:
   image: /og/troubleshooting.png
 ---
 
-Start in **Settings > Advanced > Cache tags**. **Changes** shows every change, the keys it planned, which servers applied it, and each purge with its error. **Look up** shows what a key covers.
+Start in **Settings > Advanced > Cache tags**. **Changes** shows every change, the keys it planned, which servers applied it, and each purge with its error. Every response's header shows the keys it carries.
 
 ## A response has no keys
 
@@ -27,7 +27,6 @@ Open the change in **Changes**.
 
 - **The page was not cached with the keys.** Check that your fetch tags the entry with every key in the header. Next.js keeps at most 128 tags per entry.
 - **Something else caches the page too**, such as a CDN in front of the frontend. Add that cache as a target as well.
-- **The entry outlived `MappingRetention`** (90 days). The package had forgotten which keys the response covers, so no purge named it. Keep `cacheLife`'s `expire`, or a CDN's edge TTL, within the retention.
 - **The request varies by a header** that is not part of your cache key. The package sends no `Vary` header, so if you forward `Accept-Language`, `Accept-Segment` or `Start-Item`, include them in your own cache key.
 
 ## A listing stays old
@@ -36,4 +35,4 @@ The package purges listings twice, with the change and again once every server's
 
 ## SQLite says the database is locked
 
-Under load, Umbraco on SQLite can report `database table is locked` and stop answering until you restart it. SQLite allows one writer at a time, and the package writes too, recording each response the first time Umbraco renders it. Use SQL Server for anything but local development.
+Under load, Umbraco on SQLite can report `database table is locked` and stop answering until you restart it. SQLite allows one writer at a time, and the package writes too, as it records, acknowledges and sends each change. Use SQL Server for anything but local development.

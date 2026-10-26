@@ -1,12 +1,12 @@
 ![Cache tags under Settings > Advanced in the Umbraco backoffice, with a publish of Harbour mornings opened to show its planned keys and purges](https://raw.githubusercontent.com/thebuilder/umbraco-cache-tags/refs/heads/main/apps/docs/content/screenshots/changes.png)
 
-Cache Tags lets a headless frontend cache Umbraco Delivery API responses for months, and purges exactly the right ones when an editor publishes.
+Cache Tags lets a headless frontend cache Umbraco Delivery API responses for as long as it likes, and purges exactly the right ones when an editor publishes.
 
 Every cacheable response carries its cache keys in a header. Your frontend tags its cache entries with them. When content changes, the package works out which responses showed it, waits until every Umbraco server serves the change, and sends those keys to your frontend or CDN to purge.
 
 ## What it does
 
-- Tags every cacheable Delivery API response with a key, and records which documents, media and listings it covers.
+- Tags every cacheable Delivery API response with the keys of the documents, media and listings it shows.
 - Purges a publish's page, the listings it appears in, and the pages that pick it, and nothing else.
 - Waits until every Umbraco server has applied a change before purging, and purges listings again once every server's Delivery API index has it, so the frontend never refetches the old version.
 - Sends purges as a signed webhook, to Cloudflare's purge API, or to a target of your own.

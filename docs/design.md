@@ -15,7 +15,6 @@ case-sensitively, so a key that differed only in case would behave differently p
 
 | Key | Means | Purge behaviour at the frontend |
 |---|---|---|
-| `response-<hash>` | One Delivery API response: path, normalised query, culture, segment, start item | expire now |
 | `content-<guid>` | One document | expire now |
 | `media-<guid>` | One media item | expire now |
 | `type-<alias>` | Every listing filtered by a content or media type (alias lowercased) | stale, refresh in background |
@@ -35,120 +34,57 @@ case-sensitively, so a key that differed only in case would behave differently p
 
 ## The response header
 
-Each cacheable Delivery API response carries its response key, `umbraco` (which a change to
-everything, such as a domain, language or public access change, purges), its selector keys, its `x-`
-keys and the keys of the items it shows:
+Each cacheable Delivery API response carries the keys of what it shows:
 
 ```http
-X-Umbraco-Cache-Keys: response-3f9a..., umbraco, content-e000...
+X-Umbraco-Cache-Keys: umbraco, children-e000..., content-e000..., content-e001...
 ```
 
-A purge reaches a response by the keys it carries, as with any tag-based cache. The mapping below
-(which keys each response key covers) is for the backoffice, for a header that ran out of room, and
-for response key mode, where a header carries only the response key and `umbraco`.
+- `umbraco`, which a change to everything (a domain, language or public access change) purges;
+- the selector keys that select it, for a listing (`type-`, `children-`, or the catch-all `search-`);
+- the site's own `x-` keys, for a tagged action (see Your own APIs);
+- the `content-` and `media-` keys of the items it shows, the items they pick or link to, and the
+  media they use (`ResponseCollector`, `ReferenceReader`, `OutputWalker`).
 
-The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
-identity is:
+A purge reaches a cached response by the keys it carries, as with any tag-based cache. Nothing is
+stored per response, so nothing has to be written, kept or looked up for a purge to reach a copy,
+however long it has been cached, and requests cannot make the package store anything.
 
-- the path, lowercased;
-- the query parameters the endpoint reads: `id` for the items endpoint (`items?id=`), `fetch` and
-  `filter` for a query (listing) endpoint, none for an item by route or id. An endpoint ignores the
-  others, so they are left out. Each value is lowercased and stripped of whitespace, an id (alone or
-  after a `:`, as in `children:<id>`) is written in `D` form, and a list after a `:`
-  (`contentType:b,a`) is sorted with repeats dropped. The values are then sorted, with empty and
-  repeated ones dropped;
-- the culture, as Umbraco reads it from `Accept-Language`;
-- the start item, as the id of the item `Start-Item` resolves to (an unknown one is a 404).
+A listing gets the catch-all `search-` key when nothing narrower selects it:
 
-The segment is left out: Umbraco takes `Accept-Segment` as sent, and no purge is limited by segment,
-so segment variants share a key. The same request always gives the same key on every server. The
-Delivery API's other parameters (`expand`, `fields`, `sort`, `skip`, `take`) only change how a
-response is presented, and any other parameter is ignored, so requests that differ only in them, or
-in the case, form or order of a value, share a key: the mapping only adds keys, so the shared key
-covers everything any of them showed, and a purge reaches each. Input such as
-`?fields=properties[<random>]`, `?skip=<n>`, `?id=<id>&id=<id>` or `item/<path>?filter=<random>`
-therefore makes no new key. A request whose culture is too long to record gets `no-store` and no
-key. A culture that is no language of the site is not recorded (see below): Umbraco takes
-`Accept-Language` as sent too, and a purge limited to a language would not match it.
+- a filter other than a content type filter (a search, a name filter, a custom filter), however else
+  the listing is selected;
+- no parent or type to select it;
+- a `fetch` without an axis (`children`, `descendants`, `ancestors`) and an item that exists, by path
+  or by id;
+- a type filter naming a type that does not exist (one longer than an alias can be included), or more
+  than 2 types, whatever the `fetch`.
 
-The mapping is written in the background (`MappingWriter`), and a response carries its `response-`
-key only once its record is queued. In item keys mode, the default, a response carries its other
-keys either way, so the rest of this list matters to response key mode:
-
-- A record that cannot be queued (the queue of 10,000 writes is full, the server is stopping, or the
-  package's tables do not exist yet on a first boot) makes the response carry its keys itself instead,
-  as a catch-all response does below. It is not recorded.
-- A queued record is written within moments. A purge released in those moments does not reach the
-  response through its key, the same short window as between a render and Umbraco's cache refresh.
-- When a batch fails, the records the store did not record are written again one by one, until two
-  in a row fail (the store is then taken to be down), and those still failing are retried after 2,
-  4, 8 ... seconds, at most a minute apart. While any are failing, new responses carry their keys
-  themselves, and are still queued, so the mapping fills in and the writer sees when the store works
-  again. A record that keeps failing while others go through is one the store rejects: after 3 such
-  rounds it is given up and logged, and only `umbraco` reaches that response. Any exception but the
-  server stopping counts as a failure, a store's own timeout included.
-- A stopping server refuses new records and spends up to 5 seconds writing what is queued or
-  failing, one by one where a batch fails. A crash, or what is left after those seconds, loses those
-  records (the last moment's renders): until a frontend fetches those responses again, only `umbraco`
-  reaches them.
-
-The package records which `content-`, `media-` and selector keys (`type-`, `children-`,
-`search-`) each response key covers, at most 1000 per response (past that, its items are recorded as
-their `type-` keys). A change is planned as item and selector keys, resolved to the response keys that
-cover them, and sent with both.
-
-Once a day, on one server, the package removes a response nobody has asked for in
-`MappingRetention` (90 days), and a key a later render dropped. The writer skips rewriting a render,
-and touching a response, within an hour of the last, so every row gets an extra hour.
-
-A frontend or CDN must not keep a recorded response longer than `MappingRetention`.
-
-A response the catch-all `search-` key reaches is not recorded. That is a listing with any filter
-other than a content type filter (a search, a name filter, a custom filter), however else it is
-selected; a listing with no parent or type to select it; a `fetch` without an axis (`children`,
-`descendants`, `ancestors`) and an item that exists, by path or by id; a type filter naming a type
-that does not exist (one longer than an alias can be included), or more than 2 types, whatever the
-`fetch`; `items?id=` naming an item that does not exist (it covers each id asked for, so publishing
-one later reaches it), or naming more than one item. Content and media types are read at most once
-a minute, so one created in the last minute counts as unknown until then. Each of these can vary
-with input without end: recorded, each would be another mapping row, and every content publish would
-purge every one of them, so a purge would grow with every variation ever cached. Such a response
-carries its keys itself instead, without its response key:
+Content and media types are read at most once a minute, so one created in the last minute counts as
+unknown until then. Every content publish plans the `search-` key, which purges every such listing
+at once:
 
 ```http
 X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
 ```
 
-and the planned `search-` key purges every such response at once, however many are cached. Being
-unrecorded, these responses lose culture-limited purging (a purge reaches them in every culture, which
-only over-purges) and are not shown by the lookup API.
-
-What anonymous input can still record is bounded by the site itself: per culture and start item, one
-response per item route, one per `items?id=` item, and one per listing selected by an existing
-`fetch` target (or none) and at most two existing types (or none). A site with `I` items and `T`
-types has at most about `3 I (1 + T + T(T-1)/2)` listing keys per culture, which is large for a big
-site but cannot grow with requests that name nothing real (a target can be spelled a few ways, by id or
-path, which multiplies that by a few).
-
-A response in a culture that is no language of the site (Umbraco takes `Accept-Language` as sent, so
-`Accept-Language: <random>` is one) is not recorded either, and carries its keys itself the same way,
-reached by the item and selector keys a purge sends. Languages are read at most once a minute too.
+`items?id=` carries the key of every id asked for, so publishing one that did not exist yet reaches
+it.
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
 characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128) keys, most needed
-first: its own `response-` key, `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past `MaxItemKeys` (64), or items that would push the header past the limit, are
-listed as their `type-` keys instead. A response with more listing, `x-` or `type-` keys than the
-limit loses the last of those too. Umbraco's output cache has no limit, so its entry is tagged
-with every key. Set `MaxHeaderKeys` to the limit of a target that keeps fewer tags, and raise it
-for one that limits tags by size, such as Cloudflare in front of Umbraco, which keeps 16 KB of
-`Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. Such a header is about 15 KB, which
-a proxy in front of Umbraco must allow (nginx needs a `proxy_buffer_size` of 16k or more).
+first: `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past `MaxItemKeys`
+(64), or items that would push the header past the limit, are listed as their `type-` keys instead.
+Every change to an item plans its `type-` key, and a route change plans its descendants' `type-` keys
+as well as their content keys, so such a header is still reached, only more often. A response with
+more selector, `x-` or `type-` keys than the limit loses the last of those. A request for more than
+1000 items keeps them as their types too, which bounds the tags on its output cache entry. Umbraco's
+output cache has no limit, so its entry is tagged with every key the header would carry. Raise
+`MaxHeaderKeys` for a target that limits tags by size, such as Cloudflare in front of Umbraco, which
+keeps 16 KB of `Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. A header of 128
+keys is about 6 KB and one of 300 about 15 KB, which a proxy in front of Umbraco must allow (nginx
+needs a `proxy_buffer_size` of 16k or more).
 
-A header lists up to `MaxItemKeys` (64) item keys, then their `type-` keys, and items that would push
-it past `MaxHeaderKeys` are listed as their `type-` keys too. A route change plans its descendants'
-`type-` keys as well as their content keys, so such a header is still reached. With
-`CacheTags:KeyMode` set to `ResponseKey`, a header carries only the response key and `umbraco`, and
-purges reach the response only through the mapping.
 The header name is `CacheTags:HeaderName`.
 
 No keys, and the given `Cache-Control`, on:
@@ -175,13 +111,13 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   "version": 1,
   "id": "<purge id>",
   "changeId": "<change id>",
-  "expire": ["response-...", "content-..."],
+  "expire": ["content-...", "x-dictionary-da-dk"],
   "stale": ["type-article", "children-..."]
 }
 ```
 
-- `expire` holds `response-`, `content-`, `media-` and `x-` keys: one response, item or custom
-  output, purged at once. `stale` holds `type-`, `children-`, `search-` and `umbraco`:
+- `expire` holds `content-`, `media-` and `x-` keys: one item or piece of custom output, purged
+  at once. `stale` holds `type-`, `children-`, `search-` and `umbraco`:
   listings, types or everything, served stale while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
   A change sends several purges: one per `MaxKeysPerRequest` keys, and its listing purge.
@@ -230,7 +166,7 @@ caches the responses that carry the package's keys:
 - Tags are case-insensitive at Cloudflare; the package's keys are lowercase already. A `Cache-Tag`
   header holds about 16 KB, far more than a response's keys.
 - A failed call (a bad token, a rate limit) is retried like any purge, and its error is kept with the
-  purge for the lookup API.
+  purge for the backoffice.
 
 ## Planning
 
@@ -239,7 +175,7 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 - A route change (rename, move, unpublish) also reaches the descendants, whose routes follow. The
   planner expands them when the change is recorded, with
   `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to `CacheTags:MaxDescendants`, and
-  plans `umbraco` past that. The mapping stores no ancestor keys.
+  plans `umbraco` past that. A response carries no ancestor keys.
 - A route change also plans the descendants' `type-` keys, read with `IEntityService`. A header past
   `MaxItemKeys` lists its items' types instead of the items, so only those reach it. An unpublish
   also takes the descendants out of the listings of their types, including pages of a listing that
@@ -252,7 +188,7 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
   type is not worth its place in every header. The plan also names the `type-` keys of the types it
   alters, for the listing purge below.
 - Renaming a content or media type's alias names the `type-` keys of the old alias as well as the
-  new one: listings rendered before the rename are recorded under the old one. Umbraco's
+  new one: listings rendered before the rename carry the old one. Umbraco's
   changed notification carries only the new alias, so the old one is read when the type is saving.
   A content type's rename waits for the index (Delivery, step 4), which moves its documents from
   one `filter=contentType:` to the other up to a minute later.
@@ -285,10 +221,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    timeout, and it evicts them once they are released (step 3).
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
-   not. It resolves the plan to response keys and queues one purge per target (split at
-   `MaxKeysPerRequest`). Listing responses are in it too, deliberately: the items they show come
-   from the published cache, so they are fresh at once, even though their membership and order are
-   not yet. A server that a change was released without evicts the change's responses and listings
+   not. It queues one purge of the planned keys per target (split at `MaxKeysPerRequest`). The
+   listing keys are in it too, deliberately: the items listings show come from the published cache,
+   so they are fresh at once, even though their membership and order are not yet. A server that a change was released without evicts the change's responses and listings
    from its own output cache once it has seen a refresh of the change, whether before the release
    (its clock is behind) or up to 15 minutes after (it applied the change late). It keeps the
    refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
@@ -302,10 +237,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    plan has listing keys, each server compares that stamp with each item's state in the database
    until they match (or no document is left, for a trashed or deleted item; or, for a renamed
    content type, until no document has the old alias), then evicts the
-   change's listing responses from its output cache and records the change as indexed. Once every
-   active server that acknowledged the change has, or after `CacheTags:IndexTimeout` (5 minutes), one
-   server resolves the listing keys again (a listing first requested in between has a new response
-   key) and queues the listing purge. Media listings walk the media cache, and other type changes
+   change's listings from its output cache and records the change as indexed. Once every active
+   server that acknowledged the change has, or after `CacheTags:IndexTimeout` (5 minutes), one server
+   queues the listing purge, which sends the plan's listing keys again. Media listings walk the media cache, and other type changes
    and site-wide changes purge as a whole, so those do not wait.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. Each lease runs 30 seconds from when the purge is claimed, just before it is sent, so slow
@@ -318,8 +252,8 @@ The delivery worker and the heartbeat log an error and carry on, so neither stop
 that fail validation at start stop the site; settings that become invalid on a reload of
 appsettings are logged once, and the last valid settings stay in use until they are fixed.
 
-Heartbeats and acks go through `IAckTransport`, which keeps them in the database by default. It is
-a seam of its own, separate from the mapping store (`ICacheTagStore`), so a site can replace either.
+Heartbeats and acks go through `IAckTransport`, which keeps them in the database by default. A site
+can replace it.
 
 A server that has just started applies other servers' changes only once Umbraco's instruction job
 first runs, about a minute after start; a change made in that minute waits for it (or the ack
@@ -348,12 +282,12 @@ A site's own API (anything outside the Delivery API whose responses a frontend c
 through two public pieces.
 
 **Tagging.** `[CacheTagged]` on an action or controller tags its responses the way the package tags
-Delivery API responses: a `response-` key and `umbraco` in the header, recorded with what the response
-covers. The action names its keys with the scoped `ICacheTagsResponse`; any Delivery API items in its
-result are found on their own.
+Delivery API responses: `umbraco` and the keys of what the response shows, in the header. The action
+names its keys with the scoped `ICacheTagsResponse`, and the package finds any Delivery API items in
+its result on its own.
 
 ```csharp
-[ApiController, Route("api/dictionary"), CacheTagged(QueryParameters = ["locale"])]
+[ApiController, Route("api/dictionary"), CacheTagged]
 public sealed class DictionaryController(ICacheTagsResponse cacheTags, ...) : ControllerBase
 {
     [HttpGet]
@@ -365,18 +299,12 @@ public sealed class DictionaryController(ICacheTagsResponse cacheTags, ...) : Co
 }
 ```
 
-`QueryParameters` lists the parameters that select what a response covers; none by default, and only
-those are part of its key, so listing an unbounded parameter makes a key per value. Their values are
-made canonical like the Delivery API's (lowercased, without whitespace, a list after a `:` sorted, an
-id in one form), so `?locale=da-DK` and `?locale=da-dk` share a key; where the action tells such
-values apart, the shared key still covers what each response showed. `Recorded = false`
-makes each response carry its keys itself instead, for an action whose input varies without end. Only
-a 200 is tagged, read from the result before it runs: an `ObjectResult`, `JsonResult`,
+Only a 200 is tagged, read from the result before it runs: an `ObjectResult`, `JsonResult`,
 `ContentResult`, status code result, file or `EmptyResult`, or a typed `IResult` (`TypedResults`,
 `Results<...>`) with a status code. Any other result (a redirect, a challenge, a forbid, a result
 type the package does not know) gets `no-store` and no key.
 
-**Changes.** `ICacheTagsChanges.Record(keys, waitFor, cultures, reason)` records a change that purges
+**Changes.** `ICacheTagsChanges.Record(keys, waitFor, reason)` records a change that purges
 the keys: custom keys (`x-` and lowercase letters, digits and hyphens), items' `content-` or `media-`
 keys, or `umbraco`. With `waitFor`, the purge waits until every server has reported that signal with
 `ICacheTagsChanges.Applied(signal)`, which a site calls on every server where its data is refreshed,
@@ -400,17 +328,11 @@ or discarded purge again (`POST .../purges/{id}/retry`), and sets a pending or d
 
 ## Debugging
 
-An admin-only Management API lookup:
+A response's header shows the keys it carries. The admin-only Management API lists the latest
+changes, with the keys each planned, which servers applied and indexed it, and its purges
+(`GET /umbraco/management/api/v1/cache-tags/changes?take=20`). Each change is also logged:
+`Cache tags change <id> (<kind>) plans <keys>`.
 
-- a `response-` key gives the request it stands for (path, query, culture, segment, start item) and
-  the items and selectors it covers, with names;
-- a `content-`, `media-` or selector key gives the response keys that cover it;
-- the latest changes list the keys each planned and the responses that plan reaches now.
-
-`GET /umbraco/management/api/v1/cache-tags/lookup?key=<key>` and
-`GET /umbraco/management/api/v1/cache-tags/changes?take=20`, for administrators. Each change is also
-logged: `Cache tags change <id> (<kind>) plans <keys>`.
-
-The backoffice shows the same under **Settings > Advanced > Cache tags**, with a search, and a Cache
-box on each document's and media item's Info tab. The Next.js sample shows each page's keys and
-fetch times.
+The backoffice shows the same under **Settings > Advanced > Cache tags**, and a Cache box on each
+document's and media item's Info tab gives the item's key and purges it. The Next.js sample shows each
+page's keys and fetch times.

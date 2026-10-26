@@ -7,7 +7,7 @@ seo:
   image: /og/overview.png
 ---
 
-Cache Tags lets a headless frontend cache Umbraco Delivery API responses for months, and purges exactly the right ones when an editor publishes.
+Cache Tags lets a headless frontend cache Umbraco Delivery API responses for as long as it likes, and purges exactly the right ones when an editor publishes.
 
 Every cacheable response carries its cache keys in a header. The frontend tags its cache entries with them. When content changes, the package works out which responses showed it, waits until every Umbraco server has applied the change, and sends those keys to the frontend or CDN to purge.
 
@@ -17,7 +17,7 @@ Every cacheable response carries its cache keys in a header. The frontend tags i
 
 ## How it fits together
 
-1. A frontend fetches from the Delivery API. The response carries the keys of what it shows: `X-Umbraco-Cache-Keys: response-3f9a..., umbraco, content-e000...`.
+1. A frontend fetches from the Delivery API. The response carries the keys of what it shows: `X-Umbraco-Cache-Keys: umbraco, content-e000...`.
 2. The frontend caches the response, tagged with those keys.
 3. An editor publishes. The package records the change and plans which keys it touches.
 4. Every Umbraco server applies the change and acknowledges it.
