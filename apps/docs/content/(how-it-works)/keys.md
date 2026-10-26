@@ -20,15 +20,15 @@ Every key is lowercase ASCII, because Cloudflare matches tags case-insensitively
 
 "Expire" means the next request waits for fresh content. "Stale" means the next request may get the old response once while it refreshes. Listings and site-wide changes touch many pages, and listings only change once the index has caught up.
 
-## The response key
+## What a response carries
 
-A response normally carries only its own key and `umbraco`:
+A response carries the keys of what it shows, so a purge reaches it by those keys:
 
 ```http
-X-Umbraco-Cache-Keys: response-3f9a1c..., umbraco
+X-Umbraco-Cache-Keys: response-3f9a1c..., umbraco, content-e000...0003, content-e000...0004
 ```
 
-The package records which items and listings each response key covers. When content changes, it plans the change as item and listing keys, looks up the response keys that cover them, and purges both. A header stays short however much the response shows, and purging an article also purges the pages that pick it.
+That is its own `response-` key, `umbraco`, the listing keys that select it, any `x-` keys, and the `content-` and `media-` keys of the items it shows. The package also records which keys each response key covers. The backoffice shows that record, and a purge uses it to reach a response whose header ran out of room.
 
 The response key is a hash of what selects the content:
 
@@ -85,9 +85,17 @@ Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environ
 
 Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: its `response-` key, `umbraco`, its listing keys, its `x-` keys and its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Only a response with more listing, `x-` or `type-` keys than the limit loses any of those, from the end. Umbraco's own output cache keeps every key.
 
-## Item keys mode
+A full header is about 6 KB. A proxy in front of Umbraco must allow response headers that large. Nginx, for example, answers 502 when they pass its `proxy_buffer_size`, 4 or 8 KB by default, so set it to 16k.
 
-With `CacheTags:KeyMode` set to `ItemKeys`, every header lists the item keys as well as the response key. Use it for a CDN in front of Umbraco that purges by tag itself, with no way to look up response keys. The limits above still apply: past `MaxItemKeys`, or when the items would push the header past `MaxHeaderKeys`, it lists their `type-` keys instead.
+## Response key mode
+
+With `CacheTags:KeyMode` set to `ResponseKey`, a header lists only the response key and `umbraco`:
+
+```http
+X-Umbraco-Cache-Keys: response-3f9a1c..., umbraco
+```
+
+A purge then reaches the response only through the record of what it covers, so cache it for at most `MappingRetention`. Use it for a frontend that keeps few tags per entry, or where headers must stay small.
 
 ## A prefix
 

@@ -85,7 +85,7 @@ internal sealed class SourceChangeHandlers(
 
                 // Unpublishing one culture is raised as a publish of the rest; that culture's route is gone.
                 var cultureUnpublished = unpublished?.TryGetValue(content.Key, out var gone) is true && gone.Count > 0;
-                return Item(content, routeChanged: routeChanged || cultureUnpublished, unpublished: cultureUnpublished);
+                return Item(content, routeChanged: routeChanged || cultureUnpublished);
             }).ToList();
 
             Record(at, ChangeKind.Published, items, Cultures(entities.Select(c => c.Key), published, unpublished));
@@ -98,7 +98,7 @@ internal sealed class SourceChangeHandlers(
         => Guard(at => Record(
             at,
             ChangeKind.Unpublished,
-            notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true, unpublished: true)).ToList()));
+            notification.UnpublishedEntities.Select(content => Item(content, routeChanged: true)).ToList()));
 
     public void Handle(ContentMovedNotification notification)
         => Guard(at => Record(
@@ -248,7 +248,7 @@ internal sealed class SourceChangeHandlers(
     private void RecordEverything(DateTime at, string reason, IEnumerable<string> sources)
         => recorder.Record(new Change(Guid.CreateVersion7(), at, ChangeKind.Everything, [], [], null, reason, Sources: sources.Distinct().ToList()));
 
-    private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false, bool unpublished = false)
+    private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false)
     {
         UmbracoObjectTypes type = item is IMedia ? UmbracoObjectTypes.Media : UmbracoObjectTypes.Document;
 
@@ -258,7 +258,7 @@ internal sealed class SourceChangeHandlers(
             .Select(id => int.TryParse(id, out var ancestor) ? KeyOf(ancestor, type) : Guid.Empty)
             .Where(key => key != Guid.Empty)
             .ToList();
-        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors, unpublished);
+        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors);
     }
 
     // A path is "-1,1069,1077": the parent is the next-to-last id.

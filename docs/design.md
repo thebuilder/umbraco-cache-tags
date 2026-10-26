@@ -35,12 +35,17 @@ case-sensitively, so a key that differed only in case would behave differently p
 
 ## The response header
 
-Each cacheable Delivery API response carries its response key, and `umbraco`, which a change to
-everything (a domain, language or public access change) purges:
+Each cacheable Delivery API response carries its response key, `umbraco` (which a change to
+everything, such as a domain, language or public access change, purges), its selector keys, its `x-`
+keys and the keys of the items it shows:
 
 ```http
-X-Umbraco-Cache-Keys: response-3f9a..., umbraco
+X-Umbraco-Cache-Keys: response-3f9a..., umbraco, content-e000...
 ```
+
+A purge reaches a response by the keys it carries, as with any tag-based cache. The mapping below
+(which keys each response key covers) is for the backoffice, for a header that ran out of room, and
+for response key mode, where a header carries only the response key and `umbraco`.
 
 The `response-` key is a SHA-256 of the request's identity, truncated to 32 hex characters. The
 identity is:
@@ -67,7 +72,8 @@ key. A culture that is no language of the site is not recorded (see below): Umbr
 `Accept-Language` as sent too, and a purge limited to a language would not match it.
 
 The mapping is written in the background (`MappingWriter`), and a response carries its `response-`
-key only once its record is queued:
+key only once its record is queued. In item keys mode, the default, a response carries its other
+keys either way, so the rest of this list matters to response key mode:
 
 - A record that cannot be queued (the queue of 10,000 writes is full, the server is stopping, or the
   package's tables do not exist yet on a first boot) makes the response carry its keys itself instead,
@@ -107,7 +113,7 @@ one later reaches it), or naming more than one item. Content and media types are
 a minute, so one created in the last minute counts as unknown until then. Each of these can vary
 with input without end: recorded, each would be another mapping row, and every content publish would
 purge every one of them, so a purge would grow with every variation ever cached. Such a response
-carries its keys itself instead, as in item keys mode below:
+carries its keys itself instead, without its response key:
 
 ```http
 X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
@@ -138,9 +144,11 @@ for one that limits tags by size, such as Cloudflare in front of Umbraco, which 
 `Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. Such a header is about 15 KB, which
 a proxy in front of Umbraco must allow (nginx needs a `proxy_buffer_size` of 16k or more).
 
-With `CacheTags:KeyMode` set to `ItemKeys` (opt-in, for a CDN in front of Umbraco that purges by tag
-itself), every header lists the item keys as well, up to `MaxItemKeys` (64), then their `type-` keys.
-Items that would push the header past `MaxHeaderKeys` are listed as their `type-` keys too.
+A header lists up to `MaxItemKeys` (64) item keys, then their `type-` keys, and items that would push
+it past `MaxHeaderKeys` are listed as their `type-` keys too. A route change plans its descendants'
+`type-` keys as well as their content keys, so such a header is still reached. With
+`CacheTags:KeyMode` set to `ResponseKey`, a header carries only the response key and `umbraco`, and
+purges reach the response only through the mapping.
 The header name is `CacheTags:HeaderName`.
 
 No keys, and the given `Cache-Control`, on:
@@ -232,13 +240,10 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
   planner expands them when the change is recorded, with
   `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to `CacheTags:MaxDescendants`, and
   plans `umbraco` past that. The mapping stores no ancestor keys.
-- An unpublish (of the item or one of its cultures) also plans the descendants' `type-` keys, read
-  with `IEntityService`: they leave the listings of their types with the item, including pages of a
-  listing that do not show them, which their `content-` keys would not reach. When their types
-  cannot be read, it plans `umbraco`. Umbraco itself lists every descendant of a trashed item and the
-  published descendants of a moved one, and publishes the published descendants of an item published
-  again after an unpublish, so those plan their own `type-` keys. A rename leaves the descendants in
-  the same listings.
+- A route change also plans the descendants' `type-` keys, read with `IEntityService`. A header past
+  `MaxItemKeys` lists its items' types instead of the items, so only those reach it. An unpublish
+  also takes the descendants out of the listings of their types, including pages of a listing that
+  do not show them. When their types cannot be read, it plans `umbraco`.
 - A sort plans no item keys, since the items did not change, but every listing that can show them
   in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
   `search-` key. It waits for the index like any listing.

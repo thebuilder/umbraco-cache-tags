@@ -34,7 +34,7 @@ CacheTags__Targets__nextjs__Secret=<at least 32 characters>
 | `AllowPrivateNetworkTargets` | `false` | Lets targets added in the backoffice connect to private and reserved addresses, such as `localhost`. See [Purge targets](/targets#in-the-backoffice). |
 | `HeaderName` | `X-Umbraco-Cache-Keys` | The response header that carries the keys. `Cache-Tag` for Cloudflare in front of Umbraco. |
 | `KeyPrefix` | none | A prefix for every key, such as `shop-`, for a site that shares a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |
-| `KeyMode` | `ResponseKey` | `ItemKeys` lists the item keys in every header too, for a CDN that purges by tag itself. See [Keys](/keys#item-keys-mode). |
+| `KeyMode` | `ItemKeys` | `ResponseKey` lists only the response key and `umbraco` in a header, and purges reach the response through the package's record. See [Keys](/keys#response-key-mode). |
 | `MaxItemKeys` | `64` | The most item keys a header lists before it lists their `type-` keys instead. |
 | `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 3. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare in front of the Delivery API](/targets#cloudflare-in-front-of-the-delivery-api). |
 | `MaxDescendants` | `500` | The most descendants a rename, move or unpublish purges one by one before it purges everything instead. |
