@@ -45,13 +45,8 @@ public sealed class AckProcessorTests : IDisposable
             return null;
         });
         IServiceProvider services = Fake.Of<IServiceProvider>((_, args) => (Type)args[0]! == typeof(IDeliveryApiOutputCacheManager) ? outputCache : null);
-        ICacheTagStore store = Fake.Of<ICacheTagStore>((method, _) => method.Name == nameof(ICacheTagStore.FindResponseKeysAsync)
-            ? Task.FromResult<IReadOnlyCollection<string>>(["response-page"])
-            : null);
-
         _acks = new AckProcessor(
             _ledger,
-            new PurgeResolver(store),
             new OutputCacheEviction(services),
             new DatabaseAckTransport(_database.Package),
             _identity,
@@ -86,7 +81,7 @@ public sealed class AckProcessorTests : IDisposable
     {
         public IEnumerable<Guid> Of(Guid key) => [];
 
-        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys) => [];
+        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media) => [];
     }
 
     private static IContentType TypeWith(int id, string alias, Guid dataType)
@@ -114,7 +109,7 @@ public sealed class AckProcessorTests : IDisposable
 
     private Change Record(Change change)
     {
-        _ledger.Add(change, new PurgePlan([$"content-{Item:N}"], Everything: false, Cultures: null), "backoffice");
+        _ledger.Add(change, new PurgePlan([$"content-{Item:N}"], Everything: false), "backoffice");
         return change;
     }
 
@@ -138,7 +133,7 @@ public sealed class AckProcessorTests : IDisposable
         _time.UtcNow = Noon.AddMinutes(3);
         await ApplyAsync(PublishOf(Item));
 
-        Assert.Contains("response-page", _evicted);
+        Assert.Contains($"content-{Item:N}", _evicted);
 
         // Too late to count: the purge has gone, so nothing waits for this server's ack.
         Assert.Empty(AcknowledgedBy(change.Id));
@@ -211,7 +206,7 @@ public sealed class AckProcessorTests : IDisposable
         _ledger.Release(change.Id, ChangeStage.Released, [_identity.Name], Noon.AddSeconds(60), []);
         await _acks.ProcessAsync(CancellationToken.None);
 
-        Assert.Contains("response-page", _evicted);
+        Assert.Contains($"content-{Item:N}", _evicted);
         Assert.Empty(AcknowledgedBy(change.Id));
     }
 
@@ -228,7 +223,7 @@ public sealed class AckProcessorTests : IDisposable
         _time.UtcNow = Noon.AddSeconds(71);
         await _acks.ProcessAsync(CancellationToken.None);
 
-        Assert.Contains("response-page", _evicted);
+        Assert.Contains($"content-{Item:N}", _evicted);
         Assert.Equal([_identity.Name], AcknowledgedBy(next.Id));
     }
 
@@ -245,7 +240,7 @@ public sealed class AckProcessorTests : IDisposable
         _time.UtcNow = Noon.AddSeconds(10);
         await ApplyAsync(PublishOf(Item));
 
-        Assert.Single(_evicted, tag => tag == "response-page");
+        Assert.Single(_evicted, tag => tag == $"content-{Item:N}");
     }
 
     [Fact]

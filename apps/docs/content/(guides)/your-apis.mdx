@@ -14,7 +14,7 @@ Put `[CacheTagged]` on a controller or action, and name what each response cover
 ```csharp
 [ApiController]
 [Route("api/dictionary")]
-[CacheTagged(QueryParameters = ["locale"])]
+[CacheTagged]
 public sealed class DictionaryController(ILanguageService languages, ICacheTagsResponse cacheTags) : ControllerBase
 {
     [HttpGet]
@@ -33,16 +33,10 @@ public sealed class DictionaryController(ILanguageService languages, ICacheTagsR
 }
 ```
 
-Like a Delivery API response, the response gets a `response-` key and `umbraco`, and the package records the keys it covers. It finds Delivery API items in the result by itself.
+Like a Delivery API response, the response carries `umbraco` and the keys of what it shows: the keys you name, and the keys of the Delivery API items in its result, which the package finds by itself.
 
 - **Custom keys** start with `x-` and use lowercase letters, digits and hyphens, at most 200 characters. An item's `content-` or `media-` key works too.
-- **`QueryParameters`** lists the parameters that select what a response covers. Only those are part of its key, and there are none by default.
-- **`Recorded = false`** puts the keys in each response's header instead of recording them. Use it for an action whose input varies without end, such as a search.
 - **Only a 200 is tagged.** The package tags a response before its result runs, so it reads the status from the result: return an `ObjectResult` (`Ok(...)`), a `JsonResult`, a `ContentResult`, a status code result, a file, an `EmptyResult`, or a typed result (`TypedResults.Ok(...)`, `Results<...>`) with a status code. Anything else, such as a redirect, a challenge or a result type the package does not know, gets `no-store` and no key.
-
-:::caution
-Every value of a listed query parameter makes a new key and a new recorded response. List only parameters with a known, small set of values, such as a locale.
-:::
 
 ## Record changes
 
@@ -82,7 +76,6 @@ builder.AddNotificationHandler<DictionaryCacheRefresherNotification, DictionaryC
 
 - **`waitFor`** names a signal. The package sends the purge once every server has reported the signal with `Applied(signal)`. Call it wherever a server refreshes its copy of the data, usually in a cache refresher's notification handler. Signals use lowercase letters, digits, dots and hyphens.
 - **Without `waitFor`**, the package sends the purge at once. Use that for data that every server reads straight from the database.
-- **`cultures`** limits the purge to responses in those cultures, and to responses without a culture.
 - **`reason`** is shown with the change in the backoffice.
 
 ## Purge by hand

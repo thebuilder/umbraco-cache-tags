@@ -27,9 +27,6 @@ internal sealed class ResponseCollector(
     private const string ResolvedContentItemsKey = "Umbraco.DeliveryApi.OutputCache.ResolvedContentItems";
     private const string ResolvedMediaItemsKey = "Umbraco.DeliveryApi.OutputCache.ResolvedMediaItems";
 
-    /// <summary>The most keys one response is recorded with.</summary>
-    public const int MaxKeys = 1000;
-
     public IReadOnlySet<string> Collect(object? result, HttpContext http, DeliveryEndpoint endpoint)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -50,48 +47,24 @@ internal sealed class ResponseCollector(
                 endpoint.Media));
         }
 
-        if (keys.Count > MaxKeys)
-        {
-            // A request can ask for many items (take, expand); past this, the items are recorded as
-            // their types, which a change to any of them purges, to bound the mapping per response.
-            var items = keys.Where(CacheKeys.IsItem).ToList();
-            keys.ExceptWith(items);
-            keys.UnionWith(TypeKeys(items));
-        }
-
         return keys;
     }
 
     /// <summary>
     ///     Items asked for by id (<c>items?id=…</c>): a later publish of one the response could not show
-    ///     yet must reach it, so it covers every id asked for. A request for an item that does not exist
-    ///     is a catch-all, like a fetch of one, so random ids cannot make a recorded response each. So is
-    ///     a request for more than one item: every set of a site's public ids would be a key of its own.
+    ///     yet must reach it, so it covers every id asked for.
     /// </summary>
     /// <param name="ids">The <c>id</c> parameters.</param>
     /// <param name="media">Whether the ids are media.</param>
     /// <param name="keys">The keys collected from what the response shows, added to.</param>
     public static void CollectRequestedItems(IEnumerable<string?> ids, bool media, ISet<string> keys)
     {
-        var catchAll = CacheKeys.Search(media ? ListingSelectors.MediaSearch : ListingSelectors.ContentIndex);
-        var requested = new HashSet<Guid>();
         foreach (var value in ids)
         {
-            if (Guid.TryParse(value, out Guid id) is false || requested.Add(id) is false)
+            if (Guid.TryParse(value, out Guid id))
             {
-                continue;
+                keys.Add(media ? CacheKeys.Media(id) : CacheKeys.Content(id));
             }
-
-            // The walk has already added what the response shows; an id not among it does not exist.
-            if (keys.Add(media ? CacheKeys.Media(id) : CacheKeys.Content(id)))
-            {
-                keys.Add(catchAll);
-            }
-        }
-
-        if (requested.Count > 1)
-        {
-            keys.Add(catchAll);
         }
     }
 
@@ -127,8 +100,8 @@ internal sealed class ResponseCollector(
 
     private Guid? ResolveTarget(string target, bool media)
     {
-        // An id that names nothing is like a path that does: a catch-all, so random ids cannot make a
-        // recorded response each.
+        // An id that names nothing is like a path that does: nothing selects the listing yet, so it is
+        // a catch-all, which every publish purges, the one that creates the item included.
         if (Guid.TryParse(target, out Guid key))
         {
             IPublishedContent? byKey = media ? mediaCache.GetById(key) : contentCache.GetById(key);
@@ -141,7 +114,11 @@ internal sealed class ResponseCollector(
         return item?.Key ?? (target is "/" or "" ? Guid.Empty : null);
     }
 
-    /// <summary>The types of the given items, which a publish of any of them purges; <c>umbraco</c> for an item no longer cached.</summary>
+    /// <summary>
+    ///     The types of the given items, which a change to any of them purges. An item that is not in the
+    ///     published cache (not published yet, or gone) keeps its own key: its publish plans that key,
+    ///     and its type is unknown here.
+    /// </summary>
     public SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
     {
         var types = new SortedSet<string>(StringComparer.Ordinal);
@@ -150,7 +127,7 @@ internal sealed class ResponseCollector(
             IPublishedContent? item = key.StartsWith(CacheKeys.MediaPrefix, StringComparison.Ordinal)
                 ? mediaCache.GetById(Guid.Parse(key[CacheKeys.MediaPrefix.Length..]))
                 : contentCache.GetById(Guid.Parse(key[CacheKeys.ContentPrefix.Length..]));
-            types.Add(item is null ? CacheKeys.All : CacheKeys.Type(item.ContentType.Alias));
+            types.Add(item is null ? key : CacheKeys.Type(item.ContentType.Alias));
         }
 
         return types;
@@ -172,7 +149,4 @@ internal sealed record DeliveryEndpoint(bool Media, bool Listing, bool ByIds = f
                 controller.Name.StartsWith("Query", StringComparison.Ordinal),
                 controller.Name.StartsWith("ByIds", StringComparison.Ordinal))
             : null;
-
-    /// <summary>The query parameters this endpoint reads, so the only ones part of its responses' keys.</summary>
-    public IReadOnlySet<string> Parameters => Listing ? ResponseIdentity.ListingParameters : ByIds ? ResponseIdentity.ItemsParameters : ResponseIdentity.NoParameters;
 }

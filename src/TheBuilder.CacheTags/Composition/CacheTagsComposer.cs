@@ -40,14 +40,10 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddScoped<CacheKeyResultFilter>();
         builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
         builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, OutputCacheTags>();
-        builder.Services.Configure<UmbracoPipelineOptions>(options => options.AddFilter(SeenPipeline.Filter()));
 
-        // The mapping.
+        // The package's tables.
         builder.Services.AddSingleton<PackageDatabase>();
-        builder.Services.TryAddSingleton<ICacheTagStore, UmbracoCacheTagStore>();
-        builder.Services.AddSingleton<MappingWriter>();
-        builder.Services.AddHostedService(services => services.GetRequiredService<MappingWriter>());
-        builder.Services.AddRecurringBackgroundJob<MappingPruneJob>();
+        builder.Services.AddRecurringBackgroundJob<LedgerPruneJob>();
 
         // The ledger, on the server that makes each change.
         builder.Services.AddSingleton<IDescendants, NavigationDescendants>();
@@ -85,7 +81,6 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<ServerIdentity>();
         builder.Services.AddSingleton<DeliverySignal>();
         builder.Services.TryAddSingleton<IAckTransport, DatabaseAckTransport>();
-        builder.Services.AddSingleton<PurgeResolver>();
         builder.Services.AddSingleton<OutputCacheEviction>();
         builder.Services.AddSingleton<AckProcessor>();
         builder.Services.AddSingleton<LocalDeliveryIndex>();
@@ -115,8 +110,8 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationAsyncHandler<LanguageCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<PublicAccessCacheRefresherNotification, RefresherHandlers>();
 
-        // The lookup API.
-        builder.Services.AddSingleton<ICacheTagsLookup, CacheTagsLookup>();
+        // The backoffice's Changes view.
+        builder.Services.AddSingleton<ICacheTagsChangeLog, CacheTagsChangeLog>();
         builder.Services.AddSingleton<ICacheTagsOutbox, CacheTagsOutbox>();
         builder.Services.AddSingleton<ICacheTagsTargets, CacheTagsTargets>();
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();

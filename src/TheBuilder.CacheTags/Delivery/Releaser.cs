@@ -13,7 +13,6 @@ namespace TheBuilder.CacheTags.Delivery;
 /// </summary>
 internal sealed class Releaser(
     LedgerStore ledger,
-    PurgeResolver resolver,
     IAckTransport transport,
     ServerIdentity identity,
     PurgeTargets targets,
@@ -58,12 +57,11 @@ internal sealed class Releaser(
 
     private async Task ReleaseAsync(LedgerEntry change, StageBarrier barrier, CacheTagsOptions settings, DateTime now, CancellationToken cancellationToken)
     {
-        IReadOnlyList<string> keys = (await resolver.ResolveAsync(change.Plan, cancellationToken)).Keys(settings.KeyPrefix);
+        IReadOnlyList<string> keys = change.Plan.Purged(settings.KeyPrefix);
         IReadOnlyList<NewPurge> purges = NewPurge.ToTargets(targets.Current().Values, keys, now);
 
-        // Listing responses are in this purge too, so the items they show are fresh at once; their
-        // membership and order follow in the indexing stage. A change waits there even with no
-        // listing response mapped yet: one can be requested and cached before the index has it.
+        // The listing selectors are in this purge too, so the items listings show are fresh at once;
+        // their membership and order follow in the indexing stage.
         ChangeStage next = IndexCheck.WaitsFor(change.Change, change.Plan) ? ChangeStage.Indexing : ChangeStage.Released;
         if (ledger.Release(change.Id, next, barrier.Waiting, now, purges) is false)
         {

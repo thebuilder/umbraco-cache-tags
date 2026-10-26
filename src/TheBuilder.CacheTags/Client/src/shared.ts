@@ -1,8 +1,4 @@
-import { css, html, nothing } from "@umbraco-cms/backoffice/external/lit";
-
-/** Settings > Advanced > Cache tags > Look up, showing a key. */
-export const lookupHref = (key: string) =>
-  `/umbraco/section/settings/workspace/thebuilder-cache-tags-root/view/lookup?key=${encodeURIComponent(key)}`;
+import { css } from "@umbraco-cms/backoffice/external/lit";
 
 /** Where the documentation explains how a change is timed and purged. */
 export const DOCS = "https://cache-tags.thebuilder.dk/timing";
@@ -19,58 +15,6 @@ export const time = (utc: string | null | undefined) =>
 export const errorMessage = (error: unknown, fallback: string) =>
   // fetch rejects with a TypeError when the server cannot be reached, worded differently by each browser.
   error instanceof TypeError ? "Could not reach Umbraco. Is it running?" : error instanceof Error ? error.message : fallback;
-
-const DELIVERY_API = "/umbraco/delivery/api/v2/";
-
-/** A recorded request, for reading: the Delivery API path without its prefix, and the query's parameters decoded. */
-const describeRequest = (path: string, query: string) => {
-  const delivery = path.startsWith(DELIVERY_API);
-  const parameters = query
-    ? query.split("&").map((pair) => {
-        const [name, value = ""] = pair.split("=");
-        const decode = (text: string) => {
-          try {
-            return decodeURIComponent(text);
-          } catch {
-            return text;
-          }
-        };
-        return { name: decode(name ?? ""), value: decode(value) };
-      })
-    : [];
-  return { delivery, path: delivery ? path.slice(DELIVERY_API.length) || "/" : path, parameters };
-};
-
-/** A recorded request: its path on one line, and its parameters as chips that wrap underneath. */
-export const requestTemplate = (path: string, query: string) => {
-  const request = describeRequest(path, query);
-  return html`<span class="request">
-    <span class="mono path">${request.path}</span>
-    ${request.parameters.length > 0
-      ? html`<span class="params">
-          ${request.parameters.map((parameter) => html`<span class="param"><b>${parameter.name}</b>${parameter.value}</span>`)}
-        </span>`
-      : nothing}
-  </span>`;
-};
-
-/** What a key names, from its prefix. */
-export const describeKey = (key: string) => {
-  const bare = key.replace(/^[a-z0-9-]*?(?=(response|content|media|type|children|search|x)-|umbraco$)/, "");
-  const kinds: [string, string][] = [
-    ["response-", "Response"],
-    ["content-", "Document"],
-    ["media-", "Media"],
-    ["type-", "Listings of type"],
-    ["children-", "Children of"],
-    ["search-", "Other listings"],
-    ["x-", "Custom"],
-  ];
-  if (bare === "umbraco") {
-    return "Everything";
-  }
-  return kinds.find(([prefix]) => bare.startsWith(prefix))?.[1] ?? "Key";
-};
 
 export const sharedStyles = css`
   :host {
@@ -104,33 +48,6 @@ export const sharedStyles = css`
     font-family: var(--uui-font-monospace, monospace);
     font-size: 0.85em;
   }
-  .key {
-    border: 0;
-    background: none;
-    padding: 0;
-    color: var(--uui-color-interactive);
-    cursor: pointer;
-    font-family: var(--uui-font-monospace, monospace);
-    font-size: 0.85em;
-    text-align: left;
-  }
-  .key:hover {
-    text-decoration: underline;
-  }
-  .request {
-    display: block;
-  }
-  .request .path {
-    display: block;
-    font-weight: 600;
-    overflow-wrap: anywhere;
-  }
-  .params {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--uui-size-space-1);
-    margin-top: var(--uui-size-space-1);
-  }
   .param {
     display: inline-flex;
     gap: var(--uui-size-space-1);
@@ -141,9 +58,6 @@ export const sharedStyles = css`
     background: var(--uui-color-surface-alt);
     font-family: var(--uui-font-monospace, monospace);
     font-size: 0.85em;
-  }
-  .param b {
-    font-weight: 600;
   }
   dl {
     display: grid;

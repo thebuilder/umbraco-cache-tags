@@ -157,10 +157,10 @@ internal static class LedgerSql
 
     public static void Prune(IDatabase database, DateTime cutoffUtc)
     {
+        // A dead purge stays until someone retries it or sets it aside: a copy it missed is still cached.
         database.Execute(
-            $"DELETE FROM {Constants.Tables.Outbox} WHERE (State = @0 OR State = @1 OR State = @2) AND CreatedUtc < @3",
+            $"DELETE FROM {Constants.Tables.Outbox} WHERE (State = @0 OR State = @1) AND CreatedUtc < @2",
             OutboxStates.Sent,
-            OutboxStates.Dead,
             OutboxStates.Discarded,
             cutoffUtc);
         database.Execute(

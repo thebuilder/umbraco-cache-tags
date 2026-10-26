@@ -11,8 +11,8 @@ const maxWords = 5;
  * TheBuilder.CacheTags tags it, and a publish that could change it purges it once every server's
  * index has the change.
  *
- * Each distinct search is its own cached response, and its own row in the package's mapping. The
- * words are normalised (lowercased, deduplicated, sorted) so the same search is one entry.
+ * Each distinct search is its own cached response. The words are normalised (lowercased,
+ * deduplicated, sorted) so the same search is one entry.
  */
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
   const { q } = await searchParams;

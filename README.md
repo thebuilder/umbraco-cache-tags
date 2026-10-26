@@ -5,7 +5,7 @@
 <h1 align="center">Cache Tags for Umbraco</h1>
 
 <p align="center">
-  Cache Umbraco Delivery API responses at the frontend for months,<br />
+  Cache Umbraco Delivery API responses at the frontend for as long as you like,<br />
   and purge exactly the right ones once every server has applied a change.
 </p>
 
@@ -25,8 +25,8 @@ purge.
   version.
 - **Your cache, your choice.** Tag entries with Next.js `cacheTag`, purge Cloudflare by tag, or
   receive a signed webhook in anything else.
-- **See what is cached.** Under **Settings > Advanced > Cache tags**, follow each change to its
-  purges, look up what a key covers, and purge by hand.
+- **See each change go out.** Under **Settings > Advanced > Cache tags**, follow each change to
+  its purges, and purge by hand.
 
 The package is a preview. It supports Umbraco 17.4 and later, Umbraco 18 included, on .NET 10.
 

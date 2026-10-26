@@ -3,30 +3,6 @@ using Umbraco.Cms.Infrastructure.Persistence.DatabaseAnnotations;
 
 namespace TheBuilder.CacheTags.Storage;
 
-[TableName(Constants.Tables.Responses), PrimaryKey(nameof(ResponseKey), AutoIncrement = false), ExplicitColumns]
-internal sealed class ResponseRow
-{
-    [Column(nameof(ResponseKey)), PrimaryKeyColumn(AutoIncrement = false), Length(100)] public string ResponseKey { get; set; } = string.Empty;
-    [Column(nameof(Path)), Length(1000)] public string Path { get; set; } = string.Empty;
-    [Column(nameof(Query)), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Query { get; set; } = string.Empty;
-    [Column(nameof(Culture)), Length(50)] public string Culture { get; set; } = string.Empty;
-    [Column(nameof(Segment)), Length(100)] public string Segment { get; set; } = string.Empty;
-    [Column(nameof(StartItem)), Length(200)] public string StartItem { get; set; } = string.Empty;
-    [Column(nameof(RenderedUtc))] public DateTime RenderedUtc { get; set; }
-    [Column(nameof(SeenUtc))] public DateTime SeenUtc { get; set; }
-}
-
-[TableName(Constants.Tables.ResponseKeys), PrimaryKey(nameof(Id), AutoIncrement = true), ExplicitColumns]
-internal sealed class ResponseKeyRow
-{
-    [Column(nameof(Id)), PrimaryKeyColumn(AutoIncrement = true)] public long Id { get; set; }
-    [Column(nameof(ResponseKey)), Length(100)] public string ResponseKey { get; set; } = string.Empty;
-    [Column(nameof(CacheKey)), Length(300)] public string CacheKey { get; set; } = string.Empty;
-
-    /// <summary>The last render that included this key.</summary>
-    [Column(nameof(RenderedUtc))] public DateTime RenderedUtc { get; set; }
-}
-
 [TableName(Constants.Tables.Events), PrimaryKey(nameof(Id), AutoIncrement = false), ExplicitColumns]
 internal sealed class EventRow
 {
@@ -100,7 +76,7 @@ internal static class OutboxStates
     public const string Pending = "Pending";
     public const string Sent = "Sent";
 
-    /// <summary>Set aside by a person: not sent, kept for the lookup until it ages out.</summary>
+    /// <summary>Set aside by a person: not sent, kept for the Changes view until it ages out.</summary>
     public const string Discarded = "Discarded";
     public const string Dead = "Dead";
 }

@@ -2,10 +2,10 @@ import { UmbElementMixin } from "@umbraco-cms/backoffice/element-api";
 import { css, customElement, html, LitElement, nothing, repeat, state } from "@umbraco-cms/backoffice/external/lit";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import { UmbTextStyles } from "@umbraco-cms/backoffice/style";
-import { api, ApiError, type ChangeLookup, type Purge } from "./api.js";
+import { api, ApiError, type ChangeEntry, type Purge } from "./api.js";
 import { DOCS, errorMessage, parseUtc, sharedStyles, time } from "./shared.js";
 
-const STAGES: Record<ChangeLookup["status"], { label: string; color: string; hint: string }> = {
+const STAGES: Record<ChangeEntry["status"], { label: string; color: string; hint: string }> = {
   Pending: { label: "Waiting for servers", color: "warning", hint: "Waiting for every server to apply it." },
   Indexing: { label: "Waiting for index", color: "warning", hint: "Purged; listings follow once every server's index has it." },
   Released: { label: "Purged", color: "positive", hint: "Every purge for it is queued or sent." },
@@ -14,7 +14,7 @@ const STAGES: Record<ChangeLookup["status"], { label: string; color: string; hin
 /** How often the view refreshes while a change or purge is still on its way. */
 const REFRESH_DELAY = 2000;
 
-const stageOf = (change: ChangeLookup) =>
+const stageOf = (change: ChangeEntry) =>
   change.status === "Pending" && !change.waitsForServers
     ? { label: "Queued", color: "default", hint: "Released on the next pass; it does not wait for servers." }
     : STAGES[change.status];
@@ -24,7 +24,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 /** Recent changes, what each planned and where its purges are, and the purges that failed. */
 @customElement("thebuilder-cache-tags-changes-view")
 export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
-  @state() private _changes: ChangeLookup[] = [];
+  @state() private _changes: ChangeEntry[] = [];
   @state() private _failed: Purge[] = [];
   @state() private _loading = true;
   @state() private _busy = false;
@@ -136,7 +136,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     `;
   }
 
-  #renderChange(change: ChangeLookup) {
+  #renderChange(change: ChangeEntry) {
     const stage = stageOf(change);
     const what = change.change.reason ?? plural(change.change.items.length, "item");
     const planned = change.plan.everything ? ["umbraco"] : change.plan.keys;
@@ -162,9 +162,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
           <dl>
             <dt>Planned</dt>
             <dd>${planned.map((key) => html`<span class="param">${key}</span>`)}</dd>
-            <dt>Reaches</dt>
-            <dd>${plural(change.responseCount, "recorded response")}, and every response carrying a planned key</dd>
-            ${change.plan.cultures ? html`<dt>Cultures</dt><dd>${change.plan.cultures.join(", ")}</dd>` : nothing}
+            ${change.change.cultures ? html`<dt>Cultures</dt><dd>${change.change.cultures.join(", ")}</dd>` : nothing}
             <dt>Applied by</dt>
             <dd>
               ${change.waitsForServers

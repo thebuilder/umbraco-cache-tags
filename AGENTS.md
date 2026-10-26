@@ -10,10 +10,11 @@ applied a change.
 
 ## Layout
 
-- `src/TheBuilder.CacheTags`: the package. `Collection/` tags Delivery API responses, `Storage/`
-  keeps which keys each response covers, `Ledger/` plans the purge for each change on the server
-  that makes it, `ManagementApi/` is the admin lookup.
-- `tests/TheBuilder.CacheTags.Tests`: unit tests, including the store's SQL against SQLite.
+- `src/TheBuilder.CacheTags`: the package. `Collection/` tags Delivery API responses with the keys
+  of what they show, `Ledger/` plans the purge for each change on the server that makes it,
+  `Delivery/` waits for every server and sends the purges, `Storage/` holds the package's tables,
+  `ManagementApi/` is the admin API behind the backoffice.
+- `tests/TheBuilder.CacheTags.Tests`: unit tests, including the ledger's SQL against SQLite.
 - `docs/design.md`: the key scheme, the header and webhook contract, and how a purge is planned and
   delivered. Keep it true.
 - `apps/docs`: the documentation site.

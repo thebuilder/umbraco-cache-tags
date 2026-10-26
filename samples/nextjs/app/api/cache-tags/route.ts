@@ -11,11 +11,11 @@ import { revalidateTag } from "next/cache";
  *     "version": 1,
  *     "id": "<purge id>",
  *     "changeId": "<change id>",
- *     "expire": ["response-<hash>", "content-<guid>", ...],
+ *     "expire": ["content-<guid>", "media-<guid>", "x-<name>", ...],
  *     "stale": ["type-article", "children-<guid>", "umbraco", ...]
  *   }
  *
- * Keys in "expire" name one response or one item: the next request waits for fresh content. Keys
+ * Keys in "expire" name one item or a site's own output: the next request waits for fresh content. Keys
  * in "stale" are listings or everything: they touch many pages, so they are served stale while
  * they refresh. A body over 1 MB, or of a version this receiver does not know, is refused.
  *

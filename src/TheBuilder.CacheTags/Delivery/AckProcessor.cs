@@ -14,7 +14,6 @@ namespace TheBuilder.CacheTags.Delivery;
 /// </summary>
 internal sealed class AckProcessor(
     LedgerStore ledger,
-    PurgeResolver resolver,
     OutputCacheEviction eviction,
     IAckTransport transport,
     ServerIdentity identity,
@@ -237,9 +236,7 @@ internal sealed class AckProcessor(
             foreach (var (change, _) in late)
             {
                 // Listings too: this server is not waited for in the indexing stage, so nothing else evicts them here.
-                ResolvedPurge purge = await resolver.ResolveAsync(change.Plan, cancellationToken);
-                await eviction.EvictAsync(purge);
-                await eviction.EvictAsync(purge.ListingOutputCacheTags);
+                await eviction.EvictAsync(change.Plan);
             }
         }
 
@@ -260,7 +257,7 @@ internal sealed class AckProcessor(
         {
             foreach (LedgerEntry change in completed)
             {
-                await eviction.EvictAsync(await resolver.ResolveAsync(change.Plan, cancellationToken));
+                await eviction.EvictAsync(change.Plan);
             }
         }
 

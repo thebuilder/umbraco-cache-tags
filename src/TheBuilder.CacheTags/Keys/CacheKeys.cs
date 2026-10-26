@@ -5,7 +5,6 @@ namespace TheBuilder.CacheTags.Keys;
 /// </summary>
 internal static class CacheKeys
 {
-    public const string ResponsePrefix = "response-";
     public const string ContentPrefix = "content-";
     public const string MediaPrefix = "media-";
     public const string TypePrefix = "type-";
@@ -16,7 +15,7 @@ internal static class CacheKeys
     /// <summary>The prefix of keys a site names for its own output (<c>x-dictionary-da-dk</c>).</summary>
     public const string CustomPrefix = "x-";
 
-    /// <summary>The longest custom key, so it fits the mapping with a key prefix.</summary>
+    /// <summary>The longest custom key, so it fits a frontend's tag limit (Next.js keeps 256 characters) with a key prefix.</summary>
     public const int MaxCustomKeyLength = 200;
 
     public static string Content(Guid key) => ContentPrefix + key.ToString("D");
@@ -40,13 +39,13 @@ internal static class CacheKeys
             || key.StartsWith(SearchPrefix, StringComparison.Ordinal);
 
     /// <summary>
-    ///     Whether a (prefixed) key names one response, item or piece of custom output, which a purge
-    ///     expires at once, rather than a listing selector or everything, which a purge marks stale.
+    ///     Whether a (prefixed) key names one item or piece of custom output, which a purge expires at
+    ///     once, rather than a listing selector or everything, which a purge marks stale.
     /// </summary>
     public static bool Expires(string key, string prefix)
     {
         var bare = key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
-        return bare.StartsWith(ResponsePrefix, StringComparison.Ordinal) || IsItem(bare) || IsCustom(bare);
+        return IsItem(bare) || IsCustom(bare);
     }
 
     /// <summary>Whether a key is one a site named for its own output (<c>x-</c>).</summary>
@@ -76,9 +75,6 @@ internal static class CacheKeys
             : null;
         return prefix is not null && Guid.TryParseExact(key[prefix.Length..], "D", out Guid id) && key == prefix + id.ToString("D");
     }
-
-    /// <summary>Whether a key is the catch-all selector of an index or of media listings (<c>search-</c>).</summary>
-    public static bool IsSearch(string key) => key.StartsWith(SearchPrefix, StringComparison.Ordinal);
 
     /// <summary>Applies the configured prefix to a key, for the header and the purge payload.</summary>
     public static string WithPrefix(string prefix, string key) => prefix.Length == 0 ? key : prefix + key;

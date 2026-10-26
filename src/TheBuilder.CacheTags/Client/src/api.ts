@@ -12,43 +12,6 @@ export const configureApi = (next: ApiConfiguration): void => {
   configuration = next;
 };
 
-export interface NamedKey {
-  key: string;
-  name: string | null;
-}
-
-export interface ResponseSummary {
-  key: string;
-  path: string;
-  query: string;
-  culture: string;
-  seenUtc: string;
-}
-
-export interface KeyLookup {
-  key: string;
-  kind: string;
-  name: string | null;
-  response: {
-    path: string;
-    query: string;
-    culture: string;
-    segment: string;
-    startItem: string;
-    renderedUtc: string;
-    seenUtc: string;
-    keys: NamedKey[];
-  } | null;
-  responseCount: number;
-  responses: ResponseSummary[];
-}
-
-export interface SearchResult {
-  items: { key: string; name: string; kind: "content" | "media" }[];
-  keys: NamedKey[];
-  responses: ResponseSummary[];
-}
-
 /** A value typed in, or the name of the secret under CacheTags:Secrets that holds it. Exactly one is set. */
 export interface TargetValue {
   value?: string | null;
@@ -98,7 +61,7 @@ export interface Purge {
   lastError: string | null;
 }
 
-export interface ChangeLookup {
+export interface ChangeEntry {
   id: string;
   createdUtc: string;
   kind: string;
@@ -110,10 +73,8 @@ export interface ChangeLookup {
   acknowledgedBy: string[];
   notAcknowledgedBy: string[];
   indexedBy: string[];
-  change: { reason: string | null; items: { key: string; typeAlias: string }[]; keys: string[] | null; waitFor: string | null };
-  plan: { keys: string[]; everything: boolean; cultures: string[] | null };
-  /** How many recorded responses the plan reaches now. */
-  responseCount: number;
+  change: { reason: string | null; items: { key: string; typeAlias: string }[]; cultures: string[] | null; keys: string[] | null; waitFor: string | null };
+  plan: { keys: string[]; everything: boolean };
   purges: Purge[];
 }
 
@@ -147,20 +108,7 @@ const request = async <T>(method: "GET" | "POST" | "PUT" | "DELETE", path: strin
 };
 
 export const api = {
-  /** What a key stands for: a response-key's request and keys, or the responses another key reaches. Null when nothing has it. */
-  lookup: async (key: string): Promise<KeyLookup | null> => {
-    try {
-      return await request<KeyLookup>("GET", `lookup?key=${encodeURIComponent(key)}`);
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        return null;
-      }
-      throw error;
-    }
-  },
-  /** Documents and media by name, and recorded keys and responses whose key, path or query contain the text. */
-  search: (text: string) => request<SearchResult>("GET", `search?q=${encodeURIComponent(text)}`),
-  changes: (take = 20) => request<ChangeLookup[]>("GET", `changes?take=${take}`),
+  changes: (take = 20) => request<ChangeEntry[]>("GET", `changes?take=${take}`),
   purges: (state: PurgeState, take = 50) => request<Purge[]>("GET", `purges?state=${state}&take=${take}`),
   purge: (keys: string[]) => request<{ changeId: string }>("POST", "purge", keys),
   retry: (id: string) => request<null>("POST", `purges/${id}/retry`),

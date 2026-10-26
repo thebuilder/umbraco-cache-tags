@@ -133,11 +133,8 @@ Both cases leave stale content in the cache with nothing left to purge it. Cache
 ## What Cache Tags does
 
 <Steps>
-  <Step title="Each response names what it covers">
-    The Delivery API sends a key in the `X-Umbraco-Cache-Keys` header, and your frontend tags its cache entry with it. In Next.js that is one `cacheTag` call in your fetch helper.
-  </Step>
-  <Step title="The package records what each response showed">
-    That includes the items, the items they pick, and the listings, filters and searches the response answered.
+  <Step title="Each response names what it shows">
+    The Delivery API sends the keys of the items a response shows, the items they pick, and the listings that select it, in the `X-Umbraco-Cache-Keys` header. Your frontend tags its cache entry with them. In Next.js that is one `cacheTag` call in your fetch helper.
   </Step>
   <Step title="A change is planned as keys">
     A publish, move, sort, unpublish or type change becomes the keys of every response it touches, and only those.

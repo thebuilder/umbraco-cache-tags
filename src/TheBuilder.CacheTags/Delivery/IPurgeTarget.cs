@@ -27,7 +27,7 @@ public sealed class PurgeRequest
     /// <summary>The configured target's name.</summary>
     public required string TargetName { get; init; }
 
-    /// <summary>Keys whose cached entries must be refetched before they are served again (<c>response-</c>, <c>content-</c>, <c>media-</c>).</summary>
+    /// <summary>Keys whose cached entries must be refetched before they are served again (<c>content-</c>, <c>media-</c>, <c>x-</c>).</summary>
     public required IReadOnlyList<string> Expire { get; init; }
 
     /// <summary>

@@ -94,7 +94,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   "version": 1,
   "id": "<purge id>",
   "changeId": "<change id>",
-  "expire": ["response-3f9a...", "content-e000..."],
+  "expire": ["content-e000...", "x-dictionary-da-dk"],
   "stale": ["type-article", "children-e000..."]
 }
 ```
@@ -120,7 +120,7 @@ The change the purge is for. One change can send several purges.
 </ParamField>
 
 <ParamField body="expire" type="string[]">
-Keys that name one response or one item: `response-`, `content-`, `media-` and `x-` keys. Purge them now.
+Keys that name one item or a site's own output: `content-`, `media-` and `x-` keys. Purge them now.
 </ParamField>
 
 <ParamField body="stale" type="string[]">
@@ -147,11 +147,11 @@ Cloudflare has no "serve stale" purge, so the package purges the `stale` keys at
 
 ### Cloudflare in front of your frontend
 
-This is the setup to prefer, with the Delivery API called from the frontend's server only. The frontend copies each response's keys into its own `Cache-Tag` header. Add Cloudflare as a target alongside your frontend's webhook, since both caches hold the page. Keep its edge TTL within `MappingRetention`.
+This is the setup to prefer, with the Delivery API called from the frontend's server only. The frontend copies each response's keys into its own `Cache-Tag` header. Add Cloudflare as a target alongside your frontend's webhook, since both caches hold the page.
 
 ### Cloudflare in front of the Delivery API
 
-This works for a public Delivery API only, since Cloudflare would serve a response fetched with an API key to anyone, and browsers can still call the API directly. Set `CacheTags:HeaderName` to `Cache-Tag`, and raise `CacheTags:MaxHeaderKeys` to about 300: Cloudflare keeps 16 KB of tags per response. A proxy between Cloudflare and Umbraco must then allow response headers of about 15 KB, such as nginx with a `proxy_buffer_size` of 16k. Keep the edge TTL within `MappingRetention`.
+This works for a public Delivery API only, since Cloudflare would serve a response fetched with an API key to anyone, and browsers can still call the API directly. Set `CacheTags:HeaderName` to `Cache-Tag`, and raise `CacheTags:MaxHeaderKeys` to about 300: Cloudflare keeps 16 KB of tags per response. A proxy between Cloudflare and Umbraco must then allow response headers of about 15 KB, such as nginx with a `proxy_buffer_size` of 16k.
 
 ## Your own target
 
