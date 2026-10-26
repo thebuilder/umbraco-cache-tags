@@ -37,7 +37,6 @@ internal sealed record TargetView(
     bool Enabled,
     bool FromConfiguration,
     string Url,
-    int MaxKeysPerRequest,
     TargetValue? Secret,
     IReadOnlyList<NamedValue> Headers,
     IReadOnlyList<NamedValue> Settings,
@@ -70,14 +69,13 @@ internal sealed class CacheTagsTargets(
 
     private static TargetView View(ResolvedTarget target)
         => target.Definition is { } stored
-            ? new TargetView(stored.Name, stored.Type, stored.Enabled, FromConfiguration: false, stored.Url, stored.MaxKeysPerRequest, stored.Secret, stored.Headers, stored.Settings, target.Problem)
+            ? new TargetView(stored.Name, stored.Type, stored.Enabled, FromConfiguration: false, stored.Url, stored.Secret, stored.Headers, stored.Settings, target.Problem)
             : new TargetView(
                 target.Name,
                 target.Options.Type,
                 target.Options.Enabled,
                 FromConfiguration: true,
                 WithoutSecrets(target.Options.Url),
-                target.Options.MaxKeysPerRequest,
                 Secret: null,
                 target.Options.Headers.Keys.Select(name => new NamedValue(name)).ToList(),
                 target.Options.Settings.Keys.Select(name => new NamedValue(name)).ToList(),

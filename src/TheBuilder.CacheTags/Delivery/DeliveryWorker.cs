@@ -28,6 +28,9 @@ internal sealed class DeliveryWorker(
     /// <summary>How often an idle server looks for work it was not woken for (another server's purges, say).</summary>
     private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(10);
 
+    // How often a server looks again while it has changes to release or purges to send.
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (stoppingToken.IsCancellationRequested is false)
@@ -38,7 +41,7 @@ internal sealed class DeliveryWorker(
                 CacheTagsOptions settings = options.CurrentValue;
                 if (settings.Enabled && database.IsInstalled() && await RunOnceAsync(stoppingToken))
                 {
-                    wait = settings.PollInterval;
+                    wait = PollInterval;
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException || stoppingToken.IsCancellationRequested is false)

@@ -13,7 +13,7 @@ public sealed class BackgroundLoopTests
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
     private static OptionsValidationException Invalid()
-        => new(Options.DefaultName, typeof(CacheTagsOptions), ["CacheTags:MaxAttempts, PollInterval and AckTimeout must be above zero."]);
+        => new(Options.DefaultName, typeof(CacheTagsOptions), ["CacheTags:MaxHeaderKeys must be above 1."]);
 
     private static async Task Until(Func<bool> condition)
     {
@@ -114,32 +114,32 @@ public sealed class BackgroundLoopTests
     [InlineData("ten")]
     public void Settings_that_become_invalid_on_a_reload_keep_their_last_valid_values(string invalid)
     {
-        (IConfigurationRoot configuration, IOptionsMonitor<CacheTagsOptions> options) = Settings(("CacheTags:MaxAttempts", "7"));
-        Assert.Equal(7, options.CurrentValue.MaxAttempts);
+        (IConfigurationRoot configuration, IOptionsMonitor<CacheTagsOptions> options) = Settings(("CacheTags:MaxHeaderKeys", "7"));
+        Assert.Equal(7, options.CurrentValue.MaxHeaderKeys);
 
-        configuration["CacheTags:MaxAttempts"] = invalid;
+        configuration["CacheTags:MaxHeaderKeys"] = invalid;
         configuration.Reload();
-        Assert.Equal(7, options.CurrentValue.MaxAttempts);
+        Assert.Equal(7, options.CurrentValue.MaxHeaderKeys);
 
-        configuration["CacheTags:MaxAttempts"] = "3";
+        configuration["CacheTags:MaxHeaderKeys"] = "3";
         configuration.Reload();
-        Assert.Equal(3, options.CurrentValue.MaxAttempts);
+        Assert.Equal(3, options.CurrentValue.MaxHeaderKeys);
     }
 
     [Fact]
-    public void A_header_limit_must_leave_room_past_a_response_key_and_umbraco()
+    public void A_header_limit_must_leave_room_past_umbraco()
     {
-        (_, IOptionsMonitor<CacheTagsOptions> tooSmall) = Settings(("CacheTags:MaxHeaderKeys", "2"));
-        (_, IOptionsMonitor<CacheTagsOptions> smallest) = Settings(("CacheTags:MaxHeaderKeys", "3"));
+        (_, IOptionsMonitor<CacheTagsOptions> tooSmall) = Settings(("CacheTags:MaxHeaderKeys", "1"));
+        (_, IOptionsMonitor<CacheTagsOptions> smallest) = Settings(("CacheTags:MaxHeaderKeys", "2"));
 
         Assert.Throws<OptionsValidationException>(() => tooSmall.CurrentValue);
-        Assert.Equal(3, smallest.CurrentValue.MaxHeaderKeys);
+        Assert.Equal(2, smallest.CurrentValue.MaxHeaderKeys);
     }
 
     [Fact]
     public void Settings_that_are_invalid_from_the_start_still_fail()
     {
-        (_, IOptionsMonitor<CacheTagsOptions> options) = Settings(("CacheTags:MaxAttempts", "0"));
+        (_, IOptionsMonitor<CacheTagsOptions> options) = Settings(("CacheTags:MaxHeaderKeys", "0"));
 
         Assert.Throws<OptionsValidationException>(() => options.CurrentValue);
     }

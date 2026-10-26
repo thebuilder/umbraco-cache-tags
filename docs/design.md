@@ -73,8 +73,7 @@ it.
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
 characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128) keys, most needed
-first: `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past `MaxItemKeys`
-(64), or items that would push the header past the limit, are listed as their `type-` keys instead.
+first: `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past 64, or items that would push the header past the limit, are listed as their `type-` keys instead.
 Every change to an item plans its `type-` key, and a route change plans its descendants' `type-` keys
 as well as their content keys, so such a header is still reached, only more often. A response with
 more selector, `x-` or `type-` keys than the limit loses the last of those. Umbraco's output cache
@@ -119,7 +118,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   at once. `stale` holds `type-`, `children-`, `search-` and `umbraco`:
   listings, types or everything, served stale while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
-  A change sends several purges: one per `MaxKeysPerRequest` keys, and its listing purge.
+  A change sends several purges: one per 500 keys, and its listing purge.
 - A receiver that does not know `version` must not purge, and answers with an error.
 - HMAC-SHA256 with the secret's UTF-8 bytes over `<METHOD>\n<path>\n<timestamp>\n<raw body>`. A
   5-minute window; two secrets accepted for rotation; duplicate ids ignored.
@@ -173,10 +172,10 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 
 - A route change (rename, move, unpublish) also reaches the descendants, whose routes follow. The
   planner expands them when the change is recorded, with
-  `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to `CacheTags:MaxDescendants`, and
+  `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to 500, and
   plans `umbraco` past that. A response carries no ancestor keys.
 - A route change also plans the descendants' `type-` keys, read with `IEntityService`. A header past
-  `MaxItemKeys` lists its items' types instead of the items, so only those reach it. An unpublish
+  64 items lists its items' types instead of the items, so only those reach it. An unpublish
   also takes the descendants out of the listings of their types, including pages of a listing that
   do not show them. When their types cannot be read, it plans `umbraco`.
 - A custom change, or a purge by hand, that names an item's `content-` or `media-` key also plans
@@ -222,8 +221,8 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    server more than 2 seconds behind is not acknowledged in time: its changes wait for the ack
    timeout, and it evicts them once they are released (step 3).
 3. **Release.** Any server releases a change once every active server that was running when it was
-   made has acknowledged it, or after `CacheTags:AckTimeout` (60 seconds), logging which servers did
-   not. It queues one purge of the planned keys per target (split at `MaxKeysPerRequest`). The
+   made has acknowledged it, or after 60 seconds, logging which servers did
+   not. It queues one purge of the planned keys per target (at most 500 keys per request). The
    listing keys are in it too, deliberately: the items listings show come from the published cache,
    so they are fresh at once, even though their membership and order are not yet. A server that a change was released without evicts the change's responses and listings
    from its own output cache once it has seen a refresh of the change, whether before the release
@@ -240,7 +239,7 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    until they match (or no document is left, for a trashed or deleted item; or, for a renamed
    content type, until no document has the old alias), then evicts the
    change's listings from its output cache and records the change as indexed. Once every active
-   server that acknowledged the change has, or after `CacheTags:IndexTimeout` (5 minutes), one server
+   server that acknowledged the change has, or after 5 minutes, one server
    queues the listing purge, which sends the plan's listing keys again. Media listings walk the media cache, and other type changes
    and site-wide changes purge as a whole, so those do not wait.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
@@ -248,9 +247,8 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    sends before it do not leave it expired, and a purge is claimed only while it is due, so a server
    working from an older list does not resend one another server just failed. A failure is retried
    after 2, 4, 8 ... seconds (at most 10 minutes), counted in the database, and kept as dead after
-   `CacheTags:MaxAttempts` (10). A dead purge stays until someone retries it or sets it aside, since
-   a copy it missed is still cached. Released changes and sent or set-aside purges are pruned after
-   `CacheTags:LedgerRetention` (7 days).
+   10 attempts. A dead purge stays until someone retries it or sets it aside, since a copy it missed
+   is still cached. Released changes and sent or set-aside purges are pruned after 7 days.
 
 The delivery worker and the heartbeat log an error and carry on, so neither stops the site. Settings
 that fail validation at start stop the site; settings that become invalid on a reload of

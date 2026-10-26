@@ -60,7 +60,6 @@ internal static class TargetResolver
             Enabled = target.Enabled,
             Url = target.Url,
             Secret = target.Secret is { } secret ? Read("The signing secret", secret.Value, secret.Setting) : string.Empty,
-            MaxKeysPerRequest = target.MaxKeysPerRequest,
             PublicNetworkOnly = allowPrivateNetwork is false,
         };
         foreach (NamedValue header in target.Headers)

@@ -34,7 +34,7 @@ internal sealed class ChangeRecorder(
             return;
         }
 
-        PurgePlan plan = planner.Plan(change, settings.MaxDescendants);
+        PurgePlan plan = planner.Plan(change, PurgePlanner.MaxDescendants);
 
         if (database.IsInstalled() is false)
         {

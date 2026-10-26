@@ -5,8 +5,6 @@ TheBuilder.CacheTags.Composition.CacheTagsComposer
 TheBuilder.CacheTags.Composition.CacheTagsComposer.CacheTagsComposer() -> void
 TheBuilder.CacheTags.Composition.CacheTagsComposer.Compose(Umbraco.Cms.Core.DependencyInjection.IUmbracoBuilder! builder) -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.AckTimeout.get -> System.TimeSpan
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.AckTimeout.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.AllowPrivateNetworkTargets.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.AllowPrivateNetworkTargets.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.CacheTagsOptions() -> void
@@ -14,24 +12,10 @@ TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.HeaderName.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.HeaderName.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.IndexTimeout.get -> System.TimeSpan
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.IndexTimeout.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyPrefix.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyPrefix.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.LedgerRetention.get -> System.TimeSpan
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.LedgerRetention.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxAttempts.get -> int
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxAttempts.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxDescendants.get -> int
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxDescendants.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxHeaderKeys.get -> int
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxHeaderKeys.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxItemKeys.get -> int
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxItemKeys.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.PollInterval.get -> System.TimeSpan
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.PollInterval.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.ServerTimeout.get -> System.TimeSpan
-TheBuilder.CacheTags.Configuration.CacheTagsOptions.ServerTimeout.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.Targets.get -> System.Collections.Generic.Dictionary<string!, TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions!>!
 TheBuilder.CacheTags.Configuration.CacheTagsOptions.Targets.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions
@@ -40,8 +24,6 @@ TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.get -> System.Collections.Generic.Dictionary<string!, string!>!
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.set -> void
-TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.MaxKeysPerRequest.get -> int
-TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.MaxKeysPerRequest.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Settings.get -> System.Collections.Generic.Dictionary<string!, string!>!

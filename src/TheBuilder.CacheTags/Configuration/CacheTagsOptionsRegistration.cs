@@ -21,15 +21,9 @@ internal static class CacheTagsOptionsRegistration
             .Bind(configuration.GetSection(CacheTagsOptions.SectionName))
             .Validate(options => options.HeaderName.Length > 0 && options.HeaderName.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'), "CacheTags:HeaderName must be a header name of letters, digits and hyphens.")
             .Validate(options => options.KeyPrefix.Length == 0 || (options.KeyPrefix.EndsWith('-') && options.KeyPrefix.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-')), "CacheTags:KeyPrefix may contain only lowercase letters, digits and hyphens, and must end in a hyphen.")
-            .Validate(options => options.MaxItemKeys > 0, "CacheTags:MaxItemKeys must be above 0.")
-            .Validate(options => options.MaxHeaderKeys > 2, "CacheTags:MaxHeaderKeys must be above 2.")
-            .Validate(options => options.MaxDescendants >= 0, "CacheTags:MaxDescendants must be 0 or more.")
-            .Validate(options => options.LedgerRetention > TimeSpan.Zero, "CacheTags:LedgerRetention must be above zero.")
-            .Validate(options => options.IndexTimeout > TimeSpan.Zero, "CacheTags:IndexTimeout must be above zero.")
-            .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
+            .Validate(options => options.MaxHeaderKeys > 1, "CacheTags:MaxHeaderKeys must be above 1.")
             .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)
             .Validate(options => options.Targets.Values.All(CloudflareTarget.IsValid), CloudflareTarget.ValidationMessage)
-            .Validate(options => options.AckTimeout > TimeSpan.Zero && options.ServerTimeout > Heartbeat.Interval && options.PollInterval > TimeSpan.Zero && options.MaxAttempts > 0, "CacheTags:AckTimeout, PollInterval and MaxAttempts must be above zero, and ServerTimeout above 30 seconds.")
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<CacheTagsOptions>, ConfiguredTargetHeaders>();
         services.AddSingleton<IOptionsMonitor<CacheTagsOptions>, LastValidOptions<CacheTagsOptions>>();

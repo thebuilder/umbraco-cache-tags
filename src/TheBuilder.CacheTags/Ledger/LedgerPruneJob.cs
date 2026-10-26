@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core.Sync;
@@ -7,14 +5,16 @@ using Umbraco.Cms.Infrastructure.BackgroundJobs;
 
 namespace TheBuilder.CacheTags.Ledger;
 
-/// <summary>Removes released changes and sent purges older than <see cref="CacheTagsOptions.LedgerRetention" />, once a day, on one server.</summary>
+/// <summary>Removes released changes and sent purges older than <see cref="Retention" />, once a day, on one server.</summary>
 internal sealed class LedgerPruneJob(
     IAckTransport transport,
     LedgerStore ledger,
     PackageDatabase database,
-    IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time) : IRecurringBackgroundJob
 {
+    /// <summary>How long released changes and sent purges are kept for the backoffice.</summary>
+    public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
+
     public TimeSpan Period => TimeSpan.FromDays(1);
 
     public TimeSpan Delay => TimeSpan.FromMinutes(5);
@@ -30,7 +30,7 @@ internal sealed class LedgerPruneJob(
             return;
         }
 
-        DateTime cutoff = time.GetUtcNow().UtcDateTime - options.CurrentValue.LedgerRetention;
+        DateTime cutoff = time.GetUtcNow().UtcDateTime - Retention;
         await transport.PruneAsync(cutoff);
         ledger.Prune(cutoff);
     }

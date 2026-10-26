@@ -22,8 +22,6 @@ internal sealed record TargetDefinition
     /// <summary>For a webhook: the signing secret.</summary>
     public TargetValue? Secret { get; init; }
 
-    public int MaxKeysPerRequest { get; init; } = 500;
-
     /// <summary>For a webhook: request headers sent with every purge.</summary>
     public IReadOnlyList<NamedValue> Headers { get; init; } = [];
 

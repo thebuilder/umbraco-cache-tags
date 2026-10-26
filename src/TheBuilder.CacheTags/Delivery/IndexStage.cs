@@ -24,6 +24,9 @@ internal sealed class IndexStage(
     TimeProvider time,
     ILogger<IndexStage> logger)
 {
+    /// <summary>How long a change's listing purge waits for every server's index before it is sent anyway.</summary>
+    public static readonly TimeSpan IndexTimeout = TimeSpan.FromMinutes(5);
+
     /// <summary>Records what this server's index has, and releases the listings that are ready. Returns how many still wait.</summary>
     public async Task<int> ProcessAsync(CancellationToken cancellationToken)
     {
@@ -48,7 +51,7 @@ internal sealed class IndexStage(
                 indexedBy.Add(identity.Name);
             }
 
-            StageBarrier barrier = StageBarrier.ForIndex(change.ReleasedUtc ?? change.CreatedUtc, now, servers, acks.AcknowledgedBy(change.Id), indexedBy, settings.IndexTimeout, settings.ServerTimeout);
+            StageBarrier barrier = StageBarrier.ForIndex(change.ReleasedUtc ?? change.CreatedUtc, now, servers, acks.AcknowledgedBy(change.Id), indexedBy, IndexTimeout, Heartbeat.ServerTimeout);
             if (barrier.Open is false)
             {
                 waiting++;
@@ -66,7 +69,7 @@ internal sealed class IndexStage(
                 logger.LogWarning(
                     "Cache tags change {ChangeId}'s listings were purged after {Timeout} without the Delivery API index of {Servers}. Their listings may still be old.",
                     change.Id,
-                    settings.IndexTimeout,
+                    IndexTimeout,
                     string.Join(", ", barrier.Waiting));
             }
 

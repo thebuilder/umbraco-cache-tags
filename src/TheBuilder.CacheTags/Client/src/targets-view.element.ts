@@ -14,7 +14,6 @@ const newTarget = (): TargetDraft => ({
   enabled: true,
   url: "",
   secret: { value: "" },
-  maxKeysPerRequest: 500,
   headers: [],
   settings: [],
 });
@@ -88,7 +87,6 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
           enabled: target.enabled,
           url: target.url,
           secret: target.secret ?? { value: "" },
-          maxKeysPerRequest: target.maxKeysPerRequest,
           headers: target.headers.map((header) => ({ ...header })),
           settings: target.settings.map((setting) => ({ ...setting })),
         }
@@ -274,21 +272,6 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
             <uui-toggle id="enabled" label="Send purges to this target" .checked=${draft.enabled} @change=${(event: Event) => this.#patch({ enabled: (event.target as HTMLInputElement).checked })}></uui-toggle>
           </uui-form-layout-item>
           ${draft.type === "webhook" ? this.#renderWebhook(draft) : draft.type === "cloudflare" ? this.#renderCloudflare(draft) : this.#renderSettings(draft)}
-          <details>
-            <summary>Advanced</summary>
-            <uui-form-layout-item>
-              <uui-label slot="label" for="keys">Keys per request</uui-label>
-              <span slot="description">A purge with more keys is split over several requests.</span>
-              <uui-input
-                id="keys"
-                label="Keys per request"
-                type="number"
-                min="1"
-                max="10000"
-                .value=${String(draft.maxKeysPerRequest)}
-                @input=${(event: Event) => this.#patch({ maxKeysPerRequest: Number((event.target as HTMLInputElement).value) })}></uui-input>
-            </uui-form-layout-item>
-          </details>
           ${this._formError ? html`<p class="error">${this._formError}</p>` : nothing}
           <div class="row buttons">
             <uui-button look="primary" label="Save" @click=${() => this.#save()}></uui-button>
@@ -478,13 +461,6 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
         gap: var(--uui-size-space-3);
         align-items: start;
         margin-bottom: var(--uui-size-space-3);
-      }
-      details {
-        margin: var(--uui-size-space-5) 0;
-      }
-      summary {
-        cursor: pointer;
-        color: var(--uui-color-text-alt);
       }
       .buttons {
         margin-top: var(--uui-size-space-5);

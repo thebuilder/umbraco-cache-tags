@@ -20,9 +20,6 @@ public sealed class CacheTagsOptions
     /// </summary>
     public string KeyPrefix { get; set; } = string.Empty;
 
-    /// <summary>The most item keys one response lists before it lists their content types instead. Defaults to 64.</summary>
-    public int MaxItemKeys { get; set; } = 64;
-
     /// <summary>
     ///     The most keys one response header lists, most needed first. Defaults to 128, the most tags
     ///     Next.js keeps per cache entry. Raise it for a target that limits tags by size instead, such as
@@ -31,42 +28,10 @@ public sealed class CacheTagsOptions
     public int MaxHeaderKeys { get; set; } = 128;
 
     /// <summary>
-    ///     The most descendants a route change (rename, move, unpublish) purges one by one before it
-    ///     purges every response instead. Defaults to 500.
-    /// </summary>
-    public int MaxDescendants { get; set; } = 500;
-
-    /// <summary>
     ///     Where purges are sent once every server has applied a change, by name
     ///     (<c>CacheTags:Targets:nextjs:Url</c>). A change is still planned and recorded without any.
     /// </summary>
     public Dictionary<string, CacheTagsTargetOptions> Targets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    ///     How long a change waits for every active server to acknowledge it before it is sent anyway.
-    ///     Defaults to 60 seconds.
-    /// </summary>
-    public TimeSpan AckTimeout { get; set; } = TimeSpan.FromSeconds(60);
-
-    /// <summary>
-    ///     How long since its last heartbeat a server still counts as active. Defaults to 2 minutes;
-    ///     servers send one every 30 seconds.
-    /// </summary>
-    public TimeSpan ServerTimeout { get; set; } = TimeSpan.FromMinutes(2);
-
-    /// <summary>How often each server looks for changes to release and purges to send while there are some. Defaults to 1 second.</summary>
-    public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
-
-    /// <summary>How many times a purge is tried before it is given up and kept for inspection. Defaults to 10.</summary>
-    public int MaxAttempts { get; set; } = 10;
-
-    /// <summary>
-    ///     Listings come from each server's Delivery API index, which Umbraco updates in the background
-    ///     after a change, so a change's listings are purged a second time once every server's index has
-    ///     it. This is the longest that second purge waits for a server. Defaults to 5 minutes: the
-    ///     index usually takes a second or two, and can take over a minute right after a restart.
-    /// </summary>
-    public TimeSpan IndexTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
     ///     Whether targets added in the backoffice may connect to private and reserved network
@@ -75,9 +40,6 @@ public sealed class CacheTagsOptions
     ///     in configuration are not limited.
     /// </summary>
     public bool AllowPrivateNetworkTargets { get; set; }
-
-    /// <summary>How long released changes and sent purges are kept for the lookup API. Defaults to 7 days.</summary>
-    public TimeSpan LedgerRetention { get; set; } = TimeSpan.FromDays(7);
 }
 
 /// <summary>
@@ -98,9 +60,6 @@ public sealed class CacheTagsTargetOptions
 
     /// <summary>For a webhook: the secret it is signed with (HMAC-SHA256). At least 32 characters.</summary>
     public string Secret { get; set; } = string.Empty;
-
-    /// <summary>The most keys one request carries; more are split over several requests. Defaults to 500.</summary>
-    public int MaxKeysPerRequest { get; set; } = 500;
 
     /// <summary>
     ///     For a webhook: request headers sent with every purge, such as a gateway's API key or

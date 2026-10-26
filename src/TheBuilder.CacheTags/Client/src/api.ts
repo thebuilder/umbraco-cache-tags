@@ -30,7 +30,6 @@ export interface TargetDraft {
   enabled: boolean;
   url: string;
   secret: TargetValue | null;
-  maxKeysPerRequest: number;
   headers: NamedValue[];
   settings: NamedValue[];
 }

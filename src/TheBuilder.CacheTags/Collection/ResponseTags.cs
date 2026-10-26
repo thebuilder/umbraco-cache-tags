@@ -5,6 +5,9 @@ namespace TheBuilder.CacheTags.Collection;
 /// <summary>The keys a response carries, so a purge of any of them reaches it.</summary>
 internal static class ResponseTags
 {
+    /// <summary>The most item keys a response lists before it lists their types instead.</summary>
+    public const int MaxItemKeys = 64;
+
     /// <summary>
     ///     Every response carries <c>umbraco</c>, which a change to everything purges, then the keys
     ///     purges need most, so a header cut at its limit loses the least needed: the selectors a
