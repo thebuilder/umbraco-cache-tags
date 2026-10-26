@@ -76,7 +76,7 @@ Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environ
 
 ## Limits
 
-Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: `umbraco`, its listing keys, its `x-` keys, then its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Every change to an item purges its `type-` key, so such a response is still reached, only more often. Umbraco's own output cache keeps every key.
+Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: `umbraco`, its listing keys, its `x-` keys, then its item keys. Past `MaxItemKeys` (64) items, or when the items would push the header past its limit, it lists their `type-` keys instead. Every change to an item, and every purge of its key by hand, purges its `type-` key too, so such a response is still reached, only more often. Umbraco's own output cache keeps every key.
 
 A full header is about 6 KB. A proxy in front of Umbraco must allow response headers that large. Nginx, for example, answers 502 when they pass its `proxy_buffer_size`, 4 or 8 KB by default, so set it to 16k.
 

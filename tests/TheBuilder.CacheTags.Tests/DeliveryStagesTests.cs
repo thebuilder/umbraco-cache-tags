@@ -4,6 +4,7 @@ using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.Targets;
+using Umbraco.Cms.Core.Cache;
 
 namespace TheBuilder.CacheTags.Tests;
 
@@ -50,6 +51,40 @@ public sealed class DeliveryStagesTests : IDisposable
         Assert.Equal(
             [$"{Children} {Item} type-article", $"{Children} type-article"],
             _ledger.PurgesOf(change.Id).Select(purge => string.Join(" ", purge.Keys.Order(StringComparer.Ordinal))));
+    }
+
+    [Fact]
+    public void Pruning_keeps_a_dead_purge_since_a_copy_it_missed_is_still_cached()
+    {
+        var change = new Change(Guid.CreateVersion7(), Noon, ChangeKind.Custom, [], [], null, "test", [Item]);
+        _ledger.Add(change, new PurgePlan([Item], Everything: false), "backoffice");
+        _ledger.Release(change.Id, ChangeStage.Released, [], Noon, [new NewPurge("nextjs", [Item], Noon), new NewPurge("cloudflare", [Item], Noon)]);
+        Purge sent = _ledger.PurgesOf(change.Id).Single(purge => purge.Target == "nextjs");
+        Purge dead = _ledger.PurgesOf(change.Id).Single(purge => purge.Target == "cloudflare");
+        _ledger.ClaimSend(sent.Id, "server-1", Noon, Noon.AddSeconds(30));
+        _ledger.Sent(sent.Id, "server-1", Noon);
+        _ledger.ClaimSend(dead.Id, "server-1", Noon, Noon.AddSeconds(30));
+        _ledger.Failed(dead.Id, "server-1", maxAttempts: 1, "503 Service Unavailable", Noon);
+
+        _ledger.Prune(Noon.AddDays(30));
+
+        Assert.Equal([dead.Id], _ledger.PurgesOf(change.Id).Select(purge => purge.Id));
+    }
+
+    [Fact]
+    public async Task A_plan_of_everything_evicts_all_of_umbracos_output_cache()
+    {
+        var calls = new List<string>();
+        IDeliveryApiOutputCacheManager outputCache = Fake.Of<IDeliveryApiOutputCacheManager>((method, arguments) =>
+        {
+            calls.Add(arguments.FirstOrDefault() is string tag ? $"{method.Name} {tag}" : method.Name);
+            return Task.CompletedTask;
+        });
+        var eviction = new OutputCacheEviction(Fake.Of<IServiceProvider>((_, arguments) => (Type)arguments[0]! == typeof(IDeliveryApiOutputCacheManager) ? outputCache : null));
+
+        await eviction.EvictAsync(new PurgePlan(["type-article"], Everything: true));
+
+        Assert.Equal([nameof(IDeliveryApiOutputCacheManager.EvictAllAsync)], calls);
     }
 
     private DatabaseAckTransport Transport() => new(_database.Package);

@@ -114,7 +114,11 @@ internal sealed class ResponseCollector(
         return item?.Key ?? (target is "/" or "" ? Guid.Empty : null);
     }
 
-    /// <summary>The types of the given items, which a publish of any of them purges; <c>umbraco</c> for an item no longer cached.</summary>
+    /// <summary>
+    ///     The types of the given items, which a change to any of them purges. An item that is not in the
+    ///     published cache (not published yet, or gone) keeps its own key: its publish plans that key,
+    ///     and its type is unknown here.
+    /// </summary>
     public SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
     {
         var types = new SortedSet<string>(StringComparer.Ordinal);
@@ -123,7 +127,7 @@ internal sealed class ResponseCollector(
             IPublishedContent? item = key.StartsWith(CacheKeys.MediaPrefix, StringComparison.Ordinal)
                 ? mediaCache.GetById(Guid.Parse(key[CacheKeys.MediaPrefix.Length..]))
                 : contentCache.GetById(Guid.Parse(key[CacheKeys.ContentPrefix.Length..]));
-            types.Add(item is null ? CacheKeys.All : CacheKeys.Type(item.ContentType.Alias));
+            types.Add(item is null ? key : CacheKeys.Type(item.ContentType.Alias));
         }
 
         return types;

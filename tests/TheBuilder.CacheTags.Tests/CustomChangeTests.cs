@@ -57,6 +57,26 @@ public sealed class CustomChangeTests
     }
 
     [Fact]
+    public void A_custom_or_manual_purge_of_an_item_plans_its_type_too_since_a_long_listing_carries_only_that()
+    {
+        PurgePlan plan = new PurgePlanner(new PurgePlannerTests.Tree()).Plan(
+            Custom(["content-10000000-0000-0000-0000-000000000013", "media-20000000-0000-0000-0000-000000000001"]),
+            500);
+
+        Assert.Equal(
+            ["content-10000000-0000-0000-0000-000000000013", "media-20000000-0000-0000-0000-000000000001", "type-guidepage", "type-image"],
+            plan.Keys);
+    }
+
+    [Fact]
+    public void A_custom_purge_of_an_item_whose_type_cannot_be_read_purges_everything()
+    {
+        PurgePlan plan = new PurgePlanner(new PurgePlannerTests.Tree(typesFail: true)).Plan(Custom(["content-10000000-0000-0000-0000-000000000013"]), 500);
+
+        Assert.True(plan.Everything);
+    }
+
+    [Fact]
     public void A_custom_change_naming_umbraco_purges_everything()
     {
         Assert.True(new PurgePlanner(new PurgePlannerTests.Tree()).Plan(Custom(["x-a", "umbraco"]), 500).Everything);

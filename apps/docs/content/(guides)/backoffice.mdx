@@ -21,11 +21,11 @@ Changes lists the latest changes, newest first. Open one to see:
 
 A change shows **Waiting for servers** until every server has applied it, then **Waiting for index** until every server's index has it, then **Purged** once its purges are queued or sent. The view refreshes itself until the change is purged.
 
-Purges that failed their last attempt are listed at the top. **Retry** sends one again once the target answers, and **Set aside** hides it.
+Purges that failed their last attempt are listed at the top, and stay until you act on them. **Retry** sends one again once the target answers, and **Set aside** hides it.
 
 ## Purge
 
-Purge keys by hand, one per line, or purge everything. You can purge your own `x-` keys, items' `content-` and `media-` keys, and `umbraco` for everything. After you purge everything, every cached response is fetched again from Umbraco, so expect more load for a while.
+Purge keys by hand, one per line, or purge everything. You can purge your own `x-` keys, items' `content-` and `media-` keys, and `umbraco` for everything. Purging an item's key purges its type's listings too, so a long listing that shows the item is reached. After you purge everything, every cached response is fetched again from Umbraco, so expect more load for a while.
 
 ## Targets
 

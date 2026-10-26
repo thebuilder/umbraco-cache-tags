@@ -24,7 +24,7 @@ public interface ICacheTagsChanges
     ///     waits for every server's report (or the ack timeout). <c>null</c> purges at once, for output
     ///     read straight from the database.
     /// </param>
-    /// <param name="reason">Why, for the log and the lookup API.</param>
+    /// <param name="reason">Why, for the log and the backoffice's Changes view.</param>
     /// <returns>The change's id.</returns>
     /// <exception cref="ArgumentException">A key or the signal is not one a site may name.</exception>
     Guid Record(IEnumerable<string> keys, string? waitFor = null, string? reason = null);

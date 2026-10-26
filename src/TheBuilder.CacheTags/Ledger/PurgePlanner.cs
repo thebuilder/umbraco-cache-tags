@@ -22,9 +22,25 @@ internal sealed class PurgePlanner(IDescendants descendants)
         {
             // The keys as named; "umbraco" among them purges everything.
             var named = change.Keys ?? [];
-            return named.Contains(CacheKeys.All)
-                ? new PurgePlan([], Everything: true)
-                : new PurgePlan(named.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList(), Everything: false);
+            if (named.Contains(CacheKeys.All))
+            {
+                return new PurgePlan([], Everything: true);
+            }
+
+            // A named item's type too: a response past MaxItemKeys lists its items' types, not the items.
+            var planned = new SortedSet<string>(named, StringComparer.Ordinal);
+            try
+            {
+                planned.UnionWith(descendants.TypesOf(Ids(named, CacheKeys.ContentPrefix), media: false).Select(CacheKeys.Type));
+                planned.UnionWith(descendants.TypesOf(Ids(named, CacheKeys.MediaPrefix), media: true).Select(CacheKeys.Type));
+            }
+            catch (Exception)
+            {
+                // Recording must not fail with it: without their types, every response is purged.
+                return new PurgePlan([], Everything: true);
+            }
+
+            return new PurgePlan(planned, Everything: false);
         }
 
         var keys = new SortedSet<string>(StringComparer.Ordinal);
@@ -80,7 +96,7 @@ internal sealed class PurgePlanner(IDescendants descendants)
         {
             try
             {
-                keys.UnionWith(descendants.TypesOf(routeDescendants).Select(CacheKeys.Type));
+                keys.UnionWith(descendants.TypesOf(routeDescendants, media: false).Select(CacheKeys.Type));
             }
             catch (Exception)
             {
@@ -91,6 +107,14 @@ internal sealed class PurgePlanner(IDescendants descendants)
 
         return new PurgePlan(keys, Everything: false);
     }
+
+    // The ids of the named keys with the prefix (content- or media-).
+    private static List<Guid> Ids(IEnumerable<string> keys, string prefix)
+        => keys
+            .Where(key => key.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(key => Guid.TryParse(key[prefix.Length..], out Guid id) ? id : Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .ToList();
 }
 
 /// <summary>A document's descendants, from Umbraco's in-memory navigation structure.</summary>
@@ -98,8 +122,8 @@ internal interface IDescendants
 {
     IEnumerable<Guid> Of(Guid key);
 
-    /// <summary>The content type aliases of the given documents.</summary>
-    IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys);
+    /// <summary>The content type aliases of the given documents, or the media type aliases of the given media.</summary>
+    IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media);
 }
 
 internal sealed class NavigationDescendants(
@@ -116,9 +140,9 @@ internal sealed class NavigationDescendants(
             : [];
 
     // The navigation structure knows no aliases; the entity service reads them without loading content.
-    public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys)
+    public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media)
         => keys.Chunk(TypesBatch)
-            .SelectMany(batch => entities.GetAll(Umbraco.Cms.Core.Models.UmbracoObjectTypes.Document, batch))
+            .SelectMany(batch => entities.GetAll(media ? Umbraco.Cms.Core.Models.UmbracoObjectTypes.Media : Umbraco.Cms.Core.Models.UmbracoObjectTypes.Document, batch))
             .OfType<Umbraco.Cms.Core.Models.Entities.IContentEntitySlim>()
             .Select(entity => entity.ContentTypeAlias)
             .Distinct(StringComparer.OrdinalIgnoreCase);

@@ -179,6 +179,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
   `MaxItemKeys` lists its items' types instead of the items, so only those reach it. An unpublish
   also takes the descendants out of the listings of their types, including pages of a listing that
   do not show them. When their types cannot be read, it plans `umbraco`.
+- A custom change, or a purge by hand, that names an item's `content-` or `media-` key also plans
+  the item's `type-` key, read with `IEntityService`, since a header past 64 items lists its items'
+  types. When the types cannot be read, it plans `umbraco`.
 - A sort plans no item keys, since the items did not change, but every listing that can show them
   in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
   `search-` key. It waits for the index like any listing.
@@ -245,7 +248,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    sends before it do not leave it expired, and a purge is claimed only while it is due, so a server
    working from an older list does not resend one another server just failed. A failure is retried
    after 2, 4, 8 ... seconds (at most 10 minutes), counted in the database, and kept as dead after
-   `CacheTags:MaxAttempts` (10).
+   `CacheTags:MaxAttempts` (10). A dead purge stays until someone retries it or sets it aside, since
+   a copy it missed is still cached. Released changes and sent or set-aside purges are pruned after
+   `CacheTags:LedgerRetention` (7 days).
 
 The delivery worker and the heartbeat log an error and carry on, so neither stops the site. Settings
 that fail validation at start stop the site; settings that become invalid on a reload of

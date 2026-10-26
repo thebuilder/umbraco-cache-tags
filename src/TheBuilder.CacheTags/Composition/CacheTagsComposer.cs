@@ -110,7 +110,7 @@ public sealed class CacheTagsComposer : IComposer
             .AddNotificationAsyncHandler<LanguageCacheRefresherNotification, RefresherHandlers>()
             .AddNotificationAsyncHandler<PublicAccessCacheRefresherNotification, RefresherHandlers>();
 
-        // The lookup API.
+        // The backoffice's Changes view.
         builder.Services.AddSingleton<ICacheTagsChangeLog, CacheTagsChangeLog>();
         builder.Services.AddSingleton<ICacheTagsOutbox, CacheTagsOutbox>();
         builder.Services.AddSingleton<ICacheTagsTargets, CacheTagsTargets>();

@@ -45,7 +45,7 @@ internal enum ChangeStage
 /// <param name="Items">The documents or media affected.</param>
 /// <param name="TypeAliases">For <see cref="ChangeKind.TypesChanged" />: the content and media types whose output changed.</param>
 /// <param name="Cultures">The cultures that changed, or <c>null</c> for all.</param>
-/// <param name="Reason">Why, for the log and the lookup API (for example "language da-DK saved").</param>
+/// <param name="Reason">Why, for the log and the backoffice's Changes view (for example "language da-DK saved").</param>
 /// <param name="Keys">For <see cref="ChangeKind.Custom" />: the keys to purge.</param>
 /// <param name="WaitFor">
 ///     For <see cref="ChangeKind.Custom" />: the signal every server reports once it has applied the

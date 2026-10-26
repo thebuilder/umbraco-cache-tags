@@ -1,5 +1,7 @@
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Ledger;
+using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core.PublishedCache;
 
 namespace TheBuilder.CacheTags.Tests;
 
@@ -73,6 +75,19 @@ public sealed class RequestedItemsTests
         ResponseCollector.CollectRequestedItems([Shown], media: false, keys);
 
         Assert.Equal([$"content-{Shown}"], keys);
+    }
+
+    [Fact]
+    public void Items_listed_as_their_types_keep_their_own_key_when_their_type_cannot_be_read()
+    {
+        // The missing item is not published yet: its publish plans its content- key, not a type.
+        IPublishedContentType article = Fake.Of<IPublishedContentType>((method, _) => method.Name == "get_Alias" ? "article" : null);
+        IPublishedContent shown = Fake.Of<IPublishedContent>((method, _) => method.Name == "get_ContentType" ? article : null);
+        IPublishedContentCache cache = Fake.Of<IPublishedContentCache>((method, arguments) =>
+            method.Name == "GetById" && arguments.Length > 0 && arguments[^1] is Guid id && id == new Guid(Shown) ? shown : null);
+        var collector = new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, null!);
+
+        Assert.Equal([$"content-{Missing}", "type-article"], collector.TypeKeys([$"content-{Shown}", $"content-{Missing}"]));
     }
 
     [Fact]

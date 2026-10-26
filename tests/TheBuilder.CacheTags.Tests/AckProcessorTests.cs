@@ -81,7 +81,7 @@ public sealed class AckProcessorTests : IDisposable
     {
         public IEnumerable<Guid> Of(Guid key) => [];
 
-        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys) => [];
+        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media) => [];
     }
 
     private static IContentType TypeWith(int id, string alias, Guid dataType)

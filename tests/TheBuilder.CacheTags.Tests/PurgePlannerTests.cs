@@ -14,11 +14,11 @@ public sealed class PurgePlannerTests
     // C has a guide under it, and a parking page under that.
     internal sealed class Tree(bool typesFail = false) : IDescendants
     {
-        private static readonly Dictionary<Guid, string> Types = new() { [Child] = "guidePage", [Grandchild] = "parkingPage" };
+        private static readonly Dictionary<Guid, string> Types = new() { [Child] = "guidePage", [Grandchild] = "parkingPage", [Image] = "image" };
 
         public IEnumerable<Guid> Of(Guid key) => key == C ? [Child, Grandchild] : [];
 
-        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys)
+        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media)
             => typesFail ? throw new InvalidOperationException("The database is busy.") : keys.Select(key => Types[key]);
     }
 

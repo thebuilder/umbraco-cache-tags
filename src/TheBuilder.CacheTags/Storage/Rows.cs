@@ -76,7 +76,7 @@ internal static class OutboxStates
     public const string Pending = "Pending";
     public const string Sent = "Sent";
 
-    /// <summary>Set aside by a person: not sent, kept for the lookup until it ages out.</summary>
+    /// <summary>Set aside by a person: not sent, kept for the Changes view until it ages out.</summary>
     public const string Discarded = "Discarded";
     public const string Dead = "Dead";
 }
