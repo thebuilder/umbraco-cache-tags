@@ -13,7 +13,7 @@ public sealed class AckMatchTests
     private static LedgerEntry Change(DateTime createdUtc, Guid? item = null)
     {
         var change = new Change(Guid.NewGuid(), createdUtc, ChangeKind.Published, [new ChangedItem(item ?? Item, "page", Guid.Empty)], [], null);
-        return new LedgerEntry(change, "server-1", new PurgePlan([], false, null), AckSignal.For(change), ChangeStage.Pending, null, []);
+        return new LedgerEntry(change, "server-1", new PurgePlan([], false), AckSignal.For(change), ChangeStage.Pending, null, []);
     }
 
     private static SeenRefresh Publish(DateTime observedUtc, Guid? item = null, long batch = 1)

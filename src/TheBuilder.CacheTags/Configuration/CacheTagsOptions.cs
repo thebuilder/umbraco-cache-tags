@@ -20,13 +20,7 @@ public sealed class CacheTagsOptions
     /// </summary>
     public string KeyPrefix { get; set; } = string.Empty;
 
-    /// <summary>Which keys the response header carries. Defaults to <see cref="CacheKeyMode.ItemKeys" />.</summary>
-    public CacheKeyMode KeyMode { get; set; } = CacheKeyMode.ItemKeys;
-
-    /// <summary>
-    ///     In <see cref="CacheKeyMode.ItemKeys" />, the most item keys one response lists before it lists
-    ///     their content types instead. Defaults to 64.
-    /// </summary>
+    /// <summary>The most item keys one response lists before it lists their content types instead. Defaults to 64.</summary>
     public int MaxItemKeys { get; set; } = 64;
 
     /// <summary>
@@ -41,12 +35,6 @@ public sealed class CacheTagsOptions
     ///     purges every response instead. Defaults to 500.
     /// </summary>
     public int MaxDescendants { get; set; } = 500;
-
-    /// <summary>
-    ///     How long a response's mapping (which keys it covers) is kept after the response was last
-    ///     served. Defaults to 90 days. A frontend must not cache a response longer than this.
-    /// </summary>
-    public TimeSpan MappingRetention { get; set; } = TimeSpan.FromDays(90);
 
     /// <summary>
     ///     Where purges are sent once every server has applied a change, by name
@@ -128,23 +116,4 @@ public sealed class CacheTagsTargetOptions
     ///     the backoffice, unless <see cref="CacheTagsOptions.AllowPrivateNetworkTargets" />.
     /// </summary>
     internal bool PublicNetworkOnly { get; init; }
-}
-
-/// <summary>
-///     Which keys a Delivery API response carries in its header.
-/// </summary>
-public enum CacheKeyMode
-{
-    /// <summary>
-    ///     Only a <c>response-</c> key (and <c>umbraco</c>), for a frontend that keeps few tags per entry: a
-    ///     purge reaches the response through what the package recorded it covers.
-    /// </summary>
-    ResponseKey = 0,
-
-    /// <summary>
-    ///     The default. The <c>response-</c> key, the listing selectors, and the <c>content-</c> and
-    ///     <c>media-</c> keys of every item the response shows (up to <see cref="CacheTagsOptions.MaxItemKeys" />,
-    ///     past that their types), so a purge reaches the response by the keys it carries.
-    /// </summary>
-    ItemKeys = 1,
 }

@@ -155,7 +155,7 @@ internal sealed class LedgerStore(PackageDatabase database)
         JsonSerializer.Deserialize<Change>(row.Change, Json)!,
         row.Server,
         // A plan that cannot be read back is treated as purging everything: over-purging is safe.
-        JsonSerializer.Deserialize<PurgePlan>(row.Plan, Json) ?? new PurgePlan([], Everything: true, Cultures: null),
+        JsonSerializer.Deserialize<PurgePlan>(row.Plan, Json) ?? new PurgePlan([], Everything: true),
         row.Signal is null ? null : JsonSerializer.Deserialize<AckSignal>(row.Signal, Json),
         Enum.Parse<ChangeStage>(row.Status ?? nameof(ChangeStage.Released)),
         row.ReleasedUtc,

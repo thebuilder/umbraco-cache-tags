@@ -162,9 +162,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
           <dl>
             <dt>Planned</dt>
             <dd>${planned.map((key) => html`<span class="param">${key}</span>`)}</dd>
-            <dt>Reaches</dt>
-            <dd>${plural(change.responseCount, "recorded response")}, and every response carrying a planned key</dd>
-            ${change.plan.cultures ? html`<dt>Cultures</dt><dd>${change.plan.cultures.join(", ")}</dd>` : nothing}
+            ${change.change.cultures ? html`<dt>Cultures</dt><dd>${change.change.cultures.join(", ")}</dd>` : nothing}
             <dt>Applied by</dt>
             <dd>
               ${change.waitsForServers

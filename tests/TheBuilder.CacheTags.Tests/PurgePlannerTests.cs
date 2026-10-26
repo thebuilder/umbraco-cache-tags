@@ -31,7 +31,6 @@ public sealed class PurgePlannerTests
         PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "newsPage", Site), cultures: ["da-DK"]);
 
         Assert.False(plan.Everything);
-        Assert.Equal(["da-DK"], plan.Cultures);
         Assert.Equal(
             [
                 "children-10000000-0000-0000-0000-000000000001",

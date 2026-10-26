@@ -24,11 +24,10 @@ public interface ICacheTagsChanges
     ///     waits for every server's report (or the ack timeout). <c>null</c> purges at once, for output
     ///     read straight from the database.
     /// </param>
-    /// <param name="cultures">The cultures the change is limited to, or <c>null</c> for all.</param>
     /// <param name="reason">Why, for the log and the lookup API.</param>
     /// <returns>The change's id.</returns>
     /// <exception cref="ArgumentException">A key or the signal is not one a site may name.</exception>
-    Guid Record(IEnumerable<string> keys, string? waitFor = null, IEnumerable<string>? cultures = null, string? reason = null);
+    Guid Record(IEnumerable<string> keys, string? waitFor = null, string? reason = null);
 
     /// <summary>
     ///     Reports that this server serves the changes recorded with <paramref name="signal" />. Call it
@@ -42,7 +41,7 @@ internal sealed class CacheTagsChanges(ChangeRecorder recorder, AckProcessor ack
 {
     private const int MaxSignalLength = 100;
 
-    public Guid Record(IEnumerable<string> keys, string? waitFor = null, IEnumerable<string>? cultures = null, string? reason = null)
+    public Guid Record(IEnumerable<string> keys, string? waitFor = null, string? reason = null)
     {
         var named = keys.ToList();
         if (named.Count == 0)
@@ -68,7 +67,7 @@ internal sealed class CacheTagsChanges(ChangeRecorder recorder, AckProcessor ack
             ChangeKind.Custom,
             [],
             [],
-            cultures?.Select(culture => culture.ToLowerInvariant()).Distinct().ToList(),
+            null,
             reason,
             named,
             waitFor);

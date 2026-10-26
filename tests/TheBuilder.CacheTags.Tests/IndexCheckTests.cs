@@ -51,6 +51,6 @@ public sealed class IndexCheckTests
     {
         var renamed = new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.TypesChanged, [], ["article", "post"], null, RenamedAliases: ["article"]);
 
-        Assert.True(IndexCheck.WaitsFor(renamed, new PurgePlan(["type-article", "type-post"], Everything: true, Cultures: null)));
+        Assert.True(IndexCheck.WaitsFor(renamed, new PurgePlan(["type-article", "type-post"], Everything: true)));
     }
 }

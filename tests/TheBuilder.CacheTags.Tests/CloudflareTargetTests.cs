@@ -17,12 +17,12 @@ public sealed class CloudflareTargetTests
     [Fact]
     public async Task A_purge_posts_every_key_as_a_tag_to_the_zone_with_the_token()
     {
-        HttpRequestMessage message = CloudflareTarget.Requests(Request(["response-a", "content-b"], ["type-article"]), "023e105f4ecef8ad9ca31a8372d0c353", "secret-token").Single();
+        HttpRequestMessage message = CloudflareTarget.Requests(Request(["content-a", "content-b"], ["type-article"]), "023e105f4ecef8ad9ca31a8372d0c353", "secret-token").Single();
 
         Assert.Equal(HttpMethod.Post, message.Method);
         Assert.Equal("https://api.cloudflare.com/client/v4/zones/023e105f4ecef8ad9ca31a8372d0c353/purge_cache", message.RequestUri!.AbsoluteUri);
         Assert.Equal("Bearer secret-token", message.Headers.Authorization!.ToString());
-        Assert.Equal("""{"tags":["response-a","content-b","type-article"]}""", await message.Content!.ReadAsStringAsync());
+        Assert.Equal("""{"tags":["content-a","content-b","type-article"]}""", await message.Content!.ReadAsStringAsync());
     }
 
     [Fact]

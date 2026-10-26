@@ -32,7 +32,6 @@ public sealed class KnownNamesTests
                 return Volatile.Read(ref aliases).Select(alias => Fake.Of<IContentType>((m, _) => m.Name == "get_Alias" ? alias : null)).ToArray();
             }),
             Fake.Of<IMediaTypeService>((method, _) => method.Name == "GetAll" ? Array.Empty<IMediaType>() : null),
-            Fake.Of<ILanguageService>((method, _) => method.Name == "GetAllAsync" ? Task.FromResult(Enumerable.Empty<ILanguage>()) : null),
             time,
             NullLogger<KnownNames>.Instance);
 

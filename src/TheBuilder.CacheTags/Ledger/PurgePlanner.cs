@@ -15,7 +15,7 @@ internal sealed class PurgePlanner(IDescendants descendants)
     {
         if (change.Kind == ChangeKind.Everything)
         {
-            return new PurgePlan([], Everything: true, Cultures: null);
+            return new PurgePlan([], Everything: true);
         }
 
         if (change.Kind == ChangeKind.Custom)
@@ -23,8 +23,8 @@ internal sealed class PurgePlanner(IDescendants descendants)
             // The keys as named; "umbraco" among them purges everything.
             var named = change.Keys ?? [];
             return named.Contains(CacheKeys.All)
-                ? new PurgePlan([], Everything: true, Cultures: null)
-                : new PurgePlan(named.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList(), Everything: false, change.Cultures);
+                ? new PurgePlan([], Everything: true)
+                : new PurgePlan(named.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList(), Everything: false);
         }
 
         var keys = new SortedSet<string>(StringComparer.Ordinal);
@@ -33,7 +33,7 @@ internal sealed class PurgePlanner(IDescendants descendants)
             // Any response may render an item of the type, so everything. Its listings are named too, so
             // they are purged again once every index has a renamed type (IndexCheck).
             keys.UnionWith(change.TypeAliases.Select(CacheKeys.Type));
-            return new PurgePlan(keys, Everything: true, change.Cultures);
+            return new PurgePlan(keys, Everything: true);
         }
 
         var media = change.Kind is ChangeKind.MediaSaved or ChangeKind.MediaMoved or ChangeKind.MediaTrashed or ChangeKind.MediaDeleted;
@@ -67,7 +67,7 @@ internal sealed class PurgePlanner(IDescendants descendants)
                 routeDescendants.UnionWith(below);
                 if (routeDescendants.Count > descendantBudget)
                 {
-                    return new PurgePlan([], Everything: true, change.Cultures);
+                    return new PurgePlan([], Everything: true);
                 }
             }
         }
@@ -85,11 +85,11 @@ internal sealed class PurgePlanner(IDescendants descendants)
             catch (Exception)
             {
                 // Recording must not fail with it: without their types, every listing is purged.
-                return new PurgePlan([], Everything: true, change.Cultures);
+                return new PurgePlan([], Everything: true);
             }
         }
 
-        return new PurgePlan(keys, Everything: false, change.Cultures);
+        return new PurgePlan(keys, Everything: false);
     }
 }
 

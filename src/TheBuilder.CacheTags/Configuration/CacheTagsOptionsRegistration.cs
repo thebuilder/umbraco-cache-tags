@@ -24,7 +24,7 @@ internal static class CacheTagsOptionsRegistration
             .Validate(options => options.MaxItemKeys > 0, "CacheTags:MaxItemKeys must be above 0.")
             .Validate(options => options.MaxHeaderKeys > 2, "CacheTags:MaxHeaderKeys must be above 2.")
             .Validate(options => options.MaxDescendants >= 0, "CacheTags:MaxDescendants must be 0 or more.")
-            .Validate(options => options.MappingRetention > TimeSpan.Zero && options.LedgerRetention > TimeSpan.Zero, "CacheTags:MappingRetention and LedgerRetention must be above zero.")
+            .Validate(options => options.LedgerRetention > TimeSpan.Zero, "CacheTags:LedgerRetention must be above zero.")
             .Validate(options => options.IndexTimeout > TimeSpan.Zero, "CacheTags:IndexTimeout must be above zero.")
             .Validate(options => options.Targets.Values.All(t => t.MaxKeysPerRequest > 0), "CacheTags:Targets MaxKeysPerRequest must be above 0.")
             .Validate(options => options.Targets.Values.All(WebhookTarget.IsValid), WebhookTarget.ValidationMessage)

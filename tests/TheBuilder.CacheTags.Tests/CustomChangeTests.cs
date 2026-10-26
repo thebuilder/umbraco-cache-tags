@@ -9,8 +9,8 @@ namespace TheBuilder.CacheTags.Tests;
 /// <summary>Changes a site records itself (ICacheTagsChanges), and responses of its own tagged actions.</summary>
 public sealed class CustomChangeTests
 {
-    private static Change Custom(string[] keys, string? waitFor = null, string[]? cultures = null)
-        => new(Guid.Empty, DateTime.UnixEpoch, ChangeKind.Custom, [], [], cultures, "test", keys, waitFor);
+    private static Change Custom(string[] keys, string? waitFor = null)
+        => new(Guid.Empty, DateTime.UnixEpoch, ChangeKind.Custom, [], [], null, "test", keys, waitFor);
 
     [Theory]
     [InlineData("x-dictionary-da-dk", true)]
@@ -48,13 +48,12 @@ public sealed class CustomChangeTests
     }
 
     [Fact]
-    public void A_custom_change_plans_exactly_its_keys_in_its_cultures()
+    public void A_custom_change_plans_exactly_its_keys()
     {
-        PurgePlan plan = new PurgePlanner(new PurgePlannerTests.Tree()).Plan(Custom(["x-b", "x-a", "x-b"], cultures: ["da-dk"]), 500);
+        PurgePlan plan = new PurgePlanner(new PurgePlannerTests.Tree()).Plan(Custom(["x-b", "x-a", "x-b"]), 500);
 
         Assert.Equal(["x-a", "x-b"], plan.Keys);
         Assert.False(plan.Everything);
-        Assert.Equal(["da-dk"], plan.Cultures);
     }
 
     [Fact]
@@ -92,24 +91,5 @@ public sealed class CustomChangeTests
     public void Custom_keys_expire_rather_than_go_stale()
     {
         Assert.True(CacheKeys.Expires("shop-x-dictionary-da-dk", "shop-"));
-    }
-
-    [Fact]
-    public void A_tagged_action_keys_its_responses_by_the_query_parameters_it_names_only()
-    {
-        var locale = new HashSet<string>(["locale"], StringComparer.OrdinalIgnoreCase);
-
-        Assert.Equal(
-            "locale=da-dk",
-            ResponseIdentity.NormaliseQuery([new("format", "next-intl"), new("Locale", "da-DK"), new("filter", "contentType:article")], locale));
-    }
-
-    [Fact]
-    public void An_action_that_records_nothing_carries_its_custom_keys_itself()
-    {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, "response-83dcadcd6bbb144ef252035d66d20df5", new HashSet<string> { "x-dictionary-da-dk" }, _ => [], recordable: false);
-
-        Assert.Equal(["umbraco", "x-dictionary-da-dk"], tags.Keys);
-        Assert.False(tags.Recorded);
     }
 }

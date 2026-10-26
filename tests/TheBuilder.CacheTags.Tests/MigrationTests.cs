@@ -31,12 +31,17 @@ public sealed class MigrationTests
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_ReleasedUtc (ReleasedUtc)",
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_Status (Status)",
                 "theBuilderCacheTagsOutbox IX_theBuilderCacheTagsOutbox_Due (State, NotBeforeUtc)",
-                "theBuilderCacheTagsResponse IX_theBuilderCacheTagsResponse_SeenUtc (SeenUtc)",
-                "theBuilderCacheTagsResponseKey IX_theBuilderCacheTagsResponseKey_CacheKey (CacheKey)",
-                "theBuilderCacheTagsResponseKey UNIQUE IX_theBuilderCacheTagsResponseKey_Pair (ResponseKey, CacheKey)",
             ],
-            new[] { "theBuilderCacheTagsAck", "theBuilderCacheTagsEvent", "theBuilderCacheTagsOutbox", "theBuilderCacheTagsResponse", "theBuilderCacheTagsResponseKey", "theBuilderCacheTagsServer", "theBuilderCacheTagsTarget" }
+            new[] { "theBuilderCacheTagsAck", "theBuilderCacheTagsEvent", "theBuilderCacheTagsOutbox", "theBuilderCacheTagsServer", "theBuilderCacheTagsTarget" }
                 .SelectMany(migrated.Indexes));
+    }
+
+    [Fact]
+    public void The_response_mapping_tables_are_gone_after_an_install()
+    {
+        using MigratedDatabase migrated = MigratedDatabase.Create();
+
+        Assert.DoesNotContain(migrated.Schema(), line => line.StartsWith("theBuilderCacheTagsResponse", StringComparison.Ordinal));
     }
 
     [Fact]

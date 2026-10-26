@@ -66,7 +66,7 @@ internal static class ListingSelectors
 
         // A filter on anything but the type (a name, a search, a custom filter) narrows the listing by
         // input that can vary without end. The listing is then a catch-all as well as whatever else
-        // selects it, so it is not recorded (see ResponseTags) and every publish purges it.
+        // selects it, so every publish purges it.
         if (filterList.Any(filter => filter.StartsWith(typeFilter, StringComparison.OrdinalIgnoreCase) is false))
         {
             keys.Add(catchAll);

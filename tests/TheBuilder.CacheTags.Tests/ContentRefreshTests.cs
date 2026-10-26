@@ -42,7 +42,6 @@ public sealed class ContentRefreshTests : IDisposable
         _ledger = new LedgerStore(_database.Package);
         _acks = new AckProcessor(
             _ledger,
-            new PurgeResolver(Fake.Of<ICacheTagStore>((method, _) => method.Name == nameof(ICacheTagStore.FindResponseKeysAsync) ? Task.FromResult<IReadOnlyCollection<string>>([]) : null)),
             new OutputCacheEviction(Fake.Of<IServiceProvider>()),
             new DatabaseAckTransport(_database.Package),
             _identity,

@@ -1,6 +1,6 @@
 namespace TheBuilder.CacheTags.Delivery;
 
-/// <summary>When a failed purge, or a failed mapping write, is tried again.</summary>
+/// <summary>When a failed purge is tried again.</summary>
 internal static class Backoff
 {
     private static readonly TimeSpan Longest = TimeSpan.FromMinutes(10);

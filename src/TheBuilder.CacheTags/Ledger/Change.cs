@@ -1,3 +1,5 @@
+using TheBuilder.CacheTags.Keys;
+
 namespace TheBuilder.CacheTags.Ledger;
 
 /// <summary>What happened, on the server where it happened.</summary>
@@ -83,10 +85,21 @@ internal sealed record Change(
 /// <param name="Ancestors">Its ancestors' keys, root first: a refresh of an ancestor's branch also refreshes it.</param>
 internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null);
 
-/// <summary>
-///     The keys a change purges, before they are resolved to <c>response-</c> keys.
-/// </summary>
-/// <param name="Keys">Item keys (<c>content-</c>, <c>media-</c>) and selector keys (<c>type-</c>, <c>children-</c>, <c>search-</c>).</param>
+/// <summary>The keys a change purges. Every response carries the keys of what it shows, so these reach it.</summary>
+/// <param name="Keys">Item keys (<c>content-</c>, <c>media-</c>), selector keys (<c>type-</c>, <c>children-</c>, <c>search-</c>) and a site's own <c>x-</c> keys.</param>
 /// <param name="Everything">Purge every response (<c>umbraco</c>), because the change is too wide to list.</param>
-/// <param name="Cultures">The cultures to limit the purge to, or <c>null</c> for all.</param>
-internal sealed record PurgePlan(IReadOnlyCollection<string> Keys, bool Everything, IReadOnlyList<string>? Cultures);
+internal sealed record PurgePlan(IReadOnlyCollection<string> Keys, bool Everything)
+{
+    /// <summary>The keys sent to a target once every server has the change: <c>umbraco</c>, or the planned keys.</summary>
+    public IReadOnlyList<string> Purged(string prefix)
+        => Everything ? [CacheKeys.WithPrefix(prefix, CacheKeys.All)] : Prefixed(Keys, prefix);
+
+    /// <summary>The keys sent again once every server's index has the change: the listing selectors.</summary>
+    public IReadOnlyList<string> Listings(string prefix) => Prefixed(Selectors, prefix);
+
+    /// <summary>The listing selectors among the planned keys.</summary>
+    public IEnumerable<string> Selectors => Keys.Where(CacheKeys.IsSelector);
+
+    private static List<string> Prefixed(IEnumerable<string> keys, string prefix)
+        => keys.Distinct(StringComparer.Ordinal).Select(key => CacheKeys.WithPrefix(prefix, key)).ToList();
+}

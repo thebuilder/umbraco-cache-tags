@@ -42,7 +42,7 @@ public sealed class PurgeSenderTests : IDisposable
         var time = new ManualTime(Noon);
         var ledger = new LedgerStore(_database.Package);
         var change = new Change(Guid.CreateVersion7(), Noon, ChangeKind.Published, [new ChangedItem(Guid.NewGuid(), "page", Guid.Empty)], [], null);
-        ledger.Add(change, new PurgePlan(["content-a", "content-b"], Everything: false, Cultures: null), "backoffice");
+        ledger.Add(change, new PurgePlan(["content-a", "content-b"], Everything: false), "backoffice");
         ledger.Release(change.Id, ChangeStage.Released, [], Noon, [new NewPurge("slow", ["content-a"], Noon), new NewPurge("slow", ["content-b"], Noon)]);
 
         var target = new SlowTarget(ledger, time);

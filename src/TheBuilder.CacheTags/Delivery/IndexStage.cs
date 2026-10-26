@@ -17,7 +17,6 @@ internal sealed class IndexStage(
     LedgerStore ledger,
     IAckTransport transport,
     LocalDeliveryIndex index,
-    PurgeResolver resolver,
     OutputCacheEviction eviction,
     ServerIdentity identity,
     PurgeTargets targets,
@@ -56,8 +55,7 @@ internal sealed class IndexStage(
                 continue;
             }
 
-            // Resolved now, not at release: a listing first requested in between has a new response key.
-            IReadOnlyList<string> keys = (await resolver.ResolveAsync(change.Plan, cancellationToken)).ListingKeys(settings.KeyPrefix);
+            IReadOnlyList<string> keys = change.Plan.Listings(settings.KeyPrefix);
             if (ledger.ReleaseListings(change.Id, now, NewPurge.ToTargets(targets.Current().Values, keys, now)) is false)
             {
                 continue;
@@ -94,7 +92,7 @@ internal sealed class IndexStage(
         {
             foreach (LedgerEntry change in indexed)
             {
-                await eviction.EvictAsync((await resolver.ResolveAsync(change.Plan, cancellationToken)).ListingOutputCacheTags);
+                await eviction.EvictAsync(change.Plan.Selectors);
             }
         }
 

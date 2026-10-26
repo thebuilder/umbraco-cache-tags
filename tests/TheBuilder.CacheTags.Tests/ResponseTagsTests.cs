@@ -1,108 +1,62 @@
 using TheBuilder.CacheTags.Collection;
-using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Ledger;
 
 namespace TheBuilder.CacheTags.Tests;
 
 public sealed class ResponseTagsTests
 {
-    private const string Response = "response-83dcadcd6bbb144ef252035d66d20df5";
     private const string Harbour = "content-e0000000-0000-0000-0000-000000000003";
     private const string Forest = "content-e0000000-0000-0000-0000-000000000004";
 
     private static IEnumerable<string> Types(IReadOnlyList<string> items) => ["type-article"];
 
     [Fact]
-    public void A_response_carries_its_response_key_and_the_key_of_everything_and_is_recorded()
+    public void A_response_carries_umbraco_its_selectors_its_custom_keys_and_its_items_in_that_order()
     {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 64, 128, Response, new HashSet<string> { Harbour, "children-e0000000-0000-0000-0000-000000000002" }, Types);
+        IReadOnlyList<string> keys = ResponseTags.For(64, 128, new HashSet<string> { Harbour, "x-label", "search-deliveryapicontentindex", "children-e0000000-0000-0000-0000-000000000002" }, Types);
 
-        Assert.Equal([Response, "umbraco"], tags.Keys);
-        Assert.True(tags.Recorded);
+        Assert.Equal(["umbraco", "children-e0000000-0000-0000-0000-000000000002", "search-deliveryapicontentindex", "x-label", Harbour], keys);
     }
 
     [Fact]
-    public void A_listing_only_the_catch_all_key_selects_carries_its_own_keys_and_is_not_recorded()
+    public void A_response_showing_more_items_than_it_lists_carries_their_types()
     {
-        ResponseTags tags = ResponseTags.For(
-            CacheKeyMode.ResponseKey,
-            64,
-            128,
-            Response,
-            new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" },
-            Types);
+        IReadOnlyList<string> keys = ResponseTags.For(1, 128, new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" }, Types);
 
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", Harbour, Forest], tags.Keys);
-        Assert.False(tags.Recorded);
-    }
-
-    [Fact]
-    public void A_catch_all_listing_showing_more_items_than_the_header_holds_carries_their_types()
-    {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 1, 128, Response, new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" }, Types);
-
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], tags.Keys);
-    }
-
-    [Fact]
-    public void In_item_keys_mode_a_recorded_response_carries_its_response_key_too()
-    {
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ItemKeys, 64, 128, Response, new HashSet<string> { Harbour, "type-article" }, Types);
-
-        Assert.Equal([Response, "umbraco", "type-article", Harbour], tags.Keys);
-        Assert.True(tags.Recorded);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], keys);
     }
 
     [Fact]
     public void Items_that_would_push_the_header_past_its_limit_are_listed_as_their_types()
     {
-        var items = Enumerable.Range(1, 150).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
-        var keys = new HashSet<string>([.. items, "search-deliveryapicontentindex"]);
-
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ResponseKey, 200, 128, Response, keys, Types);
-
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], tags.Keys);
-    }
-
-    [Fact]
-    public void In_item_keys_mode_a_recorded_response_lists_the_types_of_items_that_would_not_fit()
-    {
         var items = Enumerable.Range(1, 127).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
 
-        ResponseTags tags = ResponseTags.For(CacheKeyMode.ItemKeys, 200, 128, Response, new HashSet<string>(items), Types);
+        IReadOnlyList<string> keys = ResponseTags.For(200, 128, new HashSet<string>([.. items, "search-deliveryapicontentindex"]), Types);
 
-        Assert.Equal([Response, "umbraco", "type-article"], tags.Keys);
-        Assert.True(tags.Recorded);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], keys);
     }
 }
 
-public sealed class ResolvedPurgeTests
+public sealed class PurgePlanTests
 {
     [Fact]
-    public void The_listing_purge_names_the_selectors_even_when_no_listing_response_is_recorded()
+    public void A_plan_purges_its_keys_and_its_selectors_again_once_the_index_has_the_change()
     {
-        var purge = new TheBuilder.CacheTags.Delivery.ResolvedPurge(
-            new TheBuilder.CacheTags.Ledger.PurgePlan(["content-e0000000-0000-0000-0000-000000000003", "search-deliveryapicontentindex", "type-article"], false, null),
-            Responses: [],
-            Listings: []);
+        var plan = new PurgePlan(["content-e0000000-0000-0000-0000-000000000003", "search-deliveryapicontentindex", "type-article"], Everything: false);
 
-        Assert.Equal(["shop-search-deliveryapicontentindex", "shop-type-article"], purge.ListingKeys("shop-"));
+        Assert.Equal(["shop-content-e0000000-0000-0000-0000-000000000003", "shop-search-deliveryapicontentindex", "shop-type-article"], plan.Purged("shop-"));
+        Assert.Equal(["shop-search-deliveryapicontentindex", "shop-type-article"], plan.Listings("shop-"));
     }
 
     [Fact]
-    public async Task A_plan_of_everything_purges_everything_at_once_and_its_recorded_listings_again_later()
+    public void A_plan_of_everything_purges_umbraco_at_once_and_its_listings_again_later()
     {
         // A renamed content type: every response now, then the listings of both aliases once every
-        // index has the rename, the recorded ones by their response keys.
-        var store = Fake.Of<TheBuilder.CacheTags.Storage.ICacheTagStore>((method, arguments) =>
-            method.Name == nameof(TheBuilder.CacheTags.Storage.ICacheTagStore.FindResponseKeysAsync)
-                ? Task.FromResult<IReadOnlyCollection<string>>(((IReadOnlyCollection<string>)arguments[0]!).Contains("type-post") ? ["response-posts"] : [])
-                : null);
+        // index has the rename.
+        var plan = new PurgePlan(["type-article", "type-post"], Everything: true);
 
-        TheBuilder.CacheTags.Delivery.ResolvedPurge purge = await new TheBuilder.CacheTags.Delivery.PurgeResolver(store).ResolveAsync(
-            new TheBuilder.CacheTags.Ledger.PurgePlan(["type-article", "type-post"], Everything: true, Cultures: null));
-
-        Assert.Equal(["umbraco"], purge.Keys(""));
-        Assert.Equal(["response-posts", "type-article", "type-post"], purge.ListingKeys(""));
+        Assert.Equal(["umbraco"], plan.Purged(""));
+        Assert.Equal(["type-article", "type-post"], plan.Listings(""));
     }
 }
 
@@ -122,17 +76,6 @@ public sealed class RequestedItemsTests
     }
 
     [Fact]
-    public void Several_items_asked_for_make_the_response_a_catch_all_even_when_all_exist()
-    {
-        const string AlsoShown = "e0000000-0000-0000-0000-000000000004";
-        var keys = new HashSet<string> { $"content-{Shown}", $"content-{AlsoShown}" };
-
-        ResponseCollector.CollectRequestedItems([Shown, AlsoShown.ToUpperInvariant(), Shown], media: false, keys);
-
-        Assert.Equal([$"content-{Shown}", $"content-{AlsoShown}", "search-deliveryapicontentindex"], keys.Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
     public void One_item_asked_for_twice_is_one_item()
     {
         var keys = new HashSet<string> { $"content-{Shown}" };
@@ -143,12 +86,12 @@ public sealed class RequestedItemsTests
     }
 
     [Fact]
-    public void An_item_asked_for_that_does_not_exist_is_covered_and_makes_the_response_a_catch_all()
+    public void An_item_asked_for_that_does_not_exist_is_covered_so_its_publish_reaches_the_response()
     {
         var keys = new HashSet<string> { $"content-{Shown}" };
 
         ResponseCollector.CollectRequestedItems([Shown, Missing, "not-a-guid"], media: false, keys);
 
-        Assert.Equal([$"content-{Missing}", $"content-{Shown}", "search-deliveryapicontentindex"], keys.Order(StringComparer.Ordinal));
+        Assert.Equal([$"content-{Missing}", $"content-{Shown}"], keys.Order(StringComparer.Ordinal));
     }
 }

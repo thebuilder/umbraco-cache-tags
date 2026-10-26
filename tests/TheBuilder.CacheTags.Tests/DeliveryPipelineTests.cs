@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
-using TheBuilder.CacheTags.Storage;
 using Umbraco.Cms.Core.DeliveryApi;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.PublishedCache;
@@ -34,7 +33,6 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
     private const string Item = "/umbraco/delivery/api/v2/content/item/e0000000-0000-0000-0000-000000000003";
     private static readonly CacheTagsOptions Settings = new();
 
-    private readonly TestDatabase _database = new();
     private IHost? _host;
     private HttpClient _client = null!;
 
@@ -48,18 +46,14 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
                     // Umbraco's own services for what a request asks for (internal, so by name).
                     services.AddHttpContextAccessor();
                     services.AddScoped(typeof(IRequestPreviewService), UmbracoService("RequestPreviewService"));
-                    services.AddScoped(typeof(IRequestCultureService), UmbracoService("RequestCultureService"));
-                    services.AddSingleton(Fake.Of<IRequestStartItemProvider>());
                     services.AddSingleton(Fake.Of<IVariationContextAccessor>());
 
                     // The filter as CacheTagsComposer registers it, with what it needs.
                     services.AddScoped<CacheKeyResultFilter>();
                     services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
                     services.AddSingleton<IOptionsMonitor<CacheTagsOptions>>(new TestOptions(Settings));
-                    services.AddSingleton(TimeProvider.System);
                     services.AddSingleton(Names.Of(["article"]));
                     services.AddScoped<CacheTagsResponse>();
-                    services.AddSingleton(new MappingWriter(new NoStore(), _database.Package, new TestOptions(Settings), TimeProvider.System, NullLogger<MappingWriter>.Instance));
                     services.AddScoped(provider => new ResponseCollector(
                         null!,
                         Fake.Of<IPublishedContentCache>(),
@@ -94,8 +88,6 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
             await _host.StopAsync();
             _host.Dispose();
         }
-
-        _database.Dispose();
     }
 
     private Task<HttpResponseMessage> GetAsync(string path, params (string Name, string Value)[] headers)
@@ -115,14 +107,12 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
     private static string? CacheControl(HttpResponseMessage response) => response.Headers.CacheControl?.ToString();
 
     [Fact]
-    public async Task A_published_item_carries_its_response_key_and_umbraco()
+    public async Task A_published_item_carries_umbraco_and_is_not_marked_private_or_no_store()
     {
         using HttpResponseMessage response = await GetAsync(Item);
 
         Assert.Equal(200, (int)response.StatusCode);
-        var keys = Keys(response)!.Split(", ");
-        Assert.StartsWith("response-", keys[0], StringComparison.Ordinal);
-        Assert.Equal(["umbraco"], keys[1..]);
+        Assert.StartsWith("umbraco", Keys(response), StringComparison.Ordinal);
         Assert.Null(CacheControl(response));
     }
 
@@ -177,19 +167,5 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
             => Task.FromResult(Request.Headers.TryGetValue(Name, out var member)
                 ? AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, member.ToString())], SchemeName)), SchemeName))
                 : AuthenticateResult.NoResult());
-    }
-
-    private sealed class NoStore : ICacheTagStore
-    {
-        public Task RecordAsync(IReadOnlyCollection<CachedResponse> responses, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task TouchAsync(IReadOnlyCollection<string> responseKeys, DateTime seenUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task<IReadOnlyCollection<string>> FindResponseKeysAsync(IReadOnlyCollection<string> keys, IReadOnlyCollection<string>? cultures, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyCollection<string>>([]);
-
-        public Task<CachedResponse?> GetAsync(string responseKey, CancellationToken cancellationToken = default) => Task.FromResult<CachedResponse?>(null);
-
-        public Task<int> PruneAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default) => Task.FromResult(0);
     }
 }
