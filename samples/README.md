@@ -280,8 +280,46 @@ to refresh:
     old alias, must end up empty. Umbraco indexes the guides under the new alias up to a minute
     later, and the listing is purged again once it has; the undo waits for the index too.
 
-CI runs the same suite on every pull request (the `e2e` job in `.github/workflows/verify.yml`), on a
-fresh database, after waiting for the index.
+13. Street food, which was never published, is published. Late dinners and Eating out, which picked
+    it while the Delivery API left it out, must list it, and the Blocks page, whose nested teaser
+    picks it, must refetch.
+14. Hidden courtyard's summary changes. On foot, whose rich text is the only link to it, must refetch.
+15. The Courtyard image, used only inline in rich text, is renamed. Hidden courtyard and the Photo
+    essay must refetch.
+16. Events, picked by a callout in a row inside another row's area, changes. The Blocks page must
+    refetch.
+17. Getting around is renamed, which changes the routes of the guides under it. Guides, Breakfast and
+    the Blocks page, which pick or link to By ferry under it, must refetch.
+18. Harbour festival's date, which does not vary by culture, changes and en-US is published. The
+    event must show the new date in en-US and da-DK, and both event listings must refetch.
+19. Evenings at dusk is moved to the recycle bin. Its page must be not found, and `/articles` and
+    Harbour mornings must stop showing it. The undo restores and publishes it.
+20. The Night media folder is renamed. The Photo essay's listing of the City folder must show the new
+    name.
+
+Cases 1, 13 to 17 and 20 also check that a page showing none of the changed items kept its cache.
+Between cases, the script waits until the package has released every change and sent its purges
+(`GET /umbraco/management/api/v1/cache-tags/changes`), so a late purge for one case cannot refresh
+the next case's pages. `E2E_CASES=13,15` runs only those cases.
+
+CI runs the same suite on every pull request (the `e2e` jobs in `.github/workflows/verify.yml`), on a
+fresh database, after waiting for the index: on one server, on one server with Umbraco's Delivery API
+output cache on, and on two servers (see [Check it on two servers](#check-it-on-two-servers)).
+
+### Check the keys
+
+`pnpm keys` reads the `X-Umbraco-Cache-Keys` header of the seeded responses straight from Umbraco,
+and compares it with keys written out by hand from the seeders: every picker, block, rich text link,
+inline image, media item and listing selector the sample seeds, an unpublished pick, a culture
+variant, and a preview response (`no-store`, no keys). It needs only Umbraco, freshly seeded and
+indexed, and runs in a second:
+
+```bash
+cd samples/nextjs && pnpm keys
+```
+
+A missing key is a page that a publish never purges, which the e2e suite only finds for the pages it
+changes. This checks the header for every kind of reference at once. CI runs it before `pnpm e2e`.
 
 Each case prints `PASS` or `FAIL` with a line per check, and for a failed check every response on the
 page with when it was fetched and its tags. The script exits 1 when a case fails. Each case undoes its
@@ -408,7 +446,8 @@ cd samples/nextjs && UMBRACO_URL=http://localhost:5321 pnpm e2e
 A purge must now wait for A: B records each change and acknowledges it from its own cache refresh at
 once, A applies the change when it next reads Umbraco's cache instructions (every few seconds), and
 only then is the purge released. The cases take 3 to 8 seconds instead of 1. Without the wait, the
-frontend would refetch from A before A had the change and cache the old content again.
+frontend would refetch from A before A had the change and cache the old content again. CI runs the
+whole suite this way (the `e2e-two-servers` job).
 
 The ledger shows it per change (`theBuilderCacheTagsEvent`, `theBuilderCacheTagsAck`):
 

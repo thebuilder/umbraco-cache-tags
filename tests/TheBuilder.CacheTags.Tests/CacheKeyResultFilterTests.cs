@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.Routing;
 using Umbraco.Cms.Api.Delivery.Controllers.Content;
 using TheBuilder.CacheTags.Collection;
@@ -62,7 +63,20 @@ public sealed class CacheKeyResultFilterTests
         Assert.Equal(["umbraco", .. named], (IReadOnlyList<string>)http.Items[CacheKeyResultFilter.OutputCacheTagsItem]!);
     }
 
-    private sealed record Request(Type Controller, string Path, string Query = "", object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null);
+    [Fact]
+    public async Task An_empty_listing_is_tagged_in_Umbracos_output_cache_so_its_first_item_evicts_it()
+    {
+        // Umbraco asks for output cache tags once per item it resolved, so it never asks for these.
+        var outputCache = new OutputCacheFeature(new OutputCacheContext { HttpContext = new DefaultHttpContext() });
+
+        await RunAsync(new Request(typeof(QueryContentApiController), "/umbraco/delivery/api/v2/content", "?filter=search:harbour", Value: Array.Empty<IApiContent>(), OutputCache: outputCache));
+
+        Assert.Equal(["search-deliveryapicontentindex", "umbraco"], outputCache.Context.Tags.Order(StringComparer.Ordinal));
+    }
+
+    private sealed record OutputCacheFeature(OutputCacheContext Context) : IOutputCacheFeature;
+
+    private sealed record Request(Type Controller, string Path, string Query = "", object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null, IOutputCacheFeature? OutputCache = null);
 
     /// <summary>Runs the filter over a 200 response to the request.</summary>
     private static async Task<HttpContext> RunAsync(Request request)
@@ -90,6 +104,10 @@ public sealed class CacheKeyResultFilterTests
         var http = new DefaultHttpContext();
         http.Request.Path = request.Path;
         http.Request.QueryString = new QueryString(request.Query);
+        if (request.OutputCache is not null)
+        {
+            http.Features.Set(request.OutputCache);
+        }
         var action = new ControllerActionDescriptor
         {
             ControllerTypeInfo = request.Controller.GetTypeInfo(),

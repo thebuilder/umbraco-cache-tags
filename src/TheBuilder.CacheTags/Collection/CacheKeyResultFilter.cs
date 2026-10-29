@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -85,6 +86,12 @@ internal sealed class CacheKeyResultFilter(
         // limit. Umbraco's output cache has no limit, so its entry is tagged with every key.
         http.Response.Headers[settings.HeaderName] = string.Join(", ", keys.Take(settings.MaxHeaderKeys).Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
         http.Items[OutputCacheTagsItem] = keys;
+
+        // Umbraco asks OutputCacheTags for tags once per item it resolved, so a listing with no items
+        // (a search nothing matches yet, a type with no published items) would be cached untagged, and
+        // no purge could evict it: publishing its first item would leave it empty until it expired.
+        // Tagging the output cache entry directly covers every response.
+        http.Features.Get<IOutputCacheFeature>()?.Context.Tags.UnionWith(keys);
     }
 
     /// <summary>

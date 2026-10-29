@@ -30,7 +30,9 @@ case-sensitively, so a key that differed only in case would behave differently p
   another app using the same names.
 - These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`),
   which are internal to Umbraco. The package adds its own keys to Umbraco's output cache entries
-  (`OutputCacheTags`) and evicts by those, so the two never need to match.
+  and evicts by those, so the two never need to match. It tags each entry directly, as well as
+  through Umbraco's tag provider (`OutputCacheTags`), which Umbraco asks once per item: a listing
+  with no items would otherwise be cached untagged, and publishing its first item would not evict it.
 
 ## The response header
 
@@ -226,7 +228,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    listing keys are in it too, deliberately: the items listings show come from the published cache,
    so they are fresh at once, even though their membership and order are not yet. A server that a change was released without evicts the change's responses and listings
    from its own output cache once it has seen a refresh of the change, whether before the release
-   (its clock is behind) or up to 15 minutes after (it applied the change late). It keeps the
+   (its clock is behind) or up to 15 minutes after (it applied the change late), and then queues the
+   change's purges once more: a frontend that refetched from it in between cached the old content
+   again. It keeps the
    refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
    costs a cache miss, and the change's own refresh evicts after it. It does not acknowledge the
    change and is not waited for in the listings stage, so its listings may be cached again from its

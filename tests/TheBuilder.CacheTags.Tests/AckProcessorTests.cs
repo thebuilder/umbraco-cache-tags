@@ -113,6 +113,12 @@ public sealed class AckProcessorTests : IDisposable
         return change;
     }
 
+    private void Send(Purge purge, DateTime nowUtc)
+    {
+        Assert.True(_ledger.ClaimSend(purge.Id, "sender", nowUtc, nowUtc.AddMinutes(1)));
+        _ledger.Sent(purge.Id, "sender", nowUtc);
+    }
+
     private IReadOnlyList<string> AcknowledgedBy(Guid changeId)
         => _database.Sql.Fetch<string>("SELECT Server FROM theBuilderCacheTagsAck WHERE EventId = @0", changeId);
 
@@ -140,6 +146,46 @@ public sealed class AckProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_server_that_applies_a_change_after_it_was_released_without_it_sends_its_purge_once_more()
+    {
+        // A frontend refetched from this server after the purge, before it had the change, and cached the old content.
+        Change change = Record(new Change(Guid.CreateVersion7(), Noon, ChangeKind.Published, [new ChangedItem(Item, "page", Guid.Empty)], [], null));
+        _ledger.Release(change.Id, ChangeStage.Released, [_identity.Name], Noon.AddMinutes(1), [new NewPurge("frontend", [$"content-{Item:N}"], Noon.AddMinutes(1))]);
+        Send(_ledger.PurgesOf(change.Id).Single(), Noon.AddMinutes(1));
+
+        _time.UtcNow = Noon.AddMinutes(3);
+        await ApplyAsync(PublishOf(Item));
+
+        IReadOnlyList<Purge> purges = _ledger.PurgesOf(change.Id);
+        Assert.Equal(2, purges.Count);
+        Assert.All(purges, purge =>
+        {
+            Assert.Equal("frontend", purge.Target);
+            Assert.Equal([$"content-{Item:N}"], purge.Keys);
+        });
+        Assert.Equal(Noon.AddMinutes(3), purges[1].NotBeforeUtc);
+
+        // Once: a later refresh of the same change evicts again, but sends nothing more.
+        _time.UtcNow = Noon.AddMinutes(4);
+        await ApplyAsync(PublishOf(Item));
+        Assert.Equal(2, _ledger.PurgesOf(change.Id).Count);
+    }
+
+    [Fact]
+    public async Task A_purge_that_has_not_gone_out_yet_when_a_server_applies_its_change_late_is_not_doubled()
+    {
+        // The target was down: the purge is still waiting, and goes out after this server evicted anyway.
+        Change change = Record(new Change(Guid.CreateVersion7(), Noon, ChangeKind.Published, [new ChangedItem(Item, "page", Guid.Empty)], [], null));
+        _ledger.Release(change.Id, ChangeStage.Released, [_identity.Name], Noon.AddMinutes(1), [new NewPurge("frontend", [$"content-{Item:N}"], Noon.AddMinutes(1))]);
+
+        _time.UtcNow = Noon.AddMinutes(3);
+        await ApplyAsync(PublishOf(Item));
+
+        Assert.NotEmpty(_evicted);
+        Assert.Single(_ledger.PurgesOf(change.Id));
+    }
+
+    [Fact]
     public async Task A_change_released_without_another_server_is_not_evicted_again_here()
     {
         Change change = Record(new Change(Guid.CreateVersion7(), Noon, ChangeKind.Published, [new ChangedItem(Item, "page", Guid.Empty)], [], null));
@@ -149,6 +195,7 @@ public sealed class AckProcessorTests : IDisposable
         await ApplyAsync(PublishOf(Item));
 
         Assert.Empty(_evicted);
+        Assert.Empty(_ledger.PurgesOf(change.Id));
     }
 
     [Fact]
