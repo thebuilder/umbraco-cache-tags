@@ -136,19 +136,29 @@ jobs:
       - name: Build
         run: pnpm build
 
-  # The whole loop on one server: the sample Umbraco with the package, the Next.js sample, and
-  # `pnpm e2e` publishing changes through the Management API and waiting for the pages to refresh.
-  # On the sample's own Umbraco release (SampleUmbracoVersion), with a fresh SQLite database.
+  # The whole loop on one server: the sample Umbraco with the package, the Next.js sample, `pnpm keys`
+  # checking every seeded response's header, and `pnpm e2e` publishing changes through the Management
+  # API and waiting for the pages to refresh. On the sample's own Umbraco release
+  # (SampleUmbracoVersion), with a fresh SQLite database, once as the sample runs and once with
+  # Umbraco's Delivery API output cache on, which the package must evict before it purges.
   # Not for a release: it runs the package's project, not the packed file a release publishes, and a
   # flaky run should not hold a release back.
   e2e:
-    name: End to end
+    name: End to end (${{ matrix.name }})
     if: inputs.package-version == ''
     runs-on: ubuntu-latest
-    # A healthy run takes 3 to 4 minutes. The slow steps have limits of their own (the waits below,
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: one server
+            output-cache: "false"
+          - name: output cache on
+            output-cache: "true"
+    # A healthy run takes 6 to 7 minutes. The slow steps have limits of their own (the waits below,
     # and timeout-minutes on the steps after them), so a stalled step fails, rather than the whole job
-    # being cancelled, and the thread dump and logs still run inside these 10 minutes.
-    timeout-minutes: 10
+    # being cancelled, and the thread dump and logs still run inside these 15 minutes.
+    timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: 1
       UMBRACO_URL: http://localhost:5320
@@ -200,6 +210,7 @@ jobs:
           # request writing its instructions, which stalls the suite for minutes. Syncing hourly keeps it
           # out of the run.
           Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations: "01:00:00"
+          Umbraco__CMS__DeliveryApi__OutputCache__Enabled: ${{ matrix.output-cache }}
         run: |
           nohup dotnet bin/Release/net10.0/TheBuilder.CacheTags.Example.dll > "$RUNNER_TEMP/umbraco.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/umbraco.pid"
@@ -246,9 +257,15 @@ jobs:
           echo "The Next.js sample did not answer." >&2
           exit 1
 
-      # About 75 seconds when healthy.
+      # The keys of every seeded response, against the seeders, before anything is changed.
+      - name: Cache keys
+        timeout-minutes: 1
+        working-directory: samples/nextjs
+        run: pnpm keys
+
+      # About 3 minutes when healthy.
       - name: End to end
-        timeout-minutes: 3
+        timeout-minutes: 8
         working-directory: samples/nextjs
         run: pnpm e2e
 
@@ -266,6 +283,112 @@ jobs:
           echo "::group::Umbraco"
           cat "$RUNNER_TEMP/umbraco.log" || true
           echo "::endgroup::"
+          echo "::group::Next.js"
+          cat "$RUNNER_TEMP/nextjs.log" || true
+          echo "::endgroup::"
+
+  # The same suite on two Umbraco servers sharing one SQL Server database, the way a load-balanced
+  # site runs (samples/two-servers/run.sh). The Next.js sample reads server A, and every change is
+  # made on B, so a purge that went out before A had applied the change would leave A's old content
+  # in the frontend's cache. This is what the ack barrier is for, and only two servers can show it.
+  e2e-two-servers:
+    name: End to end (two servers)
+    if: inputs.package-version == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      FRONTEND_URL: http://localhost:3000
+      E2E_TIMEOUT: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-default-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-default-
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: samples/nextjs/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: samples/nextjs/pnpm-lock.yaml
+
+      - name: Install the Next.js sample
+        working-directory: samples/nextjs
+        run: pnpm install --frozen-lockfile
+
+      # SQL Server, then A (which installs and seeds the database), then B.
+      - name: Start SQL Server and both servers
+        timeout-minutes: 8
+        run: samples/two-servers/run.sh
+
+      # As in the one-server job: the seeding is done, and both servers' indexes have the articles.
+      - name: Wait for the seeded site and both Delivery API indexes
+        timeout-minutes: 4
+        run: |
+          deadline=$((SECONDS + 210))
+          articles() { curl -sf --max-time 5 "$1/umbraco/delivery/api/v2/content?fetch=children:/articles/" | jq -r '.total' || true; }
+          while (( SECONDS < deadline )); do
+            winter="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'Accept-Language: en-US' \
+              "http://localhost:5320/umbraco/delivery/api/v2/content/item/e0000000-0000-0000-0000-000000000026" || true)"
+            if [[ "$winter" == 200 && "$(articles http://localhost:5320)" == 3 && "$(articles http://localhost:5321)" == 3 ]]; then
+              echo "Seeded, and both indexes have the 3 articles after ${SECONDS}s."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The site was not seeded and indexed on both servers within 210 seconds." >&2
+          exit 1
+
+      - name: Build and start the Next.js sample, reading server A
+        timeout-minutes: 2
+        working-directory: samples/nextjs
+        env:
+          UMBRACO_URL: http://localhost:5320
+        run: |
+          pnpm build
+          nohup pnpm start > "$RUNNER_TEMP/nextjs.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl -sf -o /dev/null "$FRONTEND_URL/" && exit 0
+            sleep 2
+          done
+          echo "The Next.js sample did not answer." >&2
+          exit 1
+
+      - name: Cache keys on server A
+        timeout-minutes: 1
+        working-directory: samples/nextjs
+        env:
+          UMBRACO_URL: http://localhost:5320
+        run: pnpm keys
+
+      # Every change made on B.
+      - name: End to end, changing server B
+        timeout-minutes: 10
+        working-directory: samples/nextjs
+        env:
+          UMBRACO_URL: http://localhost:5321
+        run: pnpm e2e
+
+      - name: Logs
+        if: failure()
+        run: |
+          for server in a b; do
+            echo "::group::Umbraco $server"
+            cat "samples/two-servers/out/$server.log" || true
+            echo "::endgroup::"
+          done
           echo "::group::Next.js"
           cat "$RUNNER_TEMP/nextjs.log" || true
           echo "::endgroup::"

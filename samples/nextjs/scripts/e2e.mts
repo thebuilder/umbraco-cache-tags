@@ -37,6 +37,8 @@ const frontendUrl = (process.env.FRONTEND_URL ?? "http://localhost:3000").replac
 const clientId = process.env.UMBRACO_CLIENT_ID ?? "";
 const clientSecret = process.env.UMBRACO_CLIENT_SECRET ?? "";
 const timeoutMs = Number(process.env.E2E_TIMEOUT ?? 30) * 1000;
+// Case numbers to run, comma separated (E2E_CASES=13,15), for checking a few after a change. Empty runs all.
+const only = new Set((process.env.E2E_CASES ?? "").split(",").map((n) => n.trim()).filter(Boolean).map(Number));
 
 // The seeded keys, from ../TheBuilder.CacheTags.Example/Seeding/ExampleContent.cs.
 const keys = {
@@ -52,6 +54,16 @@ const keys = {
   byBike: "e0000000-0000-0000-0000-000000000012",
   byFerry: "e0000000-0000-0000-0000-000000000014",
   onFoot: "e0000000-0000-0000-0000-000000000015",
+  // Saved but never published, and picked by Eating out, Late dinners and a block on the Blocks page.
+  streetFood: "e0000000-0000-0000-0000-000000000019",
+  // Linked only from On foot's rich text.
+  hiddenCourtyard: "e0000000-0000-0000-0000-000000000020",
+  events: "e0000000-0000-0000-0000-000000000023",
+  harbourFestival: "e0000000-0000-0000-0000-000000000025",
+  // Shown only inline in rich text (Hidden courtyard and the Photo essay), never picked.
+  courtyardImage: "e1000000-0000-0000-0000-000000000026",
+  // A folder in Photos/City, which the Photo essay lists with the Media Delivery API.
+  nightFolder: "e1000000-0000-0000-0000-000000000012",
   // The dictionary item the footer shows (Dictionary/DictionarySeeder.cs in the Umbraco sample).
   footerTagline: "e7000000-0000-0000-0000-000000000001",
   // Not seeded: the article case 2 creates, and deletes again. e9 keys are kept for this script.
@@ -131,6 +143,47 @@ async function unpublish(id: string) {
   await management("PUT", `document/${id}/unpublish`, { cultures: null });
 }
 
+/** Unpublishes the document if a run that was stopped halfway left it published. */
+async function ensureUnpublished(id: string) {
+  const { variants } = await management<{ variants: { state: string }[] }>("GET", `document/${id}`);
+  if (variants.some((variant) => variant.state !== "Draft")) {
+    await unpublish(id);
+  }
+}
+
+/** Moves the document back under its parent and publishes it, if a run left it in the recycle bin. */
+async function ensureRestored(id: string, parent: string) {
+  const { isTrashed } = await management<Item>("GET", `document/${id}`);
+  if (isTrashed) {
+    await management("PUT", `recycle-bin/document/${id}/restore`, { target: { id: parent } });
+  }
+  await ensurePublished(id);
+}
+
+/** Changes the name of a document's invariant variant (and so its URL segment), and publishes it. Does nothing when the name stays. */
+async function renameDocument(id: string, map: (name: string) => string) {
+  const document = await management<Item>("GET", `document/${id}`);
+  const update = forUpdate(document);
+  const name = map(update.variants[0].name);
+  if (name === update.variants[0].name) {
+    return;
+  }
+  update.variants[0].name = name;
+  await management("PUT", `document/${id}`, { ...update, template: document.template });
+  await publish(id);
+}
+
+/** Changes a media item's name, and returns it. Does nothing when the name stays. */
+async function renameMedia(id: string, map: (name: string) => string) {
+  const update = forUpdate(await management<Item>("GET", `media/${id}`));
+  const name = map(update.variants[0].name);
+  if (name !== update.variants[0].name) {
+    update.variants[0].name = name;
+    await management("PUT", `media/${id}`, update);
+  }
+  return name;
+}
+
 /** Publishes the document again if a run that was stopped halfway left it unpublished. */
 async function ensurePublished(id: string) {
   const { variants } = await management<{ variants: { state: string }[] }>("GET", `document/${id}`);
@@ -152,6 +205,28 @@ async function sortChildren(parent: string, first: string[]) {
     parent: { id: parent },
     sorting: order.map((id, sortOrder) => ({ id, sortOrder })),
   });
+}
+
+type ChangeEntry = { id: string; kind: string; status: string; purges: { state: string }[] };
+
+/**
+ * Waits until every recent change has been released and its purges sent (the package's own Changes
+ * API, as the backoffice reads it), so the next case's baseline is not refreshed by a purge for the
+ * last one. On two servers a purge waits for the other server, and its listing purge for both
+ * servers' indexes, which a fixed pause does not cover.
+ */
+async function delivered(ms = timeoutMs * 3) {
+  const started = Date.now();
+  let waiting: ChangeEntry[] = [];
+  while (Date.now() - started < ms) {
+    const changes = await management<ChangeEntry[]>("GET", "cache-tags/changes?take=50");
+    waiting = changes.filter((change) => change.status !== "Released" || change.purges.some((purge) => purge.state === "Pending"));
+    if (waiting.length === 0) {
+      return;
+    }
+    await sleep(1000);
+  }
+  throw new Error(`Changes not delivered after ${ms / 1000}s: ${waiting.map((change) => `${change.kind} ${change.id} (${change.status})`).join(", ")}.`);
 }
 
 /** The articles in the order the sample seeds them. */
@@ -683,7 +758,207 @@ const cases: Case[] = [
       await indexed("contentType:guidePage");
     },
   },
+  {
+    name: "Publishing a guide that was never published refreshes the pages that picked it while it was not",
+    async run(report) {
+      // The Delivery API leaves an unpublished pick out, but its key is in the response all along.
+      await ready([hides("/guides/eating-out/late-dinners", ">Street food<", "Street food among its related guides")]);
+      const [, , blocks, about] = await settle(["/guides/eating-out/late-dinners", "/guides/eating-out", "/blocks", "/en-us/about"]);
+
+      await publish(keys.streetFood);
+
+      report.checks(
+        await waitFor([
+          shows("/guides/eating-out/late-dinners", ">Street food<", "Street food among its related guides"),
+          shows("/guides/eating-out", ">Street food<", "Street food among its featured guides"),
+          refetched(blocks, "content/item/blocks/", "a teaser in a block list inside a block picks it"),
+        ]),
+      );
+      report.checks(await holdsNow([kept(about)]));
+    },
+    async undo() {
+      await ensureUnpublished(keys.streetFood);
+    },
+  },
+  {
+    name: "Editing a page that only a rich text link reaches refreshes the page that links to it",
+    async run(report) {
+      const [, onFoot, articles] = await settle(["/hidden-courtyard", "/guides/getting-around/on-foot", "/articles"]);
+      let summary = "";
+
+      await updateDocument(keys.hiddenCourtyard, (update) =>
+        setValue(update, "summary", null, (v) => {
+          summary = original(v) + marker;
+          return summary;
+        }),
+      );
+      await publish(keys.hiddenCourtyard);
+
+      report.checks(
+        await waitFor([
+          shows("/hidden-courtyard", summary, "the new summary"),
+          refetched(onFoot, "content/item/guides/getting-around/on-foot/", "its rich text links to the page"),
+        ]),
+      );
+      report.checks(await holdsNow([kept(articles)]));
+    },
+    async undo() {
+      await updateDocument(keys.hiddenCourtyard, (update) => setValue(update, "summary", null, original));
+      await publish(keys.hiddenCourtyard);
+    },
+  },
+  {
+    name: "Renaming an image used only inline in rich text refreshes the pages it is inlined in",
+    async run(report) {
+      const [courtyard, essay, articles] = await settle(["/hidden-courtyard", "/photo-essay", "/articles"]);
+
+      await renameMedia(keys.courtyardImage, (name) => original(name) + marker);
+
+      report.checks(
+        await waitFor([
+          refetched(courtyard, "content/item/hidden-courtyard/", "its rich text shows the image"),
+          refetched(essay, "content/item/photo-essay/", "its rich text shows the image"),
+        ]),
+      );
+      report.checks(await holdsNow([kept(articles)]));
+    },
+    async undo() {
+      await renameMedia(keys.courtyardImage, original);
+    },
+  },
+  {
+    name: "Editing a page picked from a block two areas deep in a block grid refreshes the page with the grid",
+    async run(report) {
+      // Events is picked by a callout in a row that sits in an area of another row.
+      const [blocks, articles] = await settle(["/blocks", "/articles"]);
+
+      await updateDocument(keys.events, (update) => setValue(update, "intro", null, (v) => original(v) + marker));
+      await publish(keys.events);
+
+      report.checks(await waitFor([refetched(blocks, "content/item/blocks/", "a nested block picks Events")]));
+      report.checks(await holdsNow([kept(articles)]));
+    },
+    async undo() {
+      await updateDocument(keys.events, (update) => setValue(update, "intro", null, original));
+      await publish(keys.events);
+    },
+  },
+  {
+    name: "Renaming a category refreshes the pages that link to the guides under it, whose routes change",
+    async run(report) {
+      // By ferry sits under Getting around. Its route changes with the category's name, and Guides,
+      // Breakfast and the Blocks page show that route without showing the category itself.
+      const [guides, breakfast, blocks, harbour] = await settle([
+        "/guides",
+        "/guides/eating-out/breakfast-by-the-water",
+        "/blocks",
+        "/articles/harbour-mornings",
+      ]);
+
+      await renameDocument(keys.gettingAround, (name) => original(name) + marker);
+
+      report.checks(
+        await waitFor([
+          refetched(guides, "content/item/guides/", "it features By ferry"),
+          refetched(breakfast, "content/item/guides/eating-out/breakfast-by-the-water/", "it picks By ferry as related"),
+          refetched(blocks, "content/item/blocks/", "a callout and a link go to By ferry"),
+        ]),
+      );
+      report.checks(await holdsNow([kept(harbour)]));
+    },
+    async undo() {
+      await renameDocument(keys.gettingAround, original);
+    },
+  },
+  {
+    name: "Changing an event's shared date in en-US refreshes the event in both cultures",
+    async run(report) {
+      await ready([
+        shows("/en-us/events/harbour-festival", "2027-08-14 12:00", "the seeded date"),
+        shows("/da-dk/events/havnefest", "2027-08-14 12:00", "the seeded date"),
+      ]);
+      const [english, danish] = await settle(["/en-us/events", "/da-dk/events", "/en-us/events/harbour-festival", "/da-dk/events/havnefest"]);
+
+      // The date does not vary by culture, so publishing en-US changes it in da-DK as well.
+      await setEventDate("2027-08-14 13:00:00");
+
+      report.checks(
+        await waitFor([
+          shows("/en-us/events/harbour-festival", "2027-08-14 13:00", "the new date"),
+          shows("/da-dk/events/havnefest", "2027-08-14 13:00", "the new date"),
+          refetched(english, "content?fetch=children:/events/&sort=sortOrder:asc (en-US)", "its listing shows the event"),
+          refetched(danish, "content?fetch=children:/events/&sort=sortOrder:asc (da-DK)", "its listing shows the event"),
+        ]),
+      );
+    },
+    async undo() {
+      await setEventDate(seededEventDate);
+    },
+  },
+  {
+    name: "Moving an article to the recycle bin takes it off the listing and the pages that pick it",
+    async run(report) {
+      await ready([
+        shows("/articles", "Evenings at dusk", "it"),
+        shows("/articles/harbour-mornings", "Evenings at dusk", "it among its related articles"),
+      ]);
+      await settle(["/articles", "/articles/harbour-mornings", "/articles/evenings-at-dusk"]);
+
+      await management("PUT", `document/${keys.dusk}/move-to-recycle-bin`);
+
+      report.checks(
+        await waitFor(
+          [
+            notFound("/articles/evenings-at-dusk"),
+            hides("/articles/harbour-mornings", "Evenings at dusk", "it among its related articles"),
+            hides("/articles", "Evenings at dusk", "it"),
+          ],
+          timeoutMs * 2,
+        ),
+      );
+    },
+    async undo() {
+      await ensureRestored(keys.dusk, keys.articles);
+    },
+  },
+  {
+    name: "Renaming a media folder refreshes the media listing that shows it",
+    async run(report) {
+      const [essay, articles] = await settle(["/photo-essay", "/articles"]);
+
+      const name = await renameMedia(keys.nightFolder, (current) => original(current) + marker);
+
+      report.checks(
+        await waitFor([
+          shows("/photo-essay", `>${name}<`, "the folder's new name"),
+          refetched(essay, "media?fetch=children:/photos/city/&sort=name:asc", "it lists the folder"),
+        ]),
+      );
+      report.checks(await holdsNow([kept(articles)]));
+    },
+    async undo() {
+      await renameMedia(keys.nightFolder, original);
+    },
+  },
 ];
+
+const seededEventDate = "2027-08-14 12:00:00";
+
+/** Sets Harbour festival's date, which does not vary by culture, and publishes en-US. Does nothing when the date stays. */
+async function setEventDate(date: string) {
+  const document = await management<Item>("GET", `document/${keys.harbourFestival}`);
+  const update = forUpdate(document);
+  const value = update.values.find((v) => v.alias === "date");
+  if (!value) {
+    throw new Error("Harbour festival has no date value.");
+  }
+  if (value.value === date) {
+    return;
+  }
+  value.value = date;
+  await management("PUT", `document/${keys.harbourFestival}`, { ...update, template: document.template });
+  await publish(keys.harbourFestival, ["en-US"]);
+}
 
 /** Deletes the article case 2 creates, wherever a previous run left it. */
 async function deleteNewArticle() {
@@ -726,9 +1001,14 @@ async function main() {
 
   // Put back anything a stopped run left behind.
   await deleteNewArticle();
-  await ensurePublished(keys.dusk);
+  await ensureRestored(keys.dusk, keys.articles);
+  await ensureUnpublished(keys.streetFood);
   await sortChildren(keys.articles, seededArticles);
   await ensurePublished(keys.gettingAround);
+  await renameDocument(keys.gettingAround, original);
+  await renameMedia(keys.courtyardImage, original);
+  await renameMedia(keys.nightFolder, original);
+  await setEventDate(seededEventDate);
   await sortChildren(keys.gettingAround, [keys.byBike, keys.byFerry, keys.onFoot]);
   await setTypeAlias(keys.articleType, "article");
   await setTypeAlias(keys.guideType, "guidePage");
@@ -737,6 +1017,9 @@ async function main() {
   console.log(`Checking ${frontendUrl} against ${umbracoUrl}, ${timeoutMs / 1000}s per case.\n`);
   let failed = 0;
   for (const [index, testCase] of cases.entries()) {
+    if (only.size > 0 && !only.has(index + 1)) {
+      continue;
+    }
     const lines: string[] = [];
     let ok = true;
     const report: Report = {
@@ -762,8 +1045,9 @@ async function main() {
     } finally {
       try {
         await testCase.undo();
-        // Let the undo's own purge land before the next case takes its baseline.
-        await sleep(2000);
+        // Let the undo's own purges land before the next case takes its baseline.
+        await sleep(1000);
+        await delivered();
       } catch (error) {
         lines.push(`  undo failed, the next run retries it: ${message(error)}`);
       }
@@ -774,7 +1058,8 @@ async function main() {
     console.log(`${lines.join("\n")}\n`);
   }
 
-  console.log(failed === 0 ? `All ${cases.length} cases passed.` : `${failed} of ${cases.length} cases failed.`);
+  const ran = only.size > 0 ? cases.filter((_, index) => only.has(index + 1)).length : cases.length;
+  console.log(failed === 0 ? `All ${ran} cases passed.` : `${failed} of ${ran} cases failed.`);
   return failed === 0 ? 0 : 1;
 }
 
