@@ -30,7 +30,9 @@ case-sensitively, so a key that differed only in case would behave differently p
   another app using the same names.
 - These names deliberately differ from Umbraco's own output cache tags (`umb-dapi-content-{key}`),
   which are internal to Umbraco. The package adds its own keys to Umbraco's output cache entries
-  (`OutputCacheTags`) and evicts by those, so the two never need to match.
+  and evicts by those, so the two never need to match. It tags each entry directly, as well as
+  through Umbraco's tag provider (`OutputCacheTags`), which Umbraco asks once per item: a listing
+  with no items would otherwise be cached untagged, and publishing its first item would not evict it.
 
 ## The response header
 
