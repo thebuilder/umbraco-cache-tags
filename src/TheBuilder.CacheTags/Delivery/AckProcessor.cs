@@ -10,7 +10,8 @@ namespace TheBuilder.CacheTags.Delivery;
 ///     acknowledge it. A refresh can arrive before its change is recorded (the server making a
 ///     background change writes its cache instructions first), so unmatched refreshes are kept for a
 ///     short while. A change released without this server, after the ack timeout, is evicted here
-///     once a refresh of it has been seen, before or after the release, though not acknowledged.
+///     once a refresh of it has been seen, before or after the release, though not acknowledged, and
+///     its purge is sent once more.
 /// </summary>
 internal sealed class AckProcessor(
     LedgerStore ledger,
@@ -51,6 +52,7 @@ internal sealed class AckProcessor(
     // for a change seen close to them. Only the delivery worker reads and writes these three.
     private readonly HashSet<long> _usedBatches = [];
     private readonly Dictionary<Guid, long> _evictedLate = [];
+    private readonly HashSet<Guid> _resent = [];
     private DateTime _lateCheckedUtc = DateTime.MinValue;
 
     // The changes this server acknowledged, and when: a change can be released without its ack
@@ -214,6 +216,8 @@ internal sealed class AckProcessor(
             _evictedLate.Remove(gone);
         }
 
+        _resent.IntersectWith(missed.Select(change => change.Id));
+
         SeenRefresh[] history = _history.ToArray();
         var late = new List<(LedgerEntry Change, long Newest)>();
         foreach (LedgerEntry change in missed)
@@ -240,15 +244,29 @@ internal sealed class AckProcessor(
             }
         }
 
+        // The purge went out before this server had the change, or before it evicted it, so a frontend
+        // may have refetched the old content from here and cached it again. Send it once more, now
+        // that this server serves the change: once per change, however many refreshes follow.
+        var resent = 0;
         foreach (var (change, newest) in late)
         {
             _evictedLate[change.Id] = newest;
+            if (_resent.Add(change.Id))
+            {
+                resent += ledger.Resend(change.Id, now);
+            }
+        }
+
+        if (resent > 0)
+        {
+            signal.Wake();
         }
 
         logger.LogInformation(
-            "Cache tags: {Server} applied {Changes} after they were released without it, and evicted their responses.",
+            "Cache tags: {Server} applied {Changes} after they were released without it, evicted their responses and queued {Resent} purges again.",
             identity.Name,
-            string.Join(", ", late.Select(item => item.Change.Id)));
+            string.Join(", ", late.Select(item => item.Change.Id)),
+            resent);
     }
 
     private async Task AcknowledgeAsync(IReadOnlyList<LedgerEntry> completed, CancellationToken cancellationToken)

@@ -111,6 +111,27 @@ internal sealed class LedgerStore(PackageDatabase database)
     public bool ReleaseListings(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
         => database.Write(db => LedgerSql.ReleaseListings(db, changeId, Rows(changeId, nowUtc, purges)));
 
+    /// <summary>
+    ///     Queues a change's purges again, one of each target and set of keys it already queued, and
+    ///     returns how many. For a server that applied the change after it was released without it: a
+    ///     frontend that refetched from that server in between cached its old content again.
+    /// </summary>
+    public int Resend(Guid changeId, DateTime nowUtc)
+        => database.Write(db =>
+        {
+            var again = db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId)
+                .Where(row => row.State != OutboxStates.Discarded)
+                .DistinctBy(row => (row.Target, row.Keys))
+                .Select(row => new NewPurge(row.Target, JsonSerializer.Deserialize<string[]>(row.Keys, Json) ?? [], nowUtc))
+                .ToList();
+            foreach (OutboxRow row in Rows(changeId, nowUtc, again))
+            {
+                db.Insert(row);
+            }
+
+            return again.Count;
+        });
+
     /// <summary>The purges due now, and how many are pending at all (now or later).</summary>
     public (IReadOnlyList<Purge> Due, int Pending) Due(DateTime nowUtc, int take)
         => database.Read(db => (

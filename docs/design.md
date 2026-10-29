@@ -228,7 +228,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    listing keys are in it too, deliberately: the items listings show come from the published cache,
    so they are fresh at once, even though their membership and order are not yet. A server that a change was released without evicts the change's responses and listings
    from its own output cache once it has seen a refresh of the change, whether before the release
-   (its clock is behind) or up to 15 minutes after (it applied the change late). It keeps the
+   (its clock is behind) or up to 15 minutes after (it applied the change late), and then queues the
+   change's purges once more: a frontend that refetched from it in between cached the old content
+   again. It keeps the
    refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
    costs a cache miss, and the change's own refresh evicts after it. It does not acknowledge the
    change and is not waited for in the listings stage, so its listings may be cached again from its
