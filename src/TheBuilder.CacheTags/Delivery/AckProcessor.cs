@@ -250,11 +250,14 @@ internal sealed class AckProcessor(
         var resent = 0;
         foreach (var (change, newest) in late)
         {
-            _evictedLate[change.Id] = newest;
-            if (_resent.Add(change.Id))
+            // Marked only once queued, so a failed write is tried again on the next refresh.
+            if (_resent.Contains(change.Id) is false)
             {
                 resent += ledger.Resend(change.Id, now);
+                _resent.Add(change.Id);
             }
+
+            _evictedLate[change.Id] = newest;
         }
 
         if (resent > 0)

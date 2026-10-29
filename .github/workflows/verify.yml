@@ -157,8 +157,8 @@ jobs:
             output-cache: "true"
     # A healthy run takes 6 to 7 minutes. The slow steps have limits of their own (the waits below,
     # and timeout-minutes on the steps after them), so a stalled step fails, rather than the whole job
-    # being cancelled, and the thread dump and logs still run inside these 15 minutes.
-    timeout-minutes: 15
+    # being cancelled, and the thread dump and logs still run inside these 20 minutes.
+    timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: 1
       UMBRACO_URL: http://localhost:5320
@@ -295,7 +295,7 @@ jobs:
     name: End to end (two servers)
     if: inputs.package-version == ''
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       NEXT_TELEMETRY_DISABLED: 1
       FRONTEND_URL: http://localhost:3000

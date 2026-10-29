@@ -1049,7 +1049,10 @@ async function main() {
         await sleep(1000);
         await delivered();
       } catch (error) {
-        lines.push(`  undo failed, the next run retries it: ${message(error)}`);
+        // The next case would take its baseline on a site that is not back as seeded, or while this
+        // case's purges are still landing, and fail for a reason that is not its own.
+        ok = false;
+        lines.push(`  FAIL  undo: ${message(error)} (the next run retries it)`);
       }
     }
 

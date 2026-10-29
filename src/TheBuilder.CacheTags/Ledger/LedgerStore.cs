@@ -112,15 +112,16 @@ internal sealed class LedgerStore(PackageDatabase database)
         => database.Write(db => LedgerSql.ReleaseListings(db, changeId, Rows(changeId, nowUtc, purges)));
 
     /// <summary>
-    ///     Queues a change's purges again, one of each target and set of keys it already queued, and
-    ///     returns how many. For a server that applied the change after it was released without it: a
-    ///     frontend that refetched from that server in between cached its old content again.
+    ///     Queues a change's purges again, one of each target and set of keys it already sent or is
+    ///     sending, and returns how many. For a server that applied the change after it was released
+    ///     without it: a frontend that refetched from that server in between cached its old content
+    ///     again. A purge still waiting to go out goes after this server evicted, so it is not doubled.
     /// </summary>
     public int Resend(Guid changeId, DateTime nowUtc)
         => database.Write(db =>
         {
             var again = db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId)
-                .Where(row => row.State != OutboxStates.Discarded)
+                .Where(row => row.State == OutboxStates.Sent || (row.State == OutboxStates.Pending && row.LeaseOwner is not null))
                 .DistinctBy(row => (row.Target, row.Keys))
                 .Select(row => new NewPurge(row.Target, JsonSerializer.Deserialize<string[]>(row.Keys, Json) ?? [], nowUtc))
                 .ToList();
