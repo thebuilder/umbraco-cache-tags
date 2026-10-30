@@ -136,6 +136,42 @@ jobs:
       - name: Build
         run: pnpm build
 
+  # Whether the change touches anything the end-to-end jobs run, so a change to the documentation
+  # alone does not spend 7 minutes on two Umbraco runs. Lists what the e2e jobs do not need rather
+  # than what they do, so a file nobody thought of still runs them. A skipped job counts as passed,
+  # so it can stay a required check.
+  changes:
+    name: Changes
+    if: inputs.package-version == ''
+    runs-on: ubuntu-latest
+    outputs:
+      e2e: ${{ steps.e2e.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A pull request against its base, a push against the commit before it. A new branch has no
+      # commit before it, and anything else (a manual run) has no base, so those run everything.
+      - name: Check the changed files
+        id: e2e
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]] || ! git fetch --depth=1 origin "$BASE"; then
+            echo "No base to compare with, so the end-to-end jobs run."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$BASE" HEAD)"
+          relevant="$(grep -Ev '^(docs/|apps/docs/)|\.md$|^LICENSE$|^umbraco-marketplace\.json$' <<< "$changed" || true)"
+          if [[ -n "$relevant" ]]; then
+            echo "Changes the end-to-end jobs cover:"
+            echo "$relevant"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only documentation changed, so the end-to-end jobs are skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # The whole loop on one server: the sample Umbraco with the package, the Next.js sample, `pnpm keys`
   # checking every seeded response's header, and `pnpm e2e` publishing changes through the Management
   # API and waiting for the pages to refresh. On the sample's own Umbraco release
@@ -145,7 +181,8 @@ jobs:
   # flaky run should not hold a release back.
   e2e:
     name: End to end (${{ matrix.name }})
-    if: inputs.package-version == ''
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -293,7 +330,8 @@ jobs:
   # in the frontend's cache. This is what the ack barrier is for, and only two servers can show it.
   e2e-two-servers:
     name: End to end (two servers)
-    if: inputs.package-version == ''
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
