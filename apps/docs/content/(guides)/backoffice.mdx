@@ -5,7 +5,7 @@ seo:
   image: /og/backoffice.png
 ---
 
-Administrators find the package under **Settings > Advanced > Cache tags**, and in a **Cache** box on every document's and media item's **Info** tab.
+Administrators find the package under **Settings > Advanced > Cache tags**, with three tabs: **Changes**, **Purge** and **Targets**. Every document and media item also gets a **Cache** box on its **Info** tab.
 
 ## Changes
 
@@ -13,24 +13,50 @@ Administrators find the package under **Settings > Advanced > Cache tags**, and 
 ![Changes, with a publish of Harbour mornings open: the keys it planned, the server that applied and indexed it, and its two purges to the nextjs target](../screenshots/changes.png)
 </Frame>
 
-Changes lists the latest changes, newest first. Open one to see:
+Changes lists the latest changes, newest first. Open one to see the keys it planned, which servers applied it and have it in their index, and each purge with its attempts and any error.
 
-- The item and listing keys it planned
-- Which servers applied it, and which servers' indexes have it
-- Its purges to each target, with their attempts and any error
+| Status | Means |
+| --- | --- |
+| **Waiting for servers** | A server has not applied the change yet. |
+| **Waiting for index** | Every server has applied it, but a server's index has not caught up. |
+| **Purged** | Its purges are queued or sent. |
 
-A change shows **Waiting for servers** until every server has applied it, then **Waiting for index** until every server's index has it, then **Purged** once its purges are queued or sent. The view refreshes itself until the change is purged.
+The view refreshes itself until the change is purged. [How a purge is timed](/timing) explains each stage.
 
+:::note
 Purges that failed their last attempt are listed at the top, and stay until you act on them. **Retry** sends one again once the target answers, and **Set aside** hides it.
+:::
 
 ## Purge
 
-Purge keys by hand, one per line, or purge everything. You can purge your own `x-` keys, items' `content-` and `media-` keys, and `umbraco` for everything. Purging an item's key purges its type's listings too, so a long listing that shows the item is reached. After you purge everything, every cached response is fetched again from Umbraco, so expect more load for a while.
+<Frame caption="Two keys typed in: an item's own key and a site's x- key.">
+![Purge, with content-e0000000-0000-0000-0000-000000000003 and x-dictionary-en-us typed in, a Purge 2 keys button, and Purge everything below](../screenshots/purge.png)
+</Frame>
+
+Purge keys by hand, one per line. You can purge your own `x-` keys, items' `content-` and `media-` keys, and `umbraco` for everything. Purging an item's key purges its type's listings too, so a long listing that shows the item is reached.
+
+:::caution
+After **Purge everything**, every cached response is fetched again from Umbraco, so expect more load for a while.
+:::
 
 ## Targets
 
-Add a webhook, a Cloudflare zone or a target type you registered, send it a test purge before you save, and edit, disable or remove it later. The tab lists targets from `appsettings.json` too, read-only. See [Purge targets](/targets#in-the-backoffice).
+<Frame caption="The sample's Next.js webhook, from appsettings.json, so it is read-only here.">
+![Targets, listing the nextjs webhook to http://localhost:3000/api/cache-tags, enabled, from appsettings](../screenshots/targets.png)
+</Frame>
+
+The tab lists every target, those from `appsettings.json` too, read-only. **Add target** opens the form below. Edit, test, disable or remove a target you added here at any time.
+
+<Frame caption="A new webhook target, with its signing secret read from configuration.">
+![New target form: name vercel, type Webhook, enabled, URL https://www.example.com/api/cache-tags, signing secret read from CacheTags:Secrets:VercelSecret, request headers, and Save, Send test purge and Cancel](../screenshots/target-editor.png)
+</Frame>
+
+**Send test purge** checks the target answers before you save. Keep secrets under `CacheTags:Secrets` in the site's configuration rather than typing them in. See [Purge targets](/targets#in-the-backoffice).
 
 ## The Info tab
+
+<Frame caption="The Cache box on Harbour mornings' Info tab.">
+![The Cache box: the item's key content-e0000000-0000-0000-0000-000000000003 and a Purge this item button](../screenshots/info.png)
+</Frame>
 
 A document's or media item's **Info** tab has a **Cache** box with the item's key and **Purge this item**. Every cached response that shows the item carries that key, so publishing or purging the item reaches each of them.
