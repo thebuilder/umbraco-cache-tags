@@ -130,12 +130,14 @@ const save = async (name, raw) => {
 // down to the workspace's footer, which is empty here.
 const settingsWorkspace = { x: 300, y: 60 };
 
-const capture = async (name, height) => {
+// A view shorter than the window is cropped just below its last box, so the shot has no empty band.
+const capture = async (name, height, view) => {
   await page.setViewportSize({ width: 1440, height });
   await settle();
   const { x, y } = settingsWorkspace;
   const footer = await page.locator("umb-workspace-footer").boundingBox();
-  const bottom = footer?.y ?? height;
+  const last = view ? await page.locator(`${view} uui-box`).last().boundingBox() : null;
+  const bottom = last ? Math.min(last.y + last.height + 24, footer?.y ?? height) : footer?.y ?? height;
   await save(name, await page.screenshot({ clip: { x, y, width: 1440 - x, height: bottom - y } }));
 };
 
@@ -144,16 +146,30 @@ await page.goto(`${workspace}/changes`);
 await page.locator("details.change summary").first().click();
 await capture("changes", 900);
 
-// Look up, searching for "harbour". The view reads its search from the URL.
-await page.goto(`${workspace}/lookup?q=harbour`);
-await page.getByText("Harbour mornings").first().waitFor();
-await capture("lookup", 900);
+// Purge, with two keys typed in: an item's and a site's own.
+await page.goto(`${workspace}/purge`);
+await page.locator("thebuilder-cache-tags-purge-view uui-textarea textarea").fill(`content-${harbourMornings}\nx-dictionary-en-us`);
+await page.locator("body").click({ position: { x: 5, y: 5 } });
+await capture("purge", 760, "thebuilder-cache-tags-purge-view");
+
+// Targets, with the sample's target from appsettings.json.
+await page.goto(`${workspace}/targets`);
+await page.locator("thebuilder-cache-tags-targets-view uui-tag").first().waitFor();
+await capture("targets", 760, "thebuilder-cache-tags-targets-view");
+
+// A new webhook target, filled in up to the test purge. Nothing is saved.
+await page.getByRole("button", { name: "Add target" }).click();
+await page.locator("thebuilder-cache-tags-targets-view #name input").fill("vercel");
+await page.locator("thebuilder-cache-tags-targets-view #url input").fill("https://www.example.com/api/cache-tags");
+await page.getByRole("button", { name: "Read it from CacheTags:Secrets instead" }).click();
+await page.locator("thebuilder-cache-tags-targets-view #secret input").fill("VercelSecret");
+await capture("target-editor", 1100, "thebuilder-cache-tags-targets-view");
 
 // The Cache box on Harbour mornings' Info tab.
 await page.setViewportSize({ width: 1440, height: 1400 });
 await page.goto(`${umbracoUrl}/umbraco/section/content/workspace/document/edit/${harbourMornings}/invariant/view/info`);
 const box = page.locator("thebuilder-cache-tags-info-app uui-box");
-await box.locator("li").first().waitFor();
+await box.locator(".mono").waitFor();
 await box.scrollIntoViewIfNeeded();
 await settle();
 await save("info", await box.screenshot());

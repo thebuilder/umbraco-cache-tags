@@ -47,10 +47,12 @@ Every publish plans the `search-` key, which purges all of them at once. The sam
 
 ## Which responses get keys
 
-- **Cacheable responses** (200) get keys.
-- **Preview requests** get `no-store` and no keys.
-- **Requests from a signed-in member or backoffice user** get `private` and no keys.
-- **Other responses**, such as not found and redirects, get `no-store`, because no item covers them and no purge would reach them.
+| Response | Gets |
+| --- | --- |
+| Cacheable (200) | Its keys |
+| Preview | `no-store` and no keys |
+| From a signed-in member or backoffice user | `private` and no keys |
+| Anything else, such as not found and redirects | `no-store` and no keys, because no item covers them and no purge would reach them |
 
 ## How long a response may be cached
 
@@ -72,13 +74,19 @@ Fetch from your frontend's server, not from browsers. No purge reaches a browser
 }
 ```
 
-Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environment (`Umbraco__CMS__DeliveryApi__ApiKey`), not source control, and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`. The same key unlocks preview, so keep it on the server.
+Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environment (`Umbraco__CMS__DeliveryApi__ApiKey`), and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`.
+
+:::caution
+The same key unlocks preview, so keep it on the server and out of source control.
+:::
 
 ## Limits
 
 Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: `umbraco`, its listing keys, its `x-` keys, then its item keys. Past 64 items, or when the items would push the header past its limit, it lists their `type-` keys instead. Every change to an item, and every purge of its key by hand, purges its `type-` key too, so such a response is still reached, only more often. Umbraco's own output cache keeps every key.
 
+:::caution
 A full header is about 6 KB. A proxy in front of Umbraco must allow response headers that large. Nginx, for example, answers 502 when they pass its `proxy_buffer_size`, 4 or 8 KB by default, so set it to 16k.
+:::
 
 ## A prefix
 

@@ -6,7 +6,9 @@ const docsRoot = fileURLToPath(new URL("../", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const mark = `${docsRoot}public/logo-mark.svg`;
 
-await sharp(mark).resize(256, 256).png().toFile(`${docsRoot}favicon.png`);
+// The favicon lives in public/ so Blume links it by URL. A root-level icon gets inlined as a data URI in every
+// page's head, which pushes the og: tags past the 32 KB Slack reads, so links get no preview.
+await sharp(mark).resize(256, 256).png().toFile(`${docsRoot}public/favicon.png`);
 
 // The NuGet and Umbraco Marketplace icon: the mark on the dark tile the other TheBuilder packages
 // use, a #15152e to #08080f diagonal with a purple-blue glow at the top.
@@ -32,4 +34,4 @@ await sharp(Buffer.from(background))
   .png()
   .toFile(`${repoRoot}icon.png`);
 
-console.log("Generated favicon.png and the package icon.png from public/logo-mark.svg.");
+console.log("Generated public/favicon.png and the package icon.png from public/logo-mark.svg.");
