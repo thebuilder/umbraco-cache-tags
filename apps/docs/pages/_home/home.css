@@ -30,6 +30,7 @@
 
 .home .section { padding-block: 5rem; }
 .home .section-heading { max-width: 40rem; }
+.home .rule { display: block; width: 2.625rem; height: .2rem; margin-bottom: 1.25rem; border-radius: 999px; background: var(--udocs-gradient); }
 .home :where(.section-heading, .flow__copy, .api__copy) h2,
 .home .closing h2 { margin: 0; font-family: var(--blume-font-display); font-size: clamp(1.7rem, 3.5vw, 2.4rem); font-weight: 700; line-height: 1.15; letter-spacing: -.015em; }
 .home :where(.section-heading, .flow__copy, .api__copy) > p,
