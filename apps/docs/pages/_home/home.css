@@ -30,7 +30,6 @@
 
 .home .section { padding-block: 5rem; }
 .home .section-heading { max-width: 40rem; }
-.home .rule { display: block; width: 2.625rem; height: .2rem; margin-bottom: 1.25rem; border-radius: 999px; background: var(--udocs-gradient); }
 .home :where(.section-heading, .flow__copy, .api__copy) h2,
 .home .closing h2 { margin: 0; font-family: var(--blume-font-display); font-size: clamp(1.7rem, 3.5vw, 2.4rem); font-weight: 700; line-height: 1.15; letter-spacing: -.015em; }
 .home :where(.section-heading, .flow__copy, .api__copy) > p,
@@ -39,9 +38,8 @@
 
 
 .home .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.125rem; margin-top: 2.75rem; }
-.home .feature-card { min-height: 13.5rem; padding: 1.75rem; border: 1px solid var(--line); border-radius: calc(var(--blume-radius) * 1.25); background: color-mix(in oklab, var(--blume-muted) 32%, transparent); }
-.home .feature-card > span { color: var(--purple); font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
-.home .feature-card h3 { margin: 2.75rem 0 .5rem; font-size: 1.2rem; }
+.home .feature-card { padding: 1.75rem; border: 1px solid var(--line); border-radius: calc(var(--blume-radius) * 1.25); background: color-mix(in oklab, var(--blume-muted) 32%, transparent); }
+.home .feature-card h3 { margin: 0 0 .5rem; font-size: 1.2rem; }
 .home .feature-card p { margin: 0; color: var(--muted); line-height: 1.6; }
 
 .home :where(.flow, .api) { display: grid; grid-template-columns: minmax(0, .85fr) minmax(28rem, 1.15fr); gap: clamp(3rem, 8vw, 7rem); align-items: center; padding-block: 4.75rem; border-top: 1px solid var(--line); }
@@ -81,8 +79,6 @@
   .home-footer .shell { width: min(100% - 1.75rem, 70rem); }
   .home .section { padding-block: 3.75rem; }
   .home .feature-grid { grid-template-columns: 1fr; gap: 1.5rem; }
-  .home .feature-card { min-height: auto; }
-  .home .feature-card h3 { margin-top: 1.875rem; }
   .home :where(.flow, .api) { gap: 2rem; padding-block: 3.75rem; }
   .home .status-list div { grid-template-columns: 4.5rem 1fr; padding: 1.05rem; }
   .home .closing { margin-bottom: 3.5rem; padding: 3rem 1.25rem; }

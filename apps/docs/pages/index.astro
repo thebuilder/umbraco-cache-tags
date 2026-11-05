@@ -96,14 +96,12 @@ const features = [
 
     <section class="shell section" aria-labelledby="features-title">
       <div class="section-heading reveal">
-        <span class="rule" aria-hidden="true"></span>
         <h2 id="features-title">Built for headless Umbraco</h2>
         <p>For Next.js and other frontends that cache Delivery API responses, on one Umbraco server or many.</p>
       </div>
       <div class="feature-grid">
         {features.map((feature, index) => (
           <article class="feature-card reveal" style={`--i: ${index + 1}`}>
-            <span aria-hidden="true">0{index + 1}</span>
             <h3>{feature.title}</h3>
             <p>{feature.body}</p>
           </article>
@@ -113,7 +111,6 @@ const features = [
 
     <section class="shell flow" aria-labelledby="flow-title">
       <div class="flow__copy reveal">
-        <span class="rule" aria-hidden="true"></span>
         <h2 id="flow-title">How a publish reaches your cache</h2>
         <p>The package records each change, waits until every server serves it, and sends the keys to every purge target.</p>
         <a class="text-link" href="/timing">How a purge is timed <span aria-hidden="true">→</span></a>
@@ -127,7 +124,6 @@ const features = [
 
     <section class="shell api" aria-labelledby="api-title">
       <div class="api__copy reveal">
-        <span class="rule" aria-hidden="true"></span>
         <h2 id="api-title">Two lines in your fetch</h2>
         <p>Tag each cached response with its keys, and add a webhook route that expires them. The Next.js guide has both, ready to copy.</p>
         <a class="button button--secondary" href="/nextjs">Read the Next.js guide</a>
