@@ -102,7 +102,8 @@ purged by a change to one of those articles, not by every publish of an article.
 - The response carries `set-` only once its row is written. Writing gets 200 ms; a write that fails
   or takes longer, or a server past 100 new sets in a minute (logged once a minute), leaves the
   response with its items' `type-` keys, exactly as with sets off. A missing row can never leave a
-  response stale. Only a new set counts against the cap: marking a stored one seen does not. A set's
+  response stale. Writes that miss the budget are counted in a warning once a minute, so a database
+  too slow for sets shows in the log. Only a new set counts against the cap: marking a stored one seen does not. A set's
   stored time is read once its write holds the package's lock, so the second look below finds a write
   that waited for the lock past the release. Nothing is written when the keys before the items
   already fill the header.

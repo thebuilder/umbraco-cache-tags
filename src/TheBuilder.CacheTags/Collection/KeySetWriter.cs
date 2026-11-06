@@ -35,6 +35,9 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
     private int _newSetsInWindow;
     private bool _loggedCap;
     private bool _loggedFailure;
+    private int _late;
+    private DateTime _lateWarnedUtc = DateTime.MinValue;
+    private DateTime _lateSinceUtc = DateTime.MinValue;
 
     /// <summary>
     ///     The <c>set-</c> key of these items once their set is stored, or <c>null</c> when it could not
@@ -74,7 +77,14 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
         catch (TimeoutException)
         {
             // The write may still finish: a later response showing the same items finds it stored.
-            logger.LogDebug("Cache tags: a key set was not stored within {Budget}; the response carries its items' types.", WriteBudget);
+            if (LateThisMinute(now) is { } late)
+            {
+                logger.LogWarning(
+                    "Cache tags: {Count} responses since {SinceUtc:u} carried their items' types because their key set was not stored within {Budget}. A purge of any item of that type then reaches them.",
+                    late.Count,
+                    late.SinceUtc,
+                    WriteBudget);
+            }
             _ = write.ContinueWith(
                 finished => Remember(key, finished.IsCompletedSuccessfully && finished.Result, now),
                 CancellationToken.None,
@@ -109,6 +119,26 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
         }
 
         _stored[key] = storedUtc;
+    }
+
+    // Counts a write that missed the budget. Once a minute, returns how many did since the last
+    // warning, so a database too slow for sets shows in the log without a line per response.
+    private (int Count, DateTime SinceUtc)? LateThisMinute(DateTime now)
+    {
+        lock (_window)
+        {
+            _late++;
+            if (now - _lateWarnedUtc < TimeSpan.FromMinutes(1))
+            {
+                return null;
+            }
+
+            (int, DateTime) late = (_late, _lateSinceUtc == DateTime.MinValue ? now : _lateSinceUtc);
+            _late = 0;
+            _lateWarnedUtc = now;
+            _lateSinceUtc = now;
+            return late;
+        }
     }
 
     // Whether a failed write is the first since the minute TakeNewSet started, so a database that is

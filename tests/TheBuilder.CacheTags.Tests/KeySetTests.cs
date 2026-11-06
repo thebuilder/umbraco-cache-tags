@@ -171,6 +171,49 @@ public sealed partial class KeySetTests : IDisposable
     }
 
     [Fact]
+    public async Task Responses_whose_sets_miss_the_budget_are_counted_in_a_warning_once_a_minute()
+    {
+        // A database too slow for sets: every page quietly lists types, so the log has to say so.
+        using var release = new ManualResetEventSlim();
+        try
+        {
+            var logger = new Warnings();
+            var slow = new KeySetStore(Database(() => release.Wait(TimeSpan.FromSeconds(10))));
+            var writer = new KeySetWriter(slow, _database.Package, _time, logger);
+
+            async Task<string[]> RenderLateAsync(int page)
+            {
+                Task<string[]> render = RenderAsync([.. Linked, Article(1000 + page)], writer: writer);
+                while (render.IsCompleted is false)
+                {
+                    _time.Advance(TimeSpan.FromMilliseconds(250));
+                    await Task.Delay(10);
+                }
+
+                return await render;
+            }
+
+            for (var page = 0; page < 3; page++)
+            {
+                Assert.Equal(["umbraco", "type-article"], await RenderLateAsync(page));
+            }
+
+            Assert.Single(logger.Messages);
+            Assert.StartsWith("Cache tags: 1 responses", logger.Messages[0]);
+
+            _time.Advance(TimeSpan.FromMinutes(1));
+            await RenderLateAsync(3);
+
+            Assert.Equal(2, logger.Messages.Count);
+            Assert.StartsWith("Cache tags: 3 responses", logger.Messages[1]);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
     public async Task Two_renders_of_the_same_items_in_any_order_store_one_set()
     {
         var first = await RenderAsync(Linked);
@@ -508,6 +551,29 @@ public sealed partial class KeySetTests : IDisposable
     private sealed class LandingController : ControllerBase
     {
         public IActionResult Get() => Ok();
+    }
+
+    // The warnings a writer logs.
+    private sealed class Warnings : Microsoft.Extensions.Logging.ILogger<KeySetWriter>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+            {
+                lock (Messages)
+                {
+                    Messages.Add(formatter(state, exception));
+                }
+            }
+        }
     }
 
     private sealed class NoTarget : IPurgeTarget

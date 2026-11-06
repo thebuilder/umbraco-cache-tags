@@ -98,7 +98,7 @@ X-Umbraco-Cache-Keys: umbraco, set-3f9a0c1d2e4b5a6978c0d1e2f3a4b5c6
 | 80 linked articles, set not stored in time | `umbraco`, its listing keys, `type-article` |
 | A listing of 80 items | `umbraco`, its listing keys, their `type-` keys |
 
-A response carries a `set-` key only once its set is stored. When the database is slow or failing, or a server has stored 100 new sets in the last minute, the response carries its items' `type-` keys instead. Every change to an item purges its `type-` key, so such a response is still reached, only more often. Listings list their items' types too: their listing key already reaches them when an item joins or leaves, and every page and filter of a listing would need a set of its own.
+A response carries a `set-` key only once its set is stored. When the database is slow or failing, or a server has stored 100 new sets in the last minute, the response carries its items' `type-` keys instead. Every change to an item purges its `type-` key, so such a response is still reached, only more often. The log warns once a minute with how many responses missed the time limit, so a database too slow for sets shows up there. Listings list their items' types too: their listing key already reaches them when an item joins or leaves, and every page and filter of a listing would need a set of its own.
 
 Responses that show the same items share one set, so rendering a page again stores nothing new. A set no server has rendered for 90 days is removed and purged, so a response cached longer than that renders again rather than going stale. Turn sets off with `CacheTags:KeySets` to keep everything out of the database.
 
