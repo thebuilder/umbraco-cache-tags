@@ -29,10 +29,14 @@ public sealed class MigrationTests
                 "theBuilderCacheTagsAck UNIQUE IX_theBuilderCacheTagsAck_Pair (EventId, Server)",
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_CreatedUtc (CreatedUtc)",
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_ReleasedUtc (ReleasedUtc)",
+                "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_SetsCheckUtc (SetsCheckUtc)",
                 "theBuilderCacheTagsEvent IX_theBuilderCacheTagsEvent_Status (Status)",
+                "theBuilderCacheTagsKeySet IX_theBuilderCacheTagsKeySet_LastSeenUtc (LastSeenUtc)",
+                "theBuilderCacheTagsKeySetItem IX_theBuilderCacheTagsKeySetItem_ItemKey (ItemKey)",
+                "theBuilderCacheTagsKeySetItem UNIQUE IX_theBuilderCacheTagsKeySetItem_Pair (Hash, ItemKey)",
                 "theBuilderCacheTagsOutbox IX_theBuilderCacheTagsOutbox_Due (State, NotBeforeUtc)",
             ],
-            new[] { "theBuilderCacheTagsAck", "theBuilderCacheTagsEvent", "theBuilderCacheTagsOutbox", "theBuilderCacheTagsServer", "theBuilderCacheTagsTarget" }
+            new[] { "theBuilderCacheTagsAck", "theBuilderCacheTagsEvent", "theBuilderCacheTagsKeySet", "theBuilderCacheTagsKeySetItem", "theBuilderCacheTagsOutbox", "theBuilderCacheTagsServer", "theBuilderCacheTagsTarget" }
                 .SelectMany(migrated.Indexes));
     }
 
@@ -95,6 +99,22 @@ public sealed class MigrationTests
 
         AckSql.Indexed(migrated.Database, "server-1", [Recorded], new DateTime(2026, 10, 20, 9, 1, 0, DateTimeKind.Utc));
         Assert.Equal(["server-1"], AckSql.Acks(migrated.Database, [Recorded]).IndexedBy(Recorded));
+        AssertSameSchemaAsAFreshInstall(migrated);
+    }
+
+    [Fact]
+    public async Task A_change_released_before_key_sets_is_never_looked_up_again()
+    {
+        using MigratedDatabase migrated = MigratedDatabase.Before<AddKeySets>();
+
+        // The first step creates the table from today's row, so take the column away again to have
+        // the table every step before key sets left.
+        migrated.Database.Execute("ALTER TABLE theBuilderCacheTagsEvent DROP COLUMN SetsCheckUtc");
+        InsertEvent(migrated, Recorded, "Released");
+
+        await migrated.MigrateAsync();
+
+        Assert.Empty(LedgerSql.SetsCheckDue(migrated.Database, DateTime.MaxValue, 10));
         AssertSameSchemaAsAFreshInstall(migrated);
     }
 

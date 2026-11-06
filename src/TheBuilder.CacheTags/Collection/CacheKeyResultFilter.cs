@@ -23,7 +23,8 @@ internal sealed class CacheKeyResultFilter(
     IOptionsMonitor<CacheTagsOptions> options,
     IRequestPreviewService preview,
     ResponseCollector collector,
-    CacheTagsResponse named) : IAsyncResultFilter
+    CacheTagsResponse named,
+    KeySetWriter keySets) : IAsyncResultFilter
 {
     /// <summary>Where the response's keys for Umbraco's output cache are kept for the rest of the request.</summary>
     public const string OutputCacheTagsItem = "TheBuilder.CacheTags.OutputCacheTags";
@@ -35,11 +36,11 @@ internal sealed class CacheKeyResultFilter(
         {
             if (DeliveryEndpoint.Of(action.ControllerTypeInfo) is { } endpoint)
             {
-                Tag(context, settings, value => collector.Collect(value, context.HttpContext, endpoint));
+                await TagAsync(context, settings, value => collector.Collect(value, context.HttpContext, endpoint), sets: endpoint.Listing is false);
             }
             else if ((action.MethodInfo.GetCustomAttribute<CacheTaggedAttribute>() ?? action.ControllerTypeInfo.GetCustomAttribute<CacheTaggedAttribute>()) is not null)
             {
-                Tag(context, settings, Custom);
+                await TagAsync(context, settings, Custom, sets: true);
             }
         }
 
@@ -54,7 +55,10 @@ internal sealed class CacheKeyResultFilter(
         return keys;
     }
 
-    private void Tag(ResultExecutingContext context, CacheTagsOptions settings, Func<object?, IReadOnlySet<string>> collect)
+    // sets: whether items too many to list may be one stored set. A listing's own selector key already
+    // reaches it when an item joins or leaves, and every page and filter of a listing would store a
+    // set of its own, so listings list their items' types.
+    private async Task TagAsync(ResultExecutingContext context, CacheTagsOptions settings, Func<object?, IReadOnlySet<string>> collect, bool sets)
     {
         HttpContext http = context.HttpContext;
         if (preview.IsPreview())
@@ -80,11 +84,14 @@ internal sealed class CacheKeyResultFilter(
             return;
         }
 
-        IReadOnlyList<string> keys = ResponseTags.For(ResponseTags.MaxItemKeys, settings.MaxHeaderKeys, collect(value), collector.TypeKeys);
+        var tags = ResponseTags.Of(collect(value));
+        IReadOnlyList<string> header = await tags.HeaderAsync(ResponseTags.MaxItemKeys, settings.MaxHeaderKeys, items => OverflowAsync(items, settings.KeySets && sets));
 
         // A frontend keeps only so many tags per entry and drops the rest, so the header stops at the
-        // limit. Umbraco's output cache has no limit, so its entry is tagged with every key.
-        http.Response.Headers[settings.HeaderName] = string.Join(", ", keys.Take(settings.MaxHeaderKeys).Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
+        // limit. Umbraco's output cache has no limit, so its entry is tagged with every key, each item
+        // included, and a purge of an item evicts it without the item's sets.
+        http.Response.Headers[settings.HeaderName] = string.Join(", ", header.Take(settings.MaxHeaderKeys).Select(key => CacheKeys.WithPrefix(settings.KeyPrefix, key)));
+        IReadOnlyList<string> keys = tags.All;
         http.Items[OutputCacheTagsItem] = keys;
 
         // Umbraco asks OutputCacheTags for tags once per item it resolved, so a listing with no items
@@ -93,6 +100,13 @@ internal sealed class CacheKeyResultFilter(
         // Tagging the output cache entry directly covers every response.
         http.Features.Get<IOutputCacheFeature>()?.Context.Tags.UnionWith(keys);
     }
+
+    /// <summary>
+    ///     What a response lists for items too many to list: their stored set, or their types when the
+    ///     set is off or could not be stored in time.
+    /// </summary>
+    private async Task<IEnumerable<string>> OverflowAsync(IReadOnlyList<string> items, bool sets)
+        => sets && await keySets.TryStoreAsync(items) is { } set ? [set] : collector.TypeKeys(items);
 
     /// <summary>
     ///     The status a result answers with, and its body for results that carry one. The response is

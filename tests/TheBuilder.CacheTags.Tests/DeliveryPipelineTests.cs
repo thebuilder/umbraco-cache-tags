@@ -54,6 +54,7 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
                     services.AddSingleton<IOptionsMonitor<CacheTagsOptions>>(new TestOptions(Settings));
                     services.AddSingleton(Names.Of(["article"]));
                     services.AddScoped<CacheTagsResponse>();
+                    services.AddSingleton<KeySetWriter>(_ => null!);
                     services.AddScoped(provider => new ResponseCollector(
                         null!,
                         Fake.Of<IPublishedContentCache>(),

@@ -12,7 +12,8 @@ applied a change.
 
 - `src/TheBuilder.CacheTags`: the package. `Collection/` tags Delivery API responses with the keys
   of what they show, `Ledger/` plans the purge for each change on the server that makes it,
-  `Delivery/` waits for every server and sends the purges, `Storage/` holds the package's tables,
+  `Delivery/` waits for every server and sends the purges, `Storage/` holds the package's tables
+  (including the stored key sets a response past 64 items carries),
   `ManagementApi/` is the admin API behind the backoffice.
 - `tests/TheBuilder.CacheTags.Tests`: unit tests, including the ledger's SQL against SQLite.
 - `docs/design.md`: the key scheme, the header and webhook contract, and how a purge is planned and

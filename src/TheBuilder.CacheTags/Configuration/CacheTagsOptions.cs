@@ -28,6 +28,15 @@ public sealed class CacheTagsOptions
     public int MaxHeaderKeys { get; set; } = 128;
 
     /// <summary>
+    ///     Whether a response showing more items than its header lists (more than 64, or past
+    ///     <see cref="MaxHeaderKeys" />) carries one <c>set-</c> key for them, with the set stored in
+    ///     the Umbraco database, so only a change to one of its own items purges it. When off, or when
+    ///     the set cannot be stored in time, it carries its items' <c>type-</c> keys, which a change to
+    ///     any item of those types purges. Defaults to <c>true</c>.
+    /// </summary>
+    public bool KeySets { get; set; } = true;
+
+    /// <summary>
     ///     Where purges are sent once every server has applied a change, by name
     ///     (<c>CacheTags:Targets:nextjs:Url</c>). A change is still planned and recorded without any.
     /// </summary>

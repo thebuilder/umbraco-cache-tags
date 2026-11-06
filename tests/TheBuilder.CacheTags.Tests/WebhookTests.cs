@@ -37,11 +37,13 @@ public sealed class WebhookTests
     [InlineData("content-e0000000-0000-0000-0000-000000000003", "", true)]
     [InlineData("media-e0000000-0000-0000-0000-000000000003", "", true)]
     [InlineData("shop-content-e0000000-0000-0000-0000-000000000003", "shop-", true)]
+    [InlineData("set-3f9a0c1d2e4b5a6978c0d1e2f3a4b5c6", "", true)]
+    [InlineData("shop-set-3f9a0c1d2e4b5a6978c0d1e2f3a4b5c6", "shop-", true)]
     [InlineData("type-article", "", false)]
     [InlineData("children-e0000000-0000-0000-0000-000000000003", "", false)]
     [InlineData("umbraco", "", false)]
     [InlineData("shop-umbraco", "shop-", false)]
-    public void Items_and_custom_keys_expire_while_selectors_go_stale(string key, string prefix, bool expires)
+    public void Items_sets_and_custom_keys_expire_while_selectors_go_stale(string key, string prefix, bool expires)
     {
         Assert.Equal(expires, CacheKeys.Expires(key, prefix));
     }

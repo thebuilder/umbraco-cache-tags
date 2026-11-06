@@ -66,6 +66,9 @@ const keys = {
   nightFolder: "e1000000-0000-0000-0000-000000000012",
   // The dictionary item the footer shows (Dictionary/DictionarySeeder.cs in the Umbraco sample).
   footerTagline: "e7000000-0000-0000-0000-000000000001",
+  // The reading list picks notes 100 to 169, more than a header lists; note 170 it does not pick.
+  pickedNote: "e0000000-0000-0000-0000-000000000100",
+  unpickedNote: "e0000000-0000-0000-0000-000000000170",
   // Not seeded: the article case 2 creates, and deletes again. e9 keys are kept for this script.
   newArticle: "e9000000-0000-0000-0000-000000000001",
 };
@@ -938,6 +941,32 @@ const cases: Case[] = [
     },
     async undo() {
       await renameMedia(keys.nightFolder, original);
+    },
+  },
+  {
+    name: "Renaming a note the reading list picks refreshes it through its stored set, and renaming the note it does not pick leaves it cached",
+    async run(report) {
+      const [before] = await settle(["/reading-list"]);
+      const tags = before.fetches.find((f) => f.request === "content/item/reading-list/")?.tags ?? "";
+      report.checks([
+        direct(
+          "/reading-list carries one stored set in place of its 71 items, and not the notes' type",
+          /\bset-[0-9a-f]{32}\b/.test(tags) && !tags.includes("type-note") && !tags.includes(`content-${keys.pickedNote}`),
+          `tags: ${tags}`,
+        ),
+      ]);
+
+      // Every publish of a note purges type-note, which the page would carry without its set.
+      await renameDocument(keys.unpickedNote, (name) => original(name) + marker);
+      await delivered();
+      report.checks(await holdsNow([kept(before)]));
+
+      await renameDocument(keys.pickedNote, (name) => original(name) + marker);
+      report.checks(await waitFor([contains("/reading-list", "notes", `Note 01${marker}`, true)]));
+    },
+    async undo() {
+      await renameDocument(keys.unpickedNote, original);
+      await renameDocument(keys.pickedNote, original);
     },
   },
 ];

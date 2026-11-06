@@ -1,0 +1,383 @@
+using System.Reflection;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using TheBuilder.CacheTags.Collection;
+using TheBuilder.CacheTags.Configuration;
+using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.ManagementApi;
+using TheBuilder.CacheTags.Storage;
+using TheBuilder.CacheTags.Targets;
+using Umbraco.Cms.Core.DeliveryApi;
+using Umbraco.Cms.Core.Models.DeliveryApi;
+using Umbraco.Cms.Core.Models.PublishedContent;
+using Umbraco.Cms.Core.PublishedCache;
+
+namespace TheBuilder.CacheTags.Tests;
+
+/// <summary>
+///     A response showing more items than its header lists carries one stored <c>set-</c> key, and a
+///     change to one of its items purges it: rendered through the result filter, released through
+///     the ledger in SQLite.
+/// </summary>
+public sealed partial class KeySetTests : IDisposable
+{
+    private static readonly DateTime Noon = new(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc);
+
+    // A landing page's 80 linked articles, and an article it does not link.
+    private static readonly IReadOnlyList<string> Linked = Enumerable.Range(1, 80).Select(Article).ToList();
+    private static readonly string NotLinked = Article(81);
+
+    private readonly TestDatabase _database = new();
+    private readonly ManualTime _time = new(Noon);
+    private readonly KeySetStore _store;
+    private readonly LedgerStore _ledger;
+    private readonly TestOptions _options = new(new CacheTagsOptions { Targets = { ["nextjs"] = new CacheTagsTargetOptions { Type = "test" } } });
+
+    public KeySetTests()
+    {
+        _store = new KeySetStore(_database.Package);
+        _ledger = new LedgerStore(_database.Package);
+    }
+
+    public void Dispose() => _database.Dispose();
+
+    private static string Article(int i) => $"content-a0000000-0000-0000-0000-{i:D12}";
+
+    [GeneratedRegex("^set-[0-9a-f]{32}$")]
+    private static partial Regex SetKey();
+
+    [Fact]
+    public async Task A_page_showing_80_items_carries_one_set_key_in_place_of_their_type()
+    {
+        var header = await RenderAsync(Linked);
+
+        Assert.Equal("umbraco", header[0]);
+        Assert.Matches(SetKey(), Assert.Single(header[1..]));
+        Assert.Equal(80, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySetItem WHERE Hash = @0", header[1]["set-".Length..]));
+    }
+
+    [Fact]
+    public async Task Umbracos_output_cache_keeps_every_item_of_a_page_that_carries_a_set()
+    {
+        // So this server evicts the page by the changed item's own key, without looking its sets up.
+        IReadOnlyList<string>? tags = null;
+
+        await RenderAsync(Linked, rendered: http => tags = (IReadOnlyList<string>)http.Items[CacheKeyResultFilter.OutputCacheTagsItem]!);
+
+        Assert.Equal(["umbraco", .. Linked], tags);
+    }
+
+    [Fact]
+    public async Task A_listing_of_80_items_carries_their_type_and_stores_no_set()
+    {
+        // Its selector already reaches it, and every page and filter of it would be a set of its own.
+        var header = await RenderAsync(Linked, listing: true);
+
+        Assert.Equal(["umbraco", "type-article"], header);
+        Assert.Equal(0, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySet"));
+    }
+
+    [Fact]
+    public async Task A_page_showing_64_items_lists_them_and_stores_no_set()
+    {
+        var header = await RenderAsync(Linked.Take(64).ToList());
+
+        Assert.Equal(["umbraco", .. Linked.Take(64)], header);
+        Assert.Equal(0, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySet"));
+    }
+
+    [Fact]
+    public async Task Publishing_an_item_the_page_shows_purges_its_set_and_one_it_does_not_show_does_not()
+    {
+        var set = (await RenderAsync(Linked))[1];
+
+        Guid linked = Record(Linked[40]);
+        Guid notLinked = Record(NotLinked);
+        _time.UtcNow = Noon.AddMinutes(2);
+        await Releaser().ReleaseAsync(CancellationToken.None);
+
+        Assert.Contains(set, Purged(linked));
+        Assert.DoesNotContain(set, Purged(notLinked));
+    }
+
+    [Fact]
+    public async Task A_purge_by_hand_of_an_item_the_page_shows_purges_its_set()
+    {
+        var set = (await RenderAsync(Linked))[1];
+
+        var change = new Change(Guid.CreateVersion7(), Noon, ChangeKind.Custom, [], [], null, "purged by hand", [Linked[0]]);
+        _ledger.Add(change, new PurgePlan([Linked[0]], Everything: false), "backoffice");
+        await Releaser().ReleaseAsync(CancellationToken.None);
+
+        Assert.Contains(set, Purged(change.Id));
+    }
+
+    [Fact]
+    public async Task With_key_sets_off_the_page_carries_its_items_type()
+    {
+        var header = await RenderAsync(Linked, new CacheTagsOptions { KeySets = false });
+
+        Assert.Equal(["umbraco", "type-article"], header);
+        Assert.Equal(0, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySet"));
+    }
+
+    [Fact]
+    public async Task When_its_set_cannot_be_stored_the_page_carries_its_items_type()
+    {
+        _database.Sql.Execute("DROP TABLE theBuilderCacheTagsKeySetItem");
+
+        var header = await RenderAsync(Linked);
+
+        Assert.Equal(["umbraco", "type-article"], header);
+    }
+
+    [Fact]
+    public async Task When_its_set_is_not_stored_in_time_the_page_carries_its_items_type()
+    {
+        // The database takes longer than the budget to start the write.
+        var release = new ManualResetEventSlim();
+        try
+        {
+            var slow = new KeySetStore(new PackageDatabase(
+                Fake.Of<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>((method, _) =>
+                {
+                    release.Wait(TimeSpan.FromSeconds(10));
+                    return null;
+                }),
+                Fake.Of<Umbraco.Cms.Core.Services.IRuntimeState>(),
+                Fake.Of<Umbraco.Cms.Core.Services.IKeyValueService>()));
+            var writer = new KeySetWriter(slow, _database.Package, TimeProvider.System, NullLogger<KeySetWriter>.Instance);
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var header = await RenderAsync(Linked, writer: writer);
+
+            Assert.Equal(["umbraco", "type-article"], header);
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"The response waited {watch.Elapsed} for its set.");
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task Two_renders_of_the_same_items_in_any_order_store_one_set()
+    {
+        var first = await RenderAsync(Linked);
+        var second = await RenderAsync(Linked.Reverse().ToList());
+
+        Assert.Equal(first, second);
+        Assert.Equal(1, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySet"));
+        Assert.Equal(80, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySetItem"));
+    }
+
+    [Fact]
+    public async Task A_server_stores_at_most_100_new_sets_a_minute_and_then_lists_types()
+    {
+        var writer = Writer();
+        for (var page = 0; page < KeySetWriter.MaxNewSetsPerMinute; page++)
+        {
+            Assert.Matches(SetKey(), (await RenderAsync([.. Linked, Article(1000 + page)], writer: writer))[1]);
+        }
+
+        Assert.Equal(["umbraco", "type-article"], await RenderAsync([.. Linked, Article(999)], writer: writer));
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        Assert.Matches(SetKey(), (await RenderAsync([.. Linked, Article(999)], writer: writer))[1]);
+    }
+
+    [Fact]
+    public async Task A_server_marks_a_set_it_keeps_rendering_seen_once_a_day()
+    {
+        var writer = Writer();
+        var set = (await RenderAsync(Linked, writer: writer))[1]["set-".Length..];
+
+        _time.Advance(TimeSpan.FromHours(2));
+        await RenderAsync(Linked, writer: writer);
+        Assert.Equal(Noon, LastSeen(set));
+
+        _time.Advance(TimeSpan.FromDays(1));
+        await RenderAsync(Linked, writer: writer);
+        Assert.Equal(_time.UtcNow, LastSeen(set));
+    }
+
+    [Fact]
+    public async Task A_set_stored_after_the_release_by_a_render_that_read_the_old_item_is_purged_by_the_second_look()
+    {
+        // Stored long before the change: purged at release, not again.
+        var before = (await RenderAsync(Linked))[1];
+        Guid change = Record(Linked[0]);
+        _time.UtcNow = Noon.AddMinutes(2);
+        var releaser = Releaser();
+        await releaser.ReleaseAsync(CancellationToken.None);
+
+        // A render that read the item before its server applied the change stores its set just after.
+        _time.Advance(TimeSpan.FromSeconds(1));
+        var after = (await RenderAsync([.. Linked.Skip(1), Linked[0], Article(500)]))[1];
+
+        _time.Advance(Delivery.Releaser.SetsRecheckDelay - TimeSpan.FromSeconds(2));
+        Assert.Equal(0, releaser.RecheckSets());
+        Assert.Single(_ledger.PurgesOf(change));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, releaser.RecheckSets());
+        Assert.Equal(0, releaser.RecheckSets());
+
+        IReadOnlyList<Purge> purges = _ledger.PurgesOf(change);
+        Assert.Equal(2, purges.Count);
+        Assert.Contains(before, purges[0].Keys);
+        Assert.Equal([after], purges[1].Keys);
+    }
+
+    [Fact]
+    public async Task A_change_to_items_no_set_holds_is_looked_up_again_but_purges_nothing_more()
+    {
+        await RenderAsync(Linked);
+        Guid change = Record(NotLinked);
+        _time.UtcNow = Noon.AddMinutes(2);
+        var releaser = Releaser();
+        await releaser.ReleaseAsync(CancellationToken.None);
+
+        _time.Advance(Delivery.Releaser.SetsRecheckDelay);
+        Assert.Equal(1, releaser.RecheckSets());
+
+        Assert.Single(_ledger.PurgesOf(change));
+    }
+
+    [Fact]
+    public async Task A_set_no_server_has_rendered_for_90_days_is_removed_and_purged()
+    {
+        var old = (await RenderAsync(Linked))[1];
+        _time.Advance(TimeSpan.FromDays(80));
+        var recent = (await RenderAsync([.. Linked, NotLinked]))[1];
+        _time.Advance(TimeSpan.FromDays(11));
+
+        Guid? change = PruneJob().PruneKeySets(_time.UtcNow);
+
+        LedgerEntry recorded = Assert.Single(_ledger.Latest(10));
+        Assert.Equal(change, recorded.Id);
+        Assert.Equal([old], recorded.Plan.Keys);
+        Assert.Equal([recent], _store.SetsOf([Linked[0]]));
+        Assert.Null(PruneJob().PruneKeySets(_time.UtcNow));
+    }
+
+    [Fact]
+    public async Task The_Info_tab_shows_how_many_sets_hold_an_item()
+    {
+        await RenderAsync(Linked);
+        await RenderAsync([.. Linked.Take(70), NotLinked]);
+        var controller = new CacheTagsKeySetsController(new CacheTagsKeySets(_store));
+
+        Assert.Equal(2, Sets(controller.KeySets(Linked[0])));
+        Assert.Equal(1, Sets(controller.KeySets(NotLinked)));
+        Assert.Equal(0, Sets(controller.KeySets(Article(900))));
+        Assert.IsType<BadRequestObjectResult>(controller.KeySets("x-dictionary"));
+    }
+
+    private static int Sets(IActionResult result)
+        => (int)((OkObjectResult)result).Value!.GetType().GetProperty("sets")!.GetValue(((OkObjectResult)result).Value)!;
+
+    private DateTime LastSeen(string hash)
+        => _database.Sql.ExecuteScalar<DateTime>("SELECT LastSeenUtc FROM theBuilderCacheTagsKeySet WHERE Hash = @0", hash);
+
+    private Guid Record(string item)
+    {
+        var change = new Change(Guid.CreateVersion7(), Noon, ChangeKind.Published, [new ChangedItem(new Guid(item["content-".Length..]), "article", Guid.Empty)], [], null);
+        _ledger.Add(change, new PurgePlan([item, "type-article", "children-00000000-0000-0000-0000-000000000000"], Everything: false), "backoffice");
+        return change.Id;
+    }
+
+    private IReadOnlyList<string> Purged(Guid change) => _ledger.PurgesOf(change).SelectMany(purge => purge.Keys).ToList();
+
+    private KeySetWriter Writer() => new(_store, _database.Package, _time, NullLogger<KeySetWriter>.Instance);
+
+    private Releaser Releaser()
+    {
+        var identity = new ServerIdentity(_time);
+        var targets = new PurgeTargets(_options, null!, new TestDatabase(installed: false).Package, [new NoTarget()], new ConfigurationBuilder().Build(), _time, NullLogger<PurgeTargets>.Instance);
+        return new Releaser(_ledger, _store, new DatabaseAckTransport(_database.Package), identity, targets, _options, _time, NullLogger<Releaser>.Instance);
+    }
+
+    private LedgerPruneJob PruneJob()
+    {
+        var identity = new ServerIdentity(_time);
+        var recorder = new ChangeRecorder(new PurgePlanner(new NoDescendants()), _database.Package, _ledger, identity, new DeliverySignal(), _options, NullLogger<ChangeRecorder>.Instance);
+        return new LedgerPruneJob(new DatabaseAckTransport(_database.Package), _ledger, _store, recorder, _database.Package, _time);
+    }
+
+    /// <summary>Renders a site's own action that shows these items, every one an article, and returns its header.</summary>
+    /// <param name="listing">Render a Delivery API listing of articles that shows the items, instead.</param>
+    private async Task<string[]> RenderAsync(IReadOnlyList<string> items, CacheTagsOptions? options = null, KeySetWriter? writer = null, Action<HttpContext>? rendered = null, bool listing = false)
+    {
+        var named = new CacheTagsResponse();
+        if (listing is false)
+        {
+            foreach (var item in items)
+            {
+                named.Add(item);
+            }
+        }
+
+        IPublishedContentType article = Fake.Of<IPublishedContentType>((method, _) => method.Name == "get_Alias" ? "article" : null);
+        IPublishedContent published = Fake.Of<IPublishedContent>((method, _) => method.Name == "get_ContentType" ? article : null);
+        IPublishedContentCache cache = Fake.Of<IPublishedContentCache>((method, _) => method.Name == "GetById" ? published : null);
+        var filter = new CacheKeyResultFilter(
+            new TestOptions(options ?? new CacheTagsOptions()),
+            Fake.Of<IRequestPreviewService>(),
+            new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, Names.Of(["article"])),
+            named,
+            writer ?? Writer());
+
+        var http = new DefaultHttpContext();
+        http.Request.Path = listing ? "/umbraco/delivery/api/v2/content" : "/api/landing";
+        http.Request.QueryString = new QueryString(listing ? "?filter=contentType:article" : "");
+        var action = new ControllerActionDescriptor
+        {
+            ControllerTypeInfo = (listing ? typeof(Umbraco.Cms.Api.Delivery.Controllers.Content.QueryContentApiController) : typeof(LandingController)).GetTypeInfo(),
+            MethodInfo = typeof(LandingController).GetMethod(nameof(LandingController.Get))!,
+        };
+        object value = listing ? items.Select(Shown).ToArray() : new { title = "Landing" };
+        var context = new ResultExecutingContext(new ActionContext(http, new RouteData(), action), [], new ObjectResult(value), new LandingController());
+        await filter.OnResultExecutionAsync(context, () => Task.FromResult(new ResultExecutedContext(context, [], context.Result, context.Controller)));
+        rendered?.Invoke(http);
+        return http.Response.Headers["X-Umbraco-Cache-Keys"].ToString().Split(", ");
+    }
+
+    // An article in a listing, as the Delivery API returns it.
+    private static IApiContent Shown(string item) => Fake.Of<IApiContent>((method, _) => method.Name switch
+    {
+        "get_Id" => new Guid(item["content-".Length..]),
+        "get_ContentType" => "article",
+        "get_Properties" => new Dictionary<string, object?>(),
+        _ => null,
+    });
+
+    [CacheTagged]
+    private sealed class LandingController : ControllerBase
+    {
+        public IActionResult Get() => Ok();
+    }
+
+    private sealed class NoTarget : IPurgeTarget
+    {
+        public string Type => "test";
+
+        public Task<string?> SendAsync(PurgeRequest request, CacheTagsTargetOptions target, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+    }
+
+    private sealed class NoDescendants : IDescendants
+    {
+        public IEnumerable<Guid> Of(Guid key) => [];
+
+        public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media) => [];
+    }
+}

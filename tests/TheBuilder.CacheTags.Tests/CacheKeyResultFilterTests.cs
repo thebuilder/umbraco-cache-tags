@@ -99,7 +99,8 @@ public sealed class CacheKeyResultFilterTests
                 Fake.Of<IApiContentPathResolver>(),
                 Fake.Of<IApiMediaQueryService>(),
                 names),
-            named);
+            named,
+            null!);
 
         var http = new DefaultHttpContext();
         http.Request.Path = request.Path;

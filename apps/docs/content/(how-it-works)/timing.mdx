@@ -34,6 +34,7 @@ sequenceDiagram
 | A server counts as gone | 2 minutes without a heartbeat |
 | Wait for every server to apply a change | At most 60 seconds |
 | Wait for every server's index | At most 5 minutes |
+| Look up an item's stored sets again | 30 seconds after the release |
 | Keys per purge request | At most 500 |
 | Retries of a failed purge | 10 attempts, after 2, 4, 8 and more seconds, at most 10 minutes apart |
 
@@ -49,7 +50,7 @@ The timings are fixed, and there is nothing to configure.
     When a server applies the cache refresh for the change, it evicts the change's responses from Umbraco's own output cache and acknowledges it. A refresh counts only if it carries what the change did, so a draft save does not count.
   </Step>
   <Step title="Release">
-    Once every server that was running when the editor made the change has acknowledged it, the purge of the planned keys is queued for each target. After 60 seconds it is queued anyway, and the log names the servers that did not answer.
+    Once every server that was running when the editor made the change has acknowledged it, the purge of the planned keys is queued for each target, with the `set-` keys of every stored set that holds a changed item. After 60 seconds it is queued anyway, and the log names the servers that did not answer. 30 seconds later the item's sets are looked up once more, and sets stored since are purged too: a page that read the item just before its server applied the change can store its set just after.
   </Step>
   <Step title="Wait for the index">
     Listings come from each server's Delivery API index, which Umbraco updates a second or two after the refresh, or over a minute right after a restart. Each server checks its index until it has the changed item, then evicts its own listing responses. Once every server has, the listing keys are purged again. After 5 minutes they are purged anyway.

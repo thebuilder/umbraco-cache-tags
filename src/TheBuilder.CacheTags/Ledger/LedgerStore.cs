@@ -97,15 +97,26 @@ internal sealed class LedgerStore(PackageDatabase database)
     /// <summary>
     ///     Releases a pending change to <paramref name="stage" /> and queues its purges, in one
     ///     transaction, unless another server already has. Returns whether this call did.
+    ///     <paramref name="setsCheckUtc" /> is when the key sets of its items are looked up again
+    ///     (<see cref="SetsChecked" />), or <c>null</c> for never.
     /// </summary>
-    public bool Release(Guid changeId, ChangeStage stage, IReadOnlyList<string> notAcknowledgedBy, DateTime nowUtc, IEnumerable<NewPurge> purges)
+    public bool Release(Guid changeId, ChangeStage stage, IReadOnlyList<string> notAcknowledgedBy, DateTime nowUtc, IEnumerable<NewPurge> purges, DateTime? setsCheckUtc = null)
         => database.Write(db => LedgerSql.Release(
             db,
             changeId,
             stage,
             nowUtc,
             notAcknowledgedBy.Count == 0 ? null : JsonSerializer.Serialize(notAcknowledgedBy, Json),
-            Rows(changeId, nowUtc, purges)));
+            Rows(changeId, nowUtc, purges),
+            setsCheckUtc));
+
+    /// <summary>The released changes whose key sets are due to be looked up again, oldest first.</summary>
+    public IReadOnlyList<LedgerEntry> SetsCheckDue(DateTime nowUtc, int take)
+        => database.Read(db => LedgerSql.SetsCheckDue(db, nowUtc, take)).Select(Entry).ToList();
+
+    /// <summary>Marks a change's key sets looked up again and queues their purges, in one transaction, unless another server already has. Returns whether this call did.</summary>
+    public bool SetsChecked(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
+        => database.Write(db => LedgerSql.SetsChecked(db, changeId, Rows(changeId, nowUtc, purges)));
 
     /// <summary>Queues an indexing change's listing purges, in one transaction, unless another server already has. Returns whether this call did.</summary>
     public bool ReleaseListings(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)

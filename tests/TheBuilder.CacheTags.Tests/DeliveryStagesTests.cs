@@ -41,7 +41,7 @@ public sealed class DeliveryStagesTests : IDisposable
         // No server acknowledges it, so it is released once the ack timeout has passed, and its
         // listings once no acknowledging server is left to wait for.
         _time.UtcNow = Noon.AddMinutes(2);
-        await new Releaser(_ledger, Transport(), _identity, _targets, _options, _time, NullLogger<Releaser>.Instance).ReleaseAsync(CancellationToken.None);
+        await new Releaser(_ledger, new Storage.KeySetStore(_database.Package), Transport(), _identity, _targets, _options, _time, NullLogger<Releaser>.Instance).ReleaseAsync(CancellationToken.None);
 
         Assert.Equal([$"{Children} {Item} type-article"], _ledger.PurgesOf(change.Id).Select(purge => string.Join(" ", purge.Keys.Order(StringComparer.Ordinal))));
 
