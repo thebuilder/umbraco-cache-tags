@@ -43,7 +43,16 @@ internal sealed record ResponseTags(IReadOnlyList<string> First, IReadOnlyList<s
     /// <param name="maxHeaderKeys">The most keys a header carries.</param>
     /// <param name="overflow">What the items are listed as when they do not fit.</param>
     public async Task<IReadOnlyList<string>> HeaderAsync(int maxItemKeys, int maxHeaderKeys, Func<IReadOnlyList<string>, Task<IEnumerable<string>>> overflow)
-        => Items.Count == 0 || Fits(maxItemKeys, maxHeaderKeys) ? All : With(await overflow(Items));
+    {
+        if (Items.Count == 0 || Fits(maxItemKeys, maxHeaderKeys))
+        {
+            return All;
+        }
+
+        // The keys before the items fill the header, so nothing that stands for them would make it
+        // in: storing their set would only be a wasted write.
+        return First.Count >= maxHeaderKeys ? First : With(await overflow(Items));
+    }
 
     private List<string> With(IEnumerable<string> items) => First.Concat(items).Distinct(StringComparer.Ordinal).ToList();
 }

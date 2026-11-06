@@ -64,9 +64,9 @@ internal sealed class DeliveryWorker(
             await acks.ProcessAsync(cancellationToken);
             var waiting = await releaser.ReleaseAsync(cancellationToken);
             var indexingWaiting = await indexing.ProcessAsync(cancellationToken);
-            releaser.RecheckSets();
+            var rechecked = releaser.RecheckSets();
             var pending = await sender.SendAsync(cancellationToken);
-            return recorder.HasUnrecorded || acks.HasQueued || waiting > 0 || indexingWaiting > 0 || pending > 0;
+            return recorder.HasUnrecorded || acks.HasQueued || waiting > 0 || indexingWaiting > 0 || rechecked > 0 || pending > 0;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

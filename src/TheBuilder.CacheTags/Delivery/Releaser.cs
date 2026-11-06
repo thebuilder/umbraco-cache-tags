@@ -122,9 +122,7 @@ internal sealed class Releaser(
         foreach (LedgerEntry change in due)
         {
             // Sets stored before the release were found then; these were stored since.
-            var keys = keySets.SetsOf(Items(change.Plan), (change.ReleasedUtc ?? change.CreatedUtc) - ClockSlack)
-                .Select(set => CacheKeys.WithPrefix(settings.KeyPrefix, set))
-                .ToList();
+            IReadOnlyList<string> keys = SetsStoredSinceRelease(keySets, change, settings.KeyPrefix);
             if (ledger.SetsChecked(change.Id, now, NewPurge.ToTargets(targets.Current().Values, keys, now)) && keys.Count > 0)
             {
                 logger.LogInformation("Cache tags change {ChangeId}: {SetCount} key sets stored since its release purged.", change.Id, keys.Count);
@@ -133,6 +131,12 @@ internal sealed class Releaser(
 
         return due.Count;
     }
+
+    /// <summary>The <c>set-</c> keys, prefixed, of the sets that hold a released change's items and were stored since it was released.</summary>
+    public static IReadOnlyList<string> SetsStoredSinceRelease(KeySetStore keySets, LedgerEntry change, string keyPrefix)
+        => keySets.SetsOf(Items(change.Plan), (change.ReleasedUtc ?? change.CreatedUtc) - ClockSlack)
+            .Select(set => CacheKeys.WithPrefix(keyPrefix, set))
+            .ToList();
 
     // The items a plan purges, whose sets the purge reaches too. A plan of everything reaches every set.
     private static List<string> Items(PurgePlan plan)

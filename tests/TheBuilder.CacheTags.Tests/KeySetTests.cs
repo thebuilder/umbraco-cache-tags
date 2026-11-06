@@ -19,6 +19,8 @@ using Umbraco.Cms.Core.DeliveryApi;
 using Umbraco.Cms.Core.Models.DeliveryApi;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.PublishedCache;
+using Umbraco.Cms.Infrastructure.Persistence;
+using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace TheBuilder.CacheTags.Tests;
 
@@ -238,6 +240,113 @@ public sealed partial class KeySetTests : IDisposable
     }
 
     [Fact]
+    public async Task A_set_whose_write_waited_past_the_release_is_purged_by_the_second_look()
+    {
+        Guid change = Record(Linked[0]);
+        DateTime released = Noon.AddMinutes(2);
+        _time.UtcNow = released;
+        var releaser = Releaser();
+        await releaser.ReleaseAsync(CancellationToken.None);
+
+        // A render that read the item before its server applied the change asks for its set before
+        // the release, and its write only gets the database 6 s later, after the release looked.
+        _time.UtcNow = released - TimeSpan.FromSeconds(5);
+        var waited = false;
+        using var written = new ManualResetEventSlim();
+        PackageDatabase slowLock = Database(
+            () =>
+            {
+                if (waited is false)
+                {
+                    waited = true;
+                    _time.UtcNow += TimeSpan.FromSeconds(6);
+                }
+            },
+            written.Set);
+        var writer = new KeySetWriter(new KeySetStore(slowLock), _database.Package, _time, NullLogger<KeySetWriter>.Instance);
+        await RenderAsync([.. Linked, Article(500)], writer: writer);
+        Assert.True(written.Wait(TimeSpan.FromSeconds(5)));
+        var set = (await RenderAsync([.. Linked, Article(500)], writer: writer))[1];
+        Assert.Matches(SetKey(), set);
+
+        _time.UtcNow = released + Delivery.Releaser.SetsRecheckDelay;
+        Assert.Equal(1, releaser.RecheckSets());
+
+        Assert.Contains(set, Purged(change));
+    }
+
+    [Fact]
+    public async Task After_a_restart_a_server_marks_its_stored_sets_seen_without_counting_them_as_new()
+    {
+        IReadOnlyList<string>[] pages = Enumerable.Range(0, KeySetWriter.MaxNewSetsPerMinute).Select(page => (IReadOnlyList<string>)[.. Linked, Article(1000 + page)]).ToArray();
+        var before = Writer();
+        foreach (var page in pages)
+        {
+            await RenderAsync(page, writer: before);
+        }
+
+        // A new process remembers nothing: every page writes once to mark its set seen.
+        _time.Advance(TimeSpan.FromMinutes(1));
+        var restarted = Writer();
+        foreach (var page in pages)
+        {
+            Assert.Matches(SetKey(), (await RenderAsync(page, writer: restarted))[1]);
+        }
+
+        Assert.Matches(SetKey(), (await RenderAsync([.. Linked, Article(999)], writer: restarted))[1]);
+    }
+
+    [Fact]
+    public async Task A_header_its_custom_keys_fill_stores_no_set()
+    {
+        // Nothing standing for the items would fit, so a set would be a wasted write.
+        IReadOnlyList<string> custom = Enumerable.Range(0, 200).Select(i => $"x-block-{i:D3}").ToList();
+
+        var header = await RenderAsync(Linked, custom: custom);
+
+        Assert.Equal(128, header.Length);
+        Assert.DoesNotContain(header, key => key.StartsWith("set-", StringComparison.Ordinal));
+        Assert.Equal(0, _database.Sql.ExecuteScalar<int>("SELECT COUNT(*) FROM theBuilderCacheTagsKeySet"));
+    }
+
+    [Fact]
+    public async Task Umbracos_output_cache_is_handed_a_pages_keys_once_however_many_items_it_resolves()
+    {
+        HttpContext? http = null;
+        await RenderAsync(Linked, rendered: rendered => http = rendered);
+        var tags = new OutputCacheTags(new HttpContextAccessor { HttpContext = http });
+
+        // Umbraco asks once per item it resolved, and adds every answer to the same entry.
+        List<string> handed = Enumerable.Range(0, Linked.Count).SelectMany(_ => tags.GetTags(Fake.Of<IPublishedContent>())).ToList();
+
+        Assert.Equal(["umbraco", .. Linked], handed);
+    }
+
+    [Fact]
+    public async Task With_cache_tags_off_unseen_sets_are_kept()
+    {
+        // No change can be recorded to purge them, and nothing else reaches the responses that carry them.
+        var set = (await RenderAsync(Linked))[1];
+        _time.Advance(TimeSpan.FromDays(91));
+
+        Assert.Null(PruneJob(new CacheTagsOptions { Enabled = false }).PruneKeySets(_time.UtcNow));
+
+        Assert.Equal([set], _store.SetsOf([Linked[0]]));
+    }
+
+    [Fact]
+    public async Task Unseen_sets_whose_purge_cannot_be_recorded_are_kept_for_the_next_run()
+    {
+        var set = (await RenderAsync(Linked))[1];
+        _time.Advance(TimeSpan.FromDays(91));
+        _database.Sql.Execute("ALTER TABLE theBuilderCacheTagsEvent RENAME TO broken");
+
+        Assert.ThrowsAny<Exception>(() => PruneJob().PruneKeySets(_time.UtcNow));
+
+        Assert.Equal([set], _store.SetsOf([Linked[0]]));
+    }
+
+    [Fact]
     public async Task A_change_to_items_no_set_holds_is_looked_up_again_but_purges_nothing_more()
     {
         await RenderAsync(Linked);
@@ -306,18 +415,53 @@ public sealed partial class KeySetTests : IDisposable
         return new Releaser(_ledger, _store, new DatabaseAckTransport(_database.Package), identity, targets, _options, _time, NullLogger<Releaser>.Instance);
     }
 
-    private LedgerPruneJob PruneJob()
+    private LedgerPruneJob PruneJob(CacheTagsOptions? options = null)
     {
         var identity = new ServerIdentity(_time);
-        var recorder = new ChangeRecorder(new PurgePlanner(new NoDescendants()), _database.Package, _ledger, identity, new DeliverySignal(), _options, NullLogger<ChangeRecorder>.Instance);
+        var recorder = new ChangeRecorder(new PurgePlanner(new NoDescendants()), _database.Package, _ledger, identity, new DeliverySignal(), options is null ? _options : new TestOptions(options), NullLogger<ChangeRecorder>.Instance);
         return new LedgerPruneJob(new DatabaseAckTransport(_database.Package), _ledger, _store, recorder, _database.Package, _time);
+    }
+
+    // The test database, with a step run each time a write or read starts, before it has the
+    // database, and one run once it is done.
+    private PackageDatabase Database(Action starting, Action? done = null)
+    {
+        IUmbracoDatabase database = Fake.Forwarding<IUmbracoDatabase>(_database.Sql);
+        IScope scope = Fake.Of<IScope>((method, _) =>
+        {
+            if (method.Name == nameof(IScope.Dispose))
+            {
+                done?.Invoke();
+            }
+
+            return method.Name == "get_Database" ? database : null;
+        });
+        return new PackageDatabase(
+            Fake.Of<IScopeProvider>((method, _) =>
+            {
+                if (method.Name == nameof(IScopeProvider.CreateScope))
+                {
+                    starting();
+                    return scope;
+                }
+
+                return null;
+            }),
+            Fake.Of<Umbraco.Cms.Core.Services.IRuntimeState>(),
+            Fake.Of<Umbraco.Cms.Core.Services.IKeyValueService>());
     }
 
     /// <summary>Renders a site's own action that shows these items, every one an article, and returns its header.</summary>
     /// <param name="listing">Render a Delivery API listing of articles that shows the items, instead.</param>
-    private async Task<string[]> RenderAsync(IReadOnlyList<string> items, CacheTagsOptions? options = null, KeySetWriter? writer = null, Action<HttpContext>? rendered = null, bool listing = false)
+    /// <param name="custom">The site's own keys the response names too.</param>
+    private async Task<string[]> RenderAsync(IReadOnlyList<string> items, CacheTagsOptions? options = null, KeySetWriter? writer = null, Action<HttpContext>? rendered = null, bool listing = false, IReadOnlyList<string>? custom = null)
     {
         var named = new CacheTagsResponse();
+        foreach (var key in custom ?? [])
+        {
+            named.Add(key);
+        }
+
         if (listing is false)
         {
             foreach (var item in items)

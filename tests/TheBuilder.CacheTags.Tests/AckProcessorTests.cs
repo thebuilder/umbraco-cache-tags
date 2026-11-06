@@ -47,10 +47,12 @@ public sealed class AckProcessorTests : IDisposable
         IServiceProvider services = Fake.Of<IServiceProvider>((_, args) => (Type)args[0]! == typeof(IDeliveryApiOutputCacheManager) ? outputCache : null);
         _acks = new AckProcessor(
             _ledger,
+            new KeySetStore(_database.Package),
             new OutputCacheEviction(services),
             new DatabaseAckTransport(_database.Package),
             _identity,
             new DeliverySignal(),
+            new TestOptions(new CacheTagsOptions()),
             _time,
             NullLogger<AckProcessor>.Instance);
         _refreshers = new RefresherHandlers(_acks, NullLogger<RefresherHandlers>.Instance);
@@ -169,6 +171,28 @@ public sealed class AckProcessorTests : IDisposable
         _time.UtcNow = Noon.AddMinutes(4);
         await ApplyAsync(PublishOf(Item));
         Assert.Equal(2, _ledger.PurgesOf(change.Id).Count);
+    }
+
+    [Fact]
+    public async Task A_server_that_applies_a_change_late_also_purges_the_sets_it_stored_since_the_release()
+    {
+        // Before it had the change, this server rendered a page of too many items to list that
+        // showed the old item, and stored its set after the release and its second look.
+        var keySets = new KeySetStore(_database.Package);
+        IReadOnlyList<string> page = [$"content-{Item:N}", .. Enumerable.Range(1, 80).Select(i => $"content-a0000000-0000-0000-0000-{i:D12}")];
+        IReadOnlyList<string> earlier = page.Take(40).ToList();
+        Assert.True(keySets.Add(KeySetStore.HashOf(earlier), earlier, new ManualTime(Noon), () => true));
+        Change change = Record(new Change(Guid.CreateVersion7(), Noon, ChangeKind.Published, [new ChangedItem(Item, "page", Guid.Empty)], [], null));
+        _ledger.Release(change.Id, ChangeStage.Released, [_identity.Name], Noon.AddMinutes(1), [new NewPurge("frontend", [$"content-{Item:N}"], Noon.AddMinutes(1))]);
+        Send(_ledger.PurgesOf(change.Id).Single(), Noon.AddMinutes(1));
+        Assert.True(keySets.Add(KeySetStore.HashOf(page), page, new ManualTime(Noon.AddMinutes(2)), () => true));
+        var since = _database.Sql.Single<string>("SELECT Hash FROM theBuilderCacheTagsKeySet WHERE CreatedUtc > @0", Noon.AddMinutes(1));
+
+        _time.UtcNow = Noon.AddMinutes(3);
+        await ApplyAsync(PublishOf(Item));
+
+        IReadOnlyList<string> resent = _ledger.PurgesOf(change.Id).Skip(1).SelectMany(purge => purge.Keys).ToList();
+        Assert.Equal([$"content-{Item:N}", $"set-{since}"], resent);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Storage;
 
 namespace TheBuilder.CacheTags.Collection;
@@ -31,7 +32,7 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
     private readonly ConcurrentDictionary<string, DateTime> _stored = new(StringComparer.Ordinal);
     private readonly Lock _window = new();
     private DateTime _windowStartUtc = DateTime.MinValue;
-    private int _writesInWindow;
+    private int _newSetsInWindow;
     private bool _loggedCap;
     private bool _loggedFailure;
 
@@ -41,37 +42,41 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
     /// </summary>
     public async Task<string?> TryStoreAsync(IReadOnlyList<string> items)
     {
-        var key = KeySetStore.KeyOf(items);
+        var hash = KeySetStore.HashOf(items);
+        var key = CacheKeys.SetPrefix + hash;
         DateTime now = time.GetUtcNow().UtcDateTime;
         if (_stored.TryGetValue(key, out DateTime storedUtc) && now - storedUtc < RememberFor)
         {
             return key;
         }
 
-        if (database.IsInstalled() is false || TakeWrite(now) is false)
+        if (database.IsInstalled() is false)
         {
             return null;
         }
 
-        Task write;
+        Task<bool> write;
 
         // Not in the request's ambient scope, if it has one: the write commits on its own, and keeps
         // running when the request stops waiting for it.
         using (ExecutionContext.SuppressFlow())
         {
-            write = Task.Run(() => store.Add(items, now));
+            // Only a new set counts against the cap: marking a stored one seen, as every server does
+            // after a restart, adds no rows.
+            write = Task.Run(() => store.Add(hash, items, time, () => TakeNewSet(time.GetUtcNow().UtcDateTime)));
         }
 
+        bool stored;
         try
         {
-            await write.WaitAsync(WriteBudget, time);
+            stored = await write.WaitAsync(WriteBudget, time);
         }
         catch (TimeoutException)
         {
             // The write may still finish: a later response showing the same items finds it stored.
             logger.LogDebug("Cache tags: a key set was not stored within {Budget}; the response carries its items' types.", WriteBudget);
             _ = write.ContinueWith(
-                finished => Remember(key, finished.Exception is null, now),
+                finished => Remember(key, finished.IsCompletedSuccessfully && finished.Result, now),
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
@@ -87,8 +92,8 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
             return null;
         }
 
-        Remember(key, stored: true, now);
-        return key;
+        Remember(key, stored, now);
+        return stored ? key : null;
     }
 
     private void Remember(string key, bool stored, DateTime storedUtc)
@@ -106,7 +111,7 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
         _stored[key] = storedUtc;
     }
 
-    // Whether a failed write is the first since the minute TakeWrite started, so a database that is
+    // Whether a failed write is the first since the minute TakeNewSet started, so a database that is
     // down logs once a minute.
     private bool FirstFailureThisMinute()
     {
@@ -118,20 +123,20 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
         }
     }
 
-    // Counts a write against this minute's cap. Returns whether it may go ahead.
-    private bool TakeWrite(DateTime now)
+    // Counts a new set against this minute's cap. Returns whether it may be stored.
+    private bool TakeNewSet(DateTime now)
     {
         lock (_window)
         {
             if (now - _windowStartUtc >= TimeSpan.FromMinutes(1))
             {
                 _windowStartUtc = now;
-                _writesInWindow = 0;
+                _newSetsInWindow = 0;
                 _loggedCap = false;
                 _loggedFailure = false;
             }
 
-            if (_writesInWindow >= MaxNewSetsPerMinute)
+            if (_newSetsInWindow >= MaxNewSetsPerMinute)
             {
                 if (_loggedCap is false)
                 {
@@ -144,7 +149,7 @@ internal sealed class KeySetWriter(KeySetStore store, PackageDatabase database, 
                 return false;
             }
 
-            _writesInWindow++;
+            _newSetsInWindow++;
             return true;
         }
     }

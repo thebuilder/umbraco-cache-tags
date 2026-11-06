@@ -15,10 +15,13 @@ internal sealed class KeySetStore(PackageDatabase database)
     // Below SQL Server's 2100 parameters per query.
     private const int Batch = 1000;
 
-    /// <summary>The <c>set-</c> key of these items: the first 128 bits of the SHA-256 of their sorted keys, in hex.</summary>
-    public static string KeyOf(IEnumerable<string> items) => CacheKeys.SetPrefix + HashOf(items);
+    // The item rows inserted by one command.
+    private const int ItemsPerCommand = 200;
 
-    /// <summary>The hash a set of these items is stored under.</summary>
+    /// <summary>
+    ///     The hash a set of these items is stored under, and its <c>set-</c> key carries: the first
+    ///     128 bits of the SHA-256 of their sorted keys, in hex.
+    /// </summary>
     public static string HashOf(IEnumerable<string> items)
     {
         var joined = string.Join('\n', items.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
@@ -26,27 +29,34 @@ internal sealed class KeySetStore(PackageDatabase database)
     }
 
     /// <summary>
-    ///     Stores the set of these items, or marks it seen when it is stored already, in one
-    ///     transaction. Returns the set's hash.
+    ///     Stores the set of these items under <paramref name="hash" />, or marks it seen when it is
+    ///     stored already, in one transaction. Stores nothing and returns <c>false</c> when the set is
+    ///     new and <paramref name="mayCreate" /> says no.
     /// </summary>
-    public string Add(IReadOnlyCollection<string> items, DateTime nowUtc)
-    {
-        var hash = HashOf(items);
-        database.Write(db =>
+    public bool Add(string hash, IReadOnlyCollection<string> items, TimeProvider time, Func<bool> mayCreate)
+        => database.Write(db =>
         {
-            if (db.Execute($"UPDATE {Constants.Tables.KeySets} SET LastSeenUtc = @0 WHERE Hash = @1", nowUtc, hash) == 1)
+            // Read once the write lock is held, not when the response asked for the set: a release
+            // that looks the sets up while this write waits for the lock cannot see it, and the
+            // second look finds it by this time.
+            DateTime now = time.GetUtcNow().UtcDateTime;
+            if (db.Execute($"UPDATE {Constants.Tables.KeySets} SET LastSeenUtc = @0 WHERE Hash = @1", now, hash) == 1)
             {
-                return;
+                return true;
             }
 
-            db.Insert(new KeySetRow { Hash = hash, CreatedUtc = nowUtc, LastSeenUtc = nowUtc });
-            foreach (var item in items.Distinct(StringComparer.Ordinal))
+            if (mayCreate() is false)
             {
-                db.Insert(new KeySetItemRow { Hash = hash, ItemKey = item });
+                return false;
             }
+
+            db.Insert(new KeySetRow { Hash = hash, CreatedUtc = now, LastSeenUtc = now });
+
+            // Many rows to a command: a set holds hundreds of items, and the write lock is held while
+            // they go in. Two parameters a row keeps a batch well below SQL Server's 2100.
+            db.InsertBatch(items.Distinct(StringComparer.Ordinal).Select(item => new KeySetItemRow { Hash = hash, ItemKey = item }), new BatchOptions { BatchSize = ItemsPerCommand });
+            return true;
         });
-        return hash;
-    }
 
     /// <summary>
     ///     The <c>set-</c> keys of the sets that hold any of these items, optionally only the sets
@@ -74,24 +84,26 @@ internal sealed class KeySetStore(PackageDatabase database)
     public int CountOf(string itemKey)
         => database.Read(db => db.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Constants.Tables.KeySetItems} WHERE ItemKey = @0", itemKey));
 
+    /// <summary>The <c>set-</c> keys of up to <paramref name="take" /> sets no server has rendered since the cutoff, oldest first.</summary>
+    public IReadOnlyList<string> Unseen(DateTime cutoffUtc, int take)
+        => database.Read(db => db.SkipTake<string>(0, take, new Sql(
+                $"SELECT Hash FROM {Constants.Tables.KeySets} WHERE LastSeenUtc < @0 ORDER BY LastSeenUtc",
+                cutoffUtc)))
+            .Select(hash => CacheKeys.SetPrefix + hash)
+            .ToList();
+
     /// <summary>
-    ///     Removes up to <paramref name="take" /> sets no server has rendered since the cutoff, with
-    ///     their items, and returns their <c>set-</c> keys, so they can be purged: a response cached
-    ///     longer than that still carries one.
+    ///     Removes these sets, with their items, unless a server has rendered one since the cutoff.
+    ///     Only once their purge is recorded: a response cached for longer still carries one.
     /// </summary>
-    public IReadOnlyList<string> Prune(DateTime cutoffUtc, int take)
+    public void Remove(IReadOnlyList<string> sets, DateTime cutoffUtc)
         => database.Write(db =>
         {
-            List<string> hashes = db.SkipTake<string>(0, take, new Sql(
-                $"SELECT Hash FROM {Constants.Tables.KeySets} WHERE LastSeenUtc < @0 ORDER BY LastSeenUtc",
-                cutoffUtc));
-            foreach (var batch in hashes.Chunk(Batch))
+            foreach (var batch in sets.Select(set => set[CacheKeys.SetPrefix.Length..]).Chunk(Batch))
             {
-                db.Execute(new Sql($"DELETE FROM {Constants.Tables.KeySetItems} WHERE Hash IN (@0)", (object)batch));
-                db.Execute(new Sql($"DELETE FROM {Constants.Tables.KeySets} WHERE Hash IN (@0)", (object)batch));
+                db.Execute(new Sql($"DELETE FROM {Constants.Tables.KeySetItems} WHERE Hash IN (SELECT Hash FROM {Constants.Tables.KeySets} WHERE Hash IN (@0) AND LastSeenUtc < @1)", batch, cutoffUtc));
+                db.Execute(new Sql($"DELETE FROM {Constants.Tables.KeySets} WHERE Hash IN (@0) AND LastSeenUtc < @1", batch, cutoffUtc));
             }
-
-            return (IReadOnlyList<string>)hashes.Select(hash => CacheKeys.SetPrefix + hash).ToList();
         });
 
     private static Sql SetsSql(string[] items, DateTime? createdSinceUtc)

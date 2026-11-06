@@ -42,10 +42,12 @@ public sealed class ContentRefreshTests : IDisposable
         _ledger = new LedgerStore(_database.Package);
         _acks = new AckProcessor(
             _ledger,
+            new KeySetStore(_database.Package),
             new OutputCacheEviction(Fake.Of<IServiceProvider>()),
             new DatabaseAckTransport(_database.Package),
             _identity,
             new DeliverySignal(),
+            new TestOptions(new CacheTagsOptions()),
             TimeProvider.System,
             NullLogger<AckProcessor>.Instance);
         _refreshers = new RefresherHandlers(_acks, NullLogger<RefresherHandlers>.Instance);

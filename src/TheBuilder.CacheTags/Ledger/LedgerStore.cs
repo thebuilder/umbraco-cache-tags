@@ -127,15 +127,24 @@ internal sealed class LedgerStore(PackageDatabase database)
     ///     sending, and returns how many. For a server that applied the change after it was released
     ///     without it: a frontend that refetched from that server in between cached its old content
     ///     again. A purge still waiting to go out goes after this server evicted, so it is not doubled.
+    ///     <paramref name="also" /> are keys purged with it, at each target it went to: the key sets
+    ///     stored since the release.
     /// </summary>
-    public int Resend(Guid changeId, DateTime nowUtc)
+    public int Resend(Guid changeId, DateTime nowUtc, IReadOnlyList<string> also)
         => database.Write(db =>
         {
-            var again = db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId)
+            List<OutboxRow> rows = db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId)
                 .Where(row => row.State == OutboxStates.Sent || (row.State == OutboxStates.Pending && row.LeaseOwner is not null))
+                .ToList();
+            var again = rows
                 .DistinctBy(row => (row.Target, row.Keys))
                 .Select(row => new NewPurge(row.Target, JsonSerializer.Deserialize<string[]>(row.Keys, Json) ?? [], nowUtc))
                 .ToList();
+            if (also.Count > 0)
+            {
+                again.AddRange(rows.Select(row => row.Target).Distinct().SelectMany(target => also.Chunk(NewPurge.MaxKeysPerRequest).Select(chunk => new NewPurge(target, chunk, nowUtc))));
+            }
+
             foreach (OutboxRow row in Rows(changeId, nowUtc, again))
             {
                 db.Insert(row);

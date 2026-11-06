@@ -102,15 +102,19 @@ purged by a change to one of those articles, not by every publish of an article.
 - The response carries `set-` only once its row is written. Writing gets 200 ms; a write that fails
   or takes longer, or a server past 100 new sets in a minute (logged once a minute), leaves the
   response with its items' `type-` keys, exactly as with sets off. A missing row can never leave a
-  response stale.
+  response stale. Only a new set counts against the cap: marking a stored one seen does not. A set's
+  stored time is read once its write holds the package's lock, so the second look below finds a write
+  that waited for the lock past the release. Nothing is written when the keys before the items
+  already fill the header.
 - The set is content-addressed, so every response showing the same items shares it, and storing it
   again only marks it seen. A server remembers the sets it stored for a day and skips the database
   for them, so a set's last-seen time is refreshed at most once a day per server.
 - Rows are in the shared database, so a set one server stored is purged by a change any server
   records.
-- A set no server has rendered for 90 days is removed by the daily prune, which records a change that
-  purges its key: a response cached for longer renders again and stores its set again. So retention
-  costs a purge, never a stale response.
+- A set no server has rendered for 90 days is removed by the daily prune, which first records a change
+  that purges its key: a response cached for longer renders again and stores its set again. So
+  retention costs a purge, never a stale response. A set whose purge cannot be recorded (the ledger
+  write fails, or `CacheTags:Enabled` is off) is kept for the next run.
 - Only responses that overflow write anything, and only those that show items by reference: a single
   item, items by id, or a site's own tagged action. A listing (`Query…` endpoints) lists its items'
   types instead: its selector key already reaches it when an item joins or leaves, and every page,
@@ -264,8 +268,9 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    so they are fresh at once, even though their membership and order are not yet. A server that a change was released without evicts the change's responses and listings
    from its own output cache once it has seen a refresh of the change, whether before the release
    (its clock is behind) or up to 15 minutes after (it applied the change late), and then queues the
-   change's purges once more: a frontend that refetched from it in between cached the old content
-   again. It keeps the
+   change's purges once more, with the sets stored since the release: a frontend that refetched from
+   it in between cached the old content again, perhaps on a page whose set it stored after the second
+   look. It keeps the
    refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
    costs a cache miss, and the change's own refresh evicts after it. It does not acknowledge the
    change and is not waited for in the listings stage, so its listings may be cached again from its

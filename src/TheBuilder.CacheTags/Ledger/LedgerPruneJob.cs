@@ -54,14 +54,25 @@ internal sealed class LedgerPruneJob(
     /// <summary>Removes the key sets unseen for <see cref="KeySetRetention" />, and purges them. Returns the change that purges them, if any.</summary>
     public Guid? PruneKeySets(DateTime nowUtc)
     {
-        IReadOnlyList<string> pruned = keySets.Prune(nowUtc - KeySetRetention, KeySetsPerRun);
-        if (pruned.Count == 0)
+        // A pruned set is reached by nothing but its purge, so sets are kept while no change can be
+        // recorded to purge them.
+        if (recorder.Recording is false)
         {
             return null;
         }
 
-        var change = new Change(Guid.CreateVersion7(), nowUtc, ChangeKind.Custom, [], [], null, $"{pruned.Count} unused key sets pruned", pruned);
-        recorder.Record(change);
+        // The purge is recorded before the sets are removed, so a failure leaves them for the next
+        // run rather than removed with no purge to reach the responses that carry them.
+        DateTime cutoff = nowUtc - KeySetRetention;
+        IReadOnlyList<string> unseen = keySets.Unseen(cutoff, KeySetsPerRun);
+        if (unseen.Count == 0)
+        {
+            return null;
+        }
+
+        var change = new Change(Guid.CreateVersion7(), nowUtc, ChangeKind.Custom, [], [], null, $"{unseen.Count} unused key sets pruned", unseen);
+        recorder.RecordNow(change);
+        keySets.Remove(unseen, cutoff);
         return change.Id;
     }
 }
