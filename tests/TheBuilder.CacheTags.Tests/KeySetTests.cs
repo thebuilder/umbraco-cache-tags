@@ -589,5 +589,7 @@ public sealed partial class KeySetTests : IDisposable
         public IEnumerable<Guid> Of(Guid key) => [];
 
         public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media) => [];
+
+        public IEnumerable<(Guid Key, string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys) => [];
     }
 }

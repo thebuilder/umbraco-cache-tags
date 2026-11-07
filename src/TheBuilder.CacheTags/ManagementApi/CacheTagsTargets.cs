@@ -85,7 +85,7 @@ internal sealed class CacheTagsTargets(
                 Secret: null,
                 target.Options.Headers.Keys.Select(name => new NamedValue(name)).ToList(),
                 target.Options.Settings.Keys.Select(name => new NamedValue(name)).ToList(),
-                target.Options.Roots,
+                target.Roots,
                 RootsFromConfiguration: options.CurrentValue.Targets.TryGetValue(target.Name, out CacheTagsTargetOptions? configured) && configured.Roots.Count > 0,
                 Problem: null);
 
@@ -101,6 +101,12 @@ internal sealed class CacheTagsTargets(
         if (Invalid(target) is { } error)
         {
             return TargetSaveResult.Invalid(error);
+        }
+
+        // Roots kept for a target that has since left configuration are no target: they make way.
+        if (store.All().Any(stored => stored.RootsOnly && stored.Name.Equals(target.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            store.Delete(target.Name, keepPurges: true);
         }
 
         if (store.Add(target) is false)
@@ -147,6 +153,12 @@ internal sealed class CacheTagsTargets(
             if (configured.Roots.Count > 0)
             {
                 return TargetSaveResult.Invalid($"CacheTags:Targets:{name}:Roots sets this target's roots; change them there.");
+            }
+
+            // A backoffice target of the same name, which configuration shadows, keeps its row.
+            if (store.All().Any(target => target.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && target.RootsOnly is false))
+            {
+                return TargetSaveResult.Invalid($"A backoffice target named {name} is stored, which CacheTags:Targets hides. Delete it first.");
             }
 
             store.SetRootsOnly(name, roots);

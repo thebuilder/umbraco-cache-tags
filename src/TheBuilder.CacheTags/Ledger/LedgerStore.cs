@@ -54,7 +54,7 @@ internal sealed record NewPurge(string Target, IReadOnlyList<string> Keys, DateT
         => keys.Count == 0
             ? []
             : targets
-                .Where(target => target.Options.Enabled && plan.Reaches(target.Options.Roots))
+                .Where(target => target.Options.Enabled && plan.Reaches(target.Roots))
                 .SelectMany(target => keys.Chunk(MaxKeysPerRequest).Select(chunk => new NewPurge(target.Name, chunk, nowUtc)))
                 .ToList();
 }

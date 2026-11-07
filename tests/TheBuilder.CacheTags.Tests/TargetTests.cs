@@ -338,11 +338,11 @@ public sealed class TargetTests : IDisposable
             target => new ResolvedTarget(target.Name, new CacheTagsTargetOptions(), FromConfiguration: false),
             clashes.Add);
 
-        Assert.Equal([site], merged["vercel"].Options.Roots);
+        Assert.Equal([site], merged["vercel"].Roots);
         Assert.Equal("https://configured.example.com/", merged["vercel"].Options.Url);
         Assert.True(merged["vercel"].FromConfiguration);
         Assert.Empty(configured["vercel"].Roots);
-        Assert.Equal([other], merged["fixed"].Options.Roots);
+        Assert.Equal([other], merged["fixed"].Roots);
         Assert.False(merged.ContainsKey("gone"));
         Assert.Empty(clashes);
     }

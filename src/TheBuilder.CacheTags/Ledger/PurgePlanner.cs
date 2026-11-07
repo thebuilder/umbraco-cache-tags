@@ -34,15 +34,18 @@ internal sealed class PurgePlanner(IDescendants descendants)
             // a document's within its site root.
             var planned = new SortedSet<string>(named, StringComparer.Ordinal);
             var documentRoots = new HashSet<Guid>();
+            var documents = Ids(named, CacheKeys.ContentPrefix);
+            var rooted = new HashSet<Guid>();
             try
             {
-                foreach (var (alias, root) in descendants.TypesAndRootsOf(Ids(named, CacheKeys.ContentPrefix)))
+                foreach (var (key, alias, root) in descendants.TypesAndRootsOf(documents))
                 {
                     planned.Add(CacheKeys.Type(alias));
                     if (root is { } scope)
                     {
                         planned.Add(CacheKeys.Type(alias, scope));
                         documentRoots.Add(scope);
+                        rooted.Add(key);
                     }
                 }
 
@@ -55,9 +58,10 @@ internal sealed class PurgePlanner(IDescendants descendants)
             }
 
             // Only documents belong to a root: anything else named (a custom key, media, a set) may be
-            // shown by any site.
-            var onlyDocuments = named.All(key => key.StartsWith(CacheKeys.ContentPrefix, StringComparison.Ordinal));
-            return new PurgePlan(planned, Everything: false, onlyDocuments && documentRoots.Count > 0 ? documentRoots : null);
+            // shown by any site, and so may a document whose root is unknown (in the recycle bin, gone).
+            var onlyRootedDocuments = named.All(key => key.StartsWith(CacheKeys.ContentPrefix, StringComparison.Ordinal))
+                && documents.All(rooted.Contains);
+            return new PurgePlan(planned, Everything: false, onlyRootedDocuments && documentRoots.Count > 0 ? documentRoots : null);
         }
 
         var keys = new SortedSet<string>(StringComparer.Ordinal);
@@ -79,7 +83,8 @@ internal sealed class PurgePlanner(IDescendants descendants)
         // The site roots the documents are under, and were under before a move. A change recorded
         // without them (media, or an older change) may concern any site.
         var roots = new HashSet<Guid>();
-        var rootsKnown = media is false && change.Items.All(item => item.Roots is not null);
+        // An item whose roots could not be read may be under any root.
+        var rootsKnown = media is false && change.Items.All(item => item.Roots is { Count: > 0 });
         foreach (ChangedItem item in change.Items)
         {
             // A document's type and catch-all keys within each root it is or was under: listings fetched
@@ -171,9 +176,11 @@ internal interface IDescendants
     /// <summary>The content type aliases of the given documents, or the media type aliases of the given media.</summary>
     IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media);
 
-    /// <summary>The content type alias of each of the given documents, with the site root it is under (none in the recycle bin).</summary>
-    IEnumerable<(string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys)
-        => TypesOf(keys, media: false).Select(alias => (alias, (Guid?)null));
+    /// <summary>
+    ///     Each of the given documents that exists, with its content type alias and the site root it is
+    ///     under (none in the recycle bin).
+    /// </summary>
+    IEnumerable<(Guid Key, string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys);
 
     /// <summary>Every site root: the documents at the top level of the content tree.</summary>
     IEnumerable<Guid> Roots() => [];
@@ -181,7 +188,8 @@ internal interface IDescendants
 
 internal sealed class NavigationDescendants(
     Umbraco.Cms.Core.Services.Navigation.IDocumentNavigationQueryService navigation,
-    Umbraco.Cms.Core.Services.IEntityService entities) : IDescendants
+    Umbraco.Cms.Core.Services.IEntityService entities,
+    SiteRoots siteRoots) : IDescendants
 {
     // Below SQL Server's 2100 parameters per query.
     private const int TypesBatch = 1000;
@@ -200,18 +208,12 @@ internal sealed class NavigationDescendants(
             .Select(entity => entity.ContentTypeAlias)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-    public IEnumerable<(string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys)
+    public IEnumerable<(Guid Key, string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys)
         => keys.Chunk(TypesBatch)
             .SelectMany(batch => entities.GetAll(Umbraco.Cms.Core.Models.UmbracoObjectTypes.Document, batch))
             .OfType<Umbraco.Cms.Core.Models.Entities.IContentEntitySlim>()
-            .Select(entity => (entity.ContentTypeAlias, RootOf(entity.Path)))
-            .Distinct()
+            .Select(entity => (entity.Key, entity.ContentTypeAlias, siteRoots.OfPath(entity.Path)))
             .ToList();
 
     public IEnumerable<Guid> Roots() => navigation.TryGetRootKeys(out IEnumerable<Guid> keys) ? keys : [];
-
-    private Guid? RootOf(string path)
-        => SiteRoots.RootId(path) is { } id && entities.GetKey(id, Umbraco.Cms.Core.Models.UmbracoObjectTypes.Document) is { Success: true } key
-            ? key.Result
-            : null;
 }

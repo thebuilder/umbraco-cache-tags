@@ -84,7 +84,7 @@ internal sealed class PurgeTargets(
                 // row left after the target left configuration is no target.
                 if (targets.TryGetValue(target.Name, out ResolvedTarget? configuredTarget) && configuredTarget.Options.Roots.Count == 0)
                 {
-                    targets[target.Name] = configuredTarget with { Options = WithRoots(configuredTarget.Options, target.Roots) };
+                    targets[target.Name] = configuredTarget with { BackofficeRoots = target.Roots };
                 }
 
                 continue;
@@ -101,19 +101,6 @@ internal sealed class PurgeTargets(
 
         return targets;
     }
-
-    // A copy, so the options configuration bound are never changed.
-    private static CacheTagsTargetOptions WithRoots(CacheTagsTargetOptions options, IReadOnlyList<Guid> roots) => new()
-    {
-        Type = options.Type,
-        Enabled = options.Enabled,
-        Url = options.Url,
-        Secret = options.Secret,
-        Headers = new Dictionary<string, string>(options.Headers, StringComparer.OrdinalIgnoreCase),
-        Settings = new Dictionary<string, string>(options.Settings, StringComparer.OrdinalIgnoreCase),
-        Roots = [.. roots],
-        PublicNetworkOnly = options.PublicNetworkOnly,
-    };
 
     private void WarnOnce(string name)
     {

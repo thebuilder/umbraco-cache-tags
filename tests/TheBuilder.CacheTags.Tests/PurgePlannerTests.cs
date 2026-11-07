@@ -22,14 +22,16 @@ public sealed class PurgePlannerTests
             => typesFail ? throw new InvalidOperationException("The database is busy.") : keys.Select(key => Types[key]);
 
         // C and what is under it are in the site; the second site has its own root.
-        public IEnumerable<(string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys)
-            => keys.Select(key => (Types.GetValueOrDefault(key, "newsPage"), (Guid?)(key == OtherPage ? OtherSite : Site)));
+        // Trashed is in the recycle bin, so it has no root.
+        public IEnumerable<(Guid Key, string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys)
+            => keys.Select(key => (key, Types.GetValueOrDefault(key, "newsPage"), key == Trashed ? null : (Guid?)(key == OtherPage ? OtherSite : Site)));
 
         public IEnumerable<Guid> Roots() => [Site, OtherSite];
     }
 
     private static readonly Guid OtherSite = new("30000000-0000-0000-0000-000000000001");
     private static readonly Guid OtherPage = new("30000000-0000-0000-0000-000000000002");
+    private static readonly Guid Trashed = new("30000000-0000-0000-0000-000000000003");
 
     [Fact]
     public void A_publish_reaches_its_own_roots_listings_and_names_that_root()
@@ -79,6 +81,20 @@ public sealed class PurgePlannerTests
         Assert.Equal(["content-30000000-0000-0000-0000-000000000002", "type-newspage", "type-newspage-30000000-0000-0000-0000-000000000001"], page.Keys);
         Assert.Equal([OtherSite], page.Roots);
         Assert.Null(mixed.Roots);
+
+        // A named document whose root is unknown may be shown by any site.
+        PurgePlan unrooted = planner.Plan(new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.Custom, [], [], null, Keys: [$"content-{OtherPage:D}", $"content-{Trashed:D}"]), 500);
+        Assert.Null(unrooted.Roots);
+    }
+
+    [Fact]
+    public void A_change_with_an_item_whose_roots_could_not_be_read_may_concern_any_site()
+    {
+        PurgePlan plan = new PurgePlanner(new Tree()).Plan(
+            new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.Published, [new ChangedItem(C, "newsPage", Site, Roots: [Site]), new ChangedItem(OtherPage, "newsPage", OtherSite, Roots: [])], [], null),
+            500);
+
+        Assert.Null(plan.Roots);
     }
 
     [Fact]
