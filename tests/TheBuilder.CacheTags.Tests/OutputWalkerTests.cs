@@ -63,6 +63,50 @@ public sealed class OutputWalkerTests
     }
 
     [Fact]
+    public void Counts_as_rendered_only_the_documents_shown_with_their_properties_at_any_depth()
+    {
+        var markup = $"<p><a href=\"/f/\" data-destination-id=\"{InMarkup}\" data-link-type=\"Content\">F</a></p>";
+        var json = new RichTextRootElement(
+            [],
+            [new RichTextGenericElement("a", new Dictionary<string, object> { ["destinationId"] = InJson.ToString(), ["linkType"] = "Content" }, [])],
+            []);
+#pragma warning disable CS0618
+        // Two levels down: a block in the expanded pick holds a pick expanded too, and one that isn't.
+        var block = new ApiElement(Block, "picksBlock", new Dictionary<string, object?>
+        {
+            ["expanded"] = Content(InBlock, new Dictionary<string, object?> { ["title"] = "Deep" }),
+            ["notExpanded"] = Content(Linked),
+        });
+#pragma warning restore CS0618
+        ApiContent page = Content(Page, new Dictionary<string, object?>
+        {
+            ["picker"] = Content(Picked, new Dictionary<string, object?> { ["blocks"] = new ApiBlockListModel([new ApiBlockItem(block, null)]) }),
+            ["links"] = new[] { ApiLink.Content("L", null, null, Linked, "page", Route, null) },
+            ["image"] = new[] { new ApiMedia(Image, "Image 1", "Image", "/media/1.png", ".png", 1, 1, 1, new Dictionary<string, object?> { ["alt"] = "x" }) },
+            ["body"] = new RichTextModel { Markup = markup, Blocks = [] },
+            ["bodyJson"] = json,
+        });
+
+        var keys = new HashSet<string>();
+        var rendered = new HashSet<Guid>();
+        OutputWalker.Collect(page, keys, rendered);
+
+        // Linked (a link and an unexpanded pick), the rich text links and the image are shown, not rendered.
+        Assert.Equal([Page, Picked, InBlock], rendered.Order());
+    }
+
+    [Fact]
+    public void A_listing_renders_only_the_items_it_shows_with_their_properties()
+    {
+        var listing = new PagedViewModel<ApiContent> { Total = 2, Items = [Content(Picked), Content(Linked, new Dictionary<string, object?> { ["title"] = "T" })] };
+
+        var rendered = new HashSet<Guid>();
+        OutputWalker.Collect(listing, new HashSet<string>(), rendered);
+
+        Assert.Equal([Linked], rendered);
+    }
+
+    [Fact]
     public void Walks_the_items_of_a_paged_listing()
     {
         var listing = new PagedViewModel<ApiContent> { Total = 2, Items = [Content(Picked), Content(Linked)] };

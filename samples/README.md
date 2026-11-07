@@ -135,6 +135,10 @@ The cases worth checking a purge against, and where they are:
 - **More items than a header lists.** The reading list shows itself and 70 notes, past the 64 item
   keys a header lists, so it carries one stored `set-` key in their place. Renaming a picked note
   purges it; renaming Note 71, which it does not pick, does not, though both are notes.
+- **Expansion.** `pnpm keys` also asks for Home with its featured article expanded, one and two levels
+  deep, for Harbour mornings with its rich text expanded, and for the Blocks page with its links
+  expanded. A link shows its target alone, so Forest walks' image stays out of Harbour mornings' keys,
+  and the 70 notes of the reading list, which the Blocks page links to, stay out of its keys.
 - **Property editors.** Block list, block grid, rich text with blocks, links and images, multi URL
   picker (document with a query string, media, external), multinode tree picker, content picker,
   media picker with crops, tags, dropdown, date.

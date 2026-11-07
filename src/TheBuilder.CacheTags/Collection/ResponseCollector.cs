@@ -7,9 +7,9 @@ using Umbraco.Cms.Core.PublishedCache;
 namespace TheBuilder.CacheTags.Collection;
 
 /// <summary>
-///     Works out which keys a Delivery API response covers: what its result objects show, what its
-///     resolved items' published values reference (in the request culture, one level further for
-///     expanded properties), and, for listings, which selectors a new item would have to match.
+///     Works out which keys a Delivery API response covers: what its result objects show, what the
+///     published values of its resolved items and of the items it expands reference (in the request
+///     culture), and, for listings, which selectors a new item would have to match.
 ///     Reading published source values rather than hooking Umbraco's builders is what keeps this
 ///     complete on warm requests.
 /// </summary>
@@ -30,13 +30,14 @@ internal sealed class ResponseCollector(
     public IReadOnlySet<string> Collect(object? result, HttpContext http, DeliveryEndpoint endpoint)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        OutputWalker.Collect(result, keys);
+        var rendered = new HashSet<Guid>();
+        OutputWalker.Collect(result, keys, rendered);
         if (endpoint.ByIds)
         {
             CollectRequestedItems(http.Request.Query["id"], endpoint.Media, keys);
         }
 
-        CollectReferences(http, keys);
+        CollectReferences(http, rendered, keys);
         if (endpoint.Listing)
         {
             keys.UnionWith(ListingSelectors.For(
@@ -68,7 +69,7 @@ internal sealed class ResponseCollector(
         }
     }
 
-    private void CollectReferences(HttpContext http, HashSet<string> keys)
+    private void CollectReferences(HttpContext http, IReadOnlySet<Guid> rendered, HashSet<string> keys)
     {
         IPublishedContent[] resolved =
         [
@@ -81,19 +82,21 @@ internal sealed class ResponseCollector(
         }
 
         var culture = variationContext.VariationContext?.Culture;
-        Expansion expansion = Expansion.Parse(http.Request.Query["expand"].ToString());
         foreach (IPublishedContent item in resolved)
         {
             keys.Add(item.ItemType == PublishedItemType.Media ? CacheKeys.Media(item.Key) : CacheKeys.Content(item.Key));
-            foreach (ReferencedKey reference in reader.Read(item, culture))
-            {
-                keys.Add(reference.Key);
+            keys.UnionWith(reader.Read(item, culture));
+        }
 
-                // An expanded picker renders the picked item's properties, and so what they reference.
-                if (reference.IsMedia is false && expansion.Expands(reference.PropertyAlias) && contentCache.GetById(reference.Id) is { } expanded)
-                {
-                    keys.UnionWith(reader.Read(expanded, culture).Select(r => r.Key));
-                }
+        // An expanded item renders its properties, and so what they reference, at any depth of
+        // expansion. Only the items the result shows with their properties count: a link, or a picker
+        // the request does not expand, shows the item alone, however much the item itself references.
+        var requested = resolved.Select(item => item.Key).ToHashSet();
+        foreach (Guid id in rendered)
+        {
+            if (requested.Contains(id) is false && contentCache.GetById(id) is { } expanded)
+            {
+                keys.UnionWith(reader.Read(expanded, culture));
             }
         }
     }

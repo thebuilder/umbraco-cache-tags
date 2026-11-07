@@ -300,9 +300,9 @@ jobs:
         working-directory: samples/nextjs
         run: pnpm keys
 
-      # About 3 minutes when healthy.
+      # About 3 minutes when healthy, plus up to 2 for the seed's purges to finish retrying.
       - name: End to end
-        timeout-minutes: 8
+        timeout-minutes: 10
         working-directory: samples/nextjs
         run: pnpm e2e
 

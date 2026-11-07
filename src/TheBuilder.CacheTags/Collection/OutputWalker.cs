@@ -16,9 +16,16 @@ internal static partial class OutputWalker
 {
     private const int MaxDepth = 64;
 
-    public static void Collect(object? value, ISet<string> keys) => Walk(value, keys, 0);
+    public static void Collect(object? value, ISet<string> keys) => Walk(value, keys, null, 0);
 
-    private static void Walk(object? value, ISet<string> keys, int depth)
+    /// <summary>
+    ///     Also collects into <paramref name="rendered" /> the documents the result renders with their
+    ///     properties: the requested items, and the items it expands. A picked or linked document that
+    ///     is not expanded is shown without them, so what its properties reference is not shown.
+    /// </summary>
+    public static void Collect(object? value, ISet<string> keys, ISet<Guid> rendered) => Walk(value, keys, rendered, 0);
+
+    private static void Walk(object? value, ISet<string> keys, ISet<Guid>? rendered, int depth)
     {
         if (value is null || depth > MaxDepth)
         {
@@ -32,14 +39,19 @@ internal static partial class OutputWalker
                 return;
             case IApiContent content:
                 keys.Add(CacheKeys.Content(content.Id));
-                WalkProperties(content.Properties, keys, depth);
+                if (content.Properties.Count > 0)
+                {
+                    rendered?.Add(content.Id);
+                }
+
+                WalkProperties(content.Properties, keys, rendered, depth);
                 return;
             case IApiMedia media:
                 keys.Add(CacheKeys.Media(media.Id));
-                WalkProperties(media.Properties, keys, depth);
+                WalkProperties(media.Properties, keys, rendered, depth);
                 return;
             case IApiElement element:
-                WalkProperties(element.Properties, keys, depth);
+                WalkProperties(element.Properties, keys, rendered, depth);
                 return;
             case ApiLink link:
                 if (link.DestinationId is { } destination)
@@ -49,43 +61,43 @@ internal static partial class OutputWalker
 
                 return;
             case ApiBlockListModel blockList:
-                Walk(blockList.Items, keys, depth + 1);
+                Walk(blockList.Items, keys, rendered, depth + 1);
                 return;
             case ApiBlockGridModel blockGrid:
-                Walk(blockGrid.Items, keys, depth + 1);
+                Walk(blockGrid.Items, keys, rendered, depth + 1);
                 return;
             case ApiBlockGridItem gridItem:
-                Walk(gridItem.Content, keys, depth + 1);
-                Walk(gridItem.Settings, keys, depth + 1);
+                Walk(gridItem.Content, keys, rendered, depth + 1);
+                Walk(gridItem.Settings, keys, rendered, depth + 1);
                 foreach (ApiBlockGridArea area in gridItem.Areas)
                 {
-                    Walk(area.Items, keys, depth + 1);
+                    Walk(area.Items, keys, rendered, depth + 1);
                 }
 
                 return;
             case ApiBlockItem block:
-                Walk(block.Content, keys, depth + 1);
-                Walk(block.Settings, keys, depth + 1);
+                Walk(block.Content, keys, rendered, depth + 1);
+                Walk(block.Settings, keys, rendered, depth + 1);
                 return;
             case RichTextModel richText:
                 ScanMarkup(richText.Markup, keys);
-                Walk(richText.Blocks, keys, depth + 1);
+                Walk(richText.Blocks, keys, rendered, depth + 1);
                 return;
             case RichTextRootElement root:
-                Walk(root.Elements, keys, depth + 1);
-                Walk(root.Blocks, keys, depth + 1);
+                Walk(root.Elements, keys, rendered, depth + 1);
+                Walk(root.Blocks, keys, rendered, depth + 1);
                 return;
             case RichTextGenericElement element:
                 CollectLinkAttributes(element.Attributes, keys);
-                Walk(element.Elements, keys, depth + 1);
+                Walk(element.Elements, keys, rendered, depth + 1);
                 return;
             case IDictionary<string, object?> dictionary:
-                WalkProperties(dictionary, keys, depth);
+                WalkProperties(dictionary, keys, rendered, depth);
                 return;
             case IEnumerable sequence:
                 foreach (var item in sequence)
                 {
-                    Walk(item, keys, depth + 1);
+                    Walk(item, keys, rendered, depth + 1);
                 }
 
                 return;
@@ -95,15 +107,15 @@ internal static partial class OutputWalker
         Type type = value.GetType();
         if (type.IsGenericType && type.GetProperty("Items")?.GetValue(value) is IEnumerable items)
         {
-            Walk(items, keys, depth + 1);
+            Walk(items, keys, rendered, depth + 1);
         }
     }
 
-    private static void WalkProperties(IDictionary<string, object?> properties, ISet<string> keys, int depth)
+    private static void WalkProperties(IDictionary<string, object?> properties, ISet<string> keys, ISet<Guid>? rendered, int depth)
     {
         foreach (var property in properties.Values)
         {
-            Walk(property, keys, depth + 1);
+            Walk(property, keys, rendered, depth + 1);
         }
     }
 

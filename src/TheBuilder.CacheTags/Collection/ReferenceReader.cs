@@ -15,13 +15,12 @@ internal sealed class ReferenceReader(PropertyEditorCollection editors, DataValu
 {
     /// <param name="item">The published item.</param>
     /// <param name="culture">The request culture. A culture-variant property contributes this culture's value only.</param>
-    /// <param name="onlyProperties">Read only these properties, when given.</param>
-    public IEnumerable<ReferencedKey> Read(IPublishedContent item, string? culture, Func<string, bool>? onlyProperties = null)
+    /// <returns>The <c>content-</c> and <c>media-</c> keys of what the values reference.</returns>
+    public IEnumerable<string> Read(IPublishedContent item, string? culture)
     {
         foreach (IPublishedProperty property in item.Properties)
         {
-            if ((onlyProperties is not null && onlyProperties(property.Alias) is false)
-                || editors.TryGet(property.PropertyType.EditorAlias, out IDataEditor? editor) is false)
+            if (editors.TryGet(property.PropertyType.EditorAlias, out IDataEditor? editor) is false)
             {
                 continue;
             }
@@ -43,16 +42,14 @@ internal sealed class ReferenceReader(PropertyEditorCollection editors, DataValu
 
                 if (udi.EntityType == Umbraco.Cms.Core.Constants.UdiEntityType.Document)
                 {
-                    yield return new ReferencedKey(CacheKeys.Content(udi.Guid), udi.Guid, property.Alias, IsMedia: false);
+                    yield return CacheKeys.Content(udi.Guid);
                 }
                 else if (udi.EntityType == Umbraco.Cms.Core.Constants.UdiEntityType.Media)
                 {
-                    yield return new ReferencedKey(CacheKeys.Media(udi.Guid), udi.Guid, property.Alias, IsMedia: true);
+                    yield return CacheKeys.Media(udi.Guid);
                 }
             }
         }
     }
 }
 
-/// <summary>A referenced document or media item, and the property that references it.</summary>
-internal sealed record ReferencedKey(string Key, Guid Id, string PropertyAlias, bool IsMedia);
