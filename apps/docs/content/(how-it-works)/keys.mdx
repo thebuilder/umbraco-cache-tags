@@ -57,9 +57,17 @@ GET /umbraco/delivery/api/v2/content?fetch=descendants:/guides/&filter=contentTy
 X-Umbraco-Cache-Keys: umbraco, type-guidepage-e000...0001, content-e000...0012, ...
 ```
 
-A change to a document plans the global keys and its own root's, so publishing a guide in one site leaves the other sites' guide listings cached. A listing across every root, such as a search or a type filter with no `fetch`, keeps the global keys and is reached by a change in any site. The types a response lists in place of its items (see [Limits](#limits)) are scoped to each item's root too. Media has no roots, so media keys stay global.
+A change to a document plans the global keys and its own root's. Publishing a guide in Site A purges:
 
-A move between roots plans both roots' keys. `children-` keys name a parent, and item keys an item, so they never needed scoping. To keep purges for one site away from another site's frontend, limit its target to its roots (see [Purge targets](/targets#several-sites)).
+| A cached response on Site B | Purged? |
+| --- | --- |
+| A listing inside Site B's root, such as `fetch=descendants:` filtered by type | No, it carries Site B's scoped keys |
+| A listing across every root, such as a search or a type filter with no `fetch` | Yes, it carries the global keys |
+| A page that picks or links that guide | Yes, it carries the guide's own `content-` key |
+
+A move between roots plans both roots' keys. The types a response lists in place of its items (see [Limits](#limits)) are scoped to each item's root too. `children-` keys name a parent and item keys an item, so they never needed scoping, and media has no roots, so media keys stay global.
+
+This keeps one site's edits from emptying another site's listings. To also keep the purge requests themselves away from another site's frontend, limit each target to its roots (see [Purge targets](/targets#several-sites)).
 
 ## Which responses get keys
 

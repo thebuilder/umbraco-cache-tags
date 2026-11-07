@@ -69,21 +69,34 @@ To check the address it connects to, a backoffice target connects directly, not 
 
 ## Several sites
 
-When one Umbraco serves several sites, each with its own root and frontend, limit each site's target to its roots. A change to content under other roots only is then not sent to it.
+When one Umbraco serves several sites, each with its own root and frontend, limit each site's target to the roots it shows. A root is a document at the top of the content tree.
+
+```mermaid
+flowchart LR
+    A[Site A root] --> TA[site-a target]
+    S[Shared root<br/>settings, footer] --> TA
+    S --> TB[site-b target]
+    B[Site B root] --> TB
+    M(Media, dictionary,<br/>type changes) -.-> TA
+    M -.-> TB
+```
+
+A change under Site A reaches only the site-a target, and a change under the shared root reaches both, because both list it. Media, the [dictionary and your own keys](/your-apis), type changes and site-wide changes go to every target, since any site may show them. A target with no roots gets every change.
 
 ```json appsettings.json
 "site-a": {
   "Url": "https://site-a.example.com/api/cache-tags",
   "Secret": "<at least 32 characters>",
-  "Roots": ["e0000000-0000-0000-0000-000000000001"]
+  "Roots": [
+    "e0000000-0000-0000-0000-000000000001",
+    "e0000000-0000-0000-0000-000000000300"
+  ]
 }
 ```
 
 :::caution[List every root the site shows]
 A target only gets changes under the roots it lists. If the site also shows content from another root, such as a shared settings or footer root, or a page picked from another site, list that root too. Otherwise changes to that content never reach the frontend, and it keeps serving the old content without any error.
 :::
-
-A root is a document at the top of the content tree. Media, the [dictionary and your own keys](/your-apis), type changes and site-wide changes still go to every target, since any site may show them.
 
 In the backoffice, pick the roots in a target's **Site roots** field. A target from `appsettings.json` has a **Roots** button for the same, unless `appsettings.json` sets its `Roots`. The package keeps those roots in the database, so every server uses them.
 
