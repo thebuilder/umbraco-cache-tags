@@ -224,7 +224,10 @@ async function delivered(ms = timeoutMs * 3) {
   while (Date.now() - started < ms) {
     const changes = await management<ChangeEntry[]>("GET", "cache-tags/changes?take=50");
     waiting = changes.filter((change) => change.status !== "Released" || change.purges.some((purge) => purge.state === "Pending"));
-    if (waiting.length === 0) {
+    // Older changes too: a purge still retrying after the frontend was down lands whenever its
+    // backoff ends.
+    const pending = await management<unknown[]>("GET", "cache-tags/purges?state=Pending&take=1");
+    if (waiting.length === 0 && pending.length === 0) {
       return;
     }
     await sleep(1000);
@@ -759,6 +762,11 @@ const cases: Case[] = [
     async undo() {
       await setTypeAlias(keys.guideType, "guidePage");
       await indexed("contentType:guidePage");
+
+  // Umbraco seeds the site before the frontend starts, so the seed's purges fail and retry with
+  // backoff. One that lands during the first case would refresh a page the case expects to stay
+  // cached. By the time the frontend is up, the retries are a minute or two apart.
+  await delivered(5 * 60_000);
     },
   },
   {
