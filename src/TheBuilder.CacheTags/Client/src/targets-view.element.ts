@@ -347,8 +347,9 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       <uui-form-layout-item>
         <uui-label slot="label" for="roots">Site roots</uui-label>
         <span slot="description">
-          For an Umbraco instance with several sites: the top-level pages whose content this frontend shows, a shared one it picks
-          from included. A change to content under other roots only is not sent here. Leave empty to send every change.
+          For an Umbraco instance with several sites: every top-level page whose content this frontend shows, including shared
+          ones such as settings or a footer. Changes under roots not picked here never reach this frontend. Leave empty to send every
+          change.
         </span>
         <umb-input-document
           id="roots"

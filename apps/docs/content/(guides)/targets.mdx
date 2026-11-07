@@ -79,7 +79,11 @@ When one Umbraco serves several sites, each with its own root and frontend, limi
 }
 ```
 
-A root is a document at the top of the content tree. List every root the site shows content from, including a shared one it picks from, such as a global settings folder: a change to content under a root the target does not list never reaches that frontend. Media, the [dictionary and your own keys](/your-apis), type changes and site-wide changes still go to every target, since any site may show them.
+:::caution[List every root the site shows]
+A target only gets changes under the roots it lists. If the site also shows content from another root, such as a shared settings or footer root, or a page picked from another site, list that root too. Otherwise changes to that content never reach the frontend, and it keeps serving the old content without any error.
+:::
+
+A root is a document at the top of the content tree. Media, the [dictionary and your own keys](/your-apis), type changes and site-wide changes still go to every target, since any site may show them.
 
 In the backoffice, pick the roots in a target's **Site roots** field. A target from `appsettings.json` has a **Roots** button for the same, unless `appsettings.json` sets its `Roots`. The package keeps those roots in the database, so every server uses them.
 

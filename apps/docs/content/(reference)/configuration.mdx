@@ -49,7 +49,7 @@ The timings are fixed: a change waits at most 60 seconds for every server to app
 | `Secret` | none | For a webhook, the signing secret, at least 32 characters. |
 | `Headers` | none | For a webhook, request headers to send with every purge. See [Purge targets](/targets#request-headers). |
 | `Settings` | none | Settings for other types, such as Cloudflare's `ZoneId` and `ApiToken`. |
-| `Roots` | none | For an Umbraco with several sites: the keys of the site roots whose content this target's frontend shows. Changes under other roots only are not sent to it. Can also be set in the backoffice. See [Purge targets](/targets#several-sites). |
+| `Roots` | none | For an Umbraco with several sites: the keys of every root whose content this target's frontend shows, including shared roots it picks from. Changes under other roots only are not sent to it. Can also be set in the backoffice. See [Purge targets](/targets#several-sites). |
 
 :::caution
 Keep secrets and tokens out of `appsettings.json` in source control. Set them as environment variables, such as `CacheTags__Targets__nextjs__Secret`, or in your host's secret store.
