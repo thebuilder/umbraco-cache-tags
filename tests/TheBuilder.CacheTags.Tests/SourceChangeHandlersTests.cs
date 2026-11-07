@@ -102,7 +102,11 @@ public sealed class SourceChangeHandlersTests : IDisposable
         var category = new ContentType(Strings, -1) { Id = 1050, Alias = "category" };
         var content = new Content("Getting around", 2000, category) { Id = 1060, Key = C, Path = "-1,2000,1060", Published = true };
 
-        _handlers.Handle(new ContentMovedNotification(new MoveEventInfo<IContent>(content, "-1,1059,1060", 2000), new EventMessages()));
+        // The overload with the new parent's key is not in every supported Umbraco version.
+#pragma warning disable CS0618
+        var move = new MoveEventInfo<IContent>(content, "-1,1059,1060", 2000);
+#pragma warning restore CS0618
+        _handlers.Handle(new ContentMovedNotification(move, new EventMessages()));
 
         LedgerEntry recorded = Assert.Single(_ledger.Latest(10));
         Assert.Equal([Site, OtherSite], recorded.Plan.Roots!.Order());
