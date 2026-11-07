@@ -1,0 +1,102 @@
+---
+title: How keys are collected
+description: Which documents and media a response's keys cover, and how expand, links, rich text and fields change that.
+seo:
+  image: /og/collection.png
+---
+
+A response carries the key of every document and media item it shows. An item it renders with its properties also brings the keys of what those properties reference. An item it only names, such as a link or a pick that isn't expanded, brings its own key and nothing more.
+
+## Two sources
+
+```mermaid
+flowchart LR
+    R[A Delivery API response] --> J[The JSON it returns]
+    R --> P[The published values of<br/>the items it renders]
+    J -->|every document, media<br/>item and link in it| K[Keys]
+    P -->|what those values<br/>reference| K
+    K --> C{64 items or fewer?}
+    C -->|yes| I[content- and<br/>media- keys]
+    C -->|no| S[one set- key]
+```
+
+The JSON is what a reader sees: the item, the media it uses, the documents it picks and the links in it, at any depth of blocks and rich text.
+
+The published values cover what the JSON can't name. A pick of an item that isn't published yet renders as nothing, but the response still has to change when that item is published. So for each item the response renders with its properties, the package reads what its published values reference, the same way Umbraco finds relations. Those are source values, which Umbraco never caches away, so a warm request carries the same keys as a cold one.
+
+## A worked example
+
+The sample site's home page has a hero image (Dusk), a featured article (Harbour mornings) and two teaser blocks that pick Articles and About. Harbour mornings has its own image, picks two related articles, and links Forest walks in its body.
+
+Asked for with `?expand=properties[featuredArticle]`, the response renders Home and Harbour mornings with their properties. Everything else is only named:
+
+```mermaid
+flowchart TD
+    H[Home]:::rendered --> D(Dusk image)
+    H --> F[Harbour mornings<br/>expanded]:::rendered
+    H --> A[Articles<br/>teaser pick]:::shown
+    H --> O[About<br/>teaser pick]:::shown
+    F --> HI(Harbour image)
+    F --> W[Forest walks<br/>related pick]:::shown
+    F --> E[Evenings at dusk<br/>related pick]:::shown
+    F -. link in the body .-> W
+    W -. not carried .-> WI(Forest image):::dropped
+    classDef rendered stroke-width:2px
+    classDef shown stroke-dasharray:4 3
+    classDef dropped stroke-dasharray:2 3
+```
+
+The heavy boxes are rendered with their properties, so what they reference counts. The dashed boxes are only named, so only their own key counts, and the rounded boxes are media. Forest walks' image is not carried, because the response never shows Forest walks' properties.
+
+Expanding more renders more, and the header grows with it:
+
+| Request for Home | Rendered with properties | Carries, besides `umbraco` |
+| --- | --- | --- |
+| No `expand` | Home | Home, Dusk, Harbour mornings, Articles, About |
+| `expand=properties[featuredArticle]` | Home, Harbour mornings | the above, plus Harbour image, Forest walks, Evenings at dusk |
+| `expand=properties[featuredArticle[properties[related]]]` | Home, Harbour mornings, Forest walks, Evenings at dusk | the above, plus Forest image |
+
+Each row is checked against the sample site on every change to the package, so this page stays true.
+
+## What each value adds
+
+| In the response | Its own key | What it references |
+| --- | --- | --- |
+| The item you asked for | Yes | Yes |
+| A picked document, expanded | Yes | Yes, at any depth |
+| A picked document, not expanded | Yes | No |
+| A link, from a multi URL picker | Yes | No |
+| A link in rich text | Yes | No |
+| A media item | Yes | No |
+| A block | No, blocks aren't published on their own | Its picks and links count as above |
+
+## Expand
+
+Umbraco renders a picked document with its properties only when the request expands it. `expand=properties[$all]` expands every pick one level down, and `expand=properties[$all[properties[$all]]]` two levels. The keys follow exactly what is expanded, at whatever depth.
+
+Links never expand. Umbraco's multi URL picker and rich text ignore `expand`, so a link shows its target's name and URL however deep the request expands. A navigation that links a page picking 92 articles carries one key for that page, not 92:
+
+```mermaid
+flowchart LR
+    H[Home]:::rendered -->|navigation link| C[Cache test]:::shown
+    C -. picks, not carried .-> N[92 articles]:::dropped
+    classDef rendered stroke-width:2px
+    classDef shown stroke-dasharray:4 3
+    classDef dropped stroke-dasharray:2 3
+```
+
+Publishing one of the 92 articles doesn't purge Home, because Home never shows them. Renaming or moving Cache test does, because that changes the link.
+
+## Rich text
+
+A link in rich text carries its target's key, whether the Delivery API returns the rich text as HTML or as JSON. The target's URL and name are in the link, so a rename or a move has to reach the response. What the target references is not carried.
+
+Blocks inside rich text are walked like any other block: their picks, links and media count as in the table above.
+
+## Fields
+
+`fields` limits which properties an expanded item shows. The keys still cover everything the item references, because the package reads the item's published values, not the fields in the JSON. With `expand=properties[featuredArticle]&fields=properties[featuredArticle[properties[title]]]`, the response shows one title, and Home still carries the same 8 keys as without `fields`: Dusk, Articles and About, and Harbour mornings' image and related articles. That is more keys than the response needs, never fewer: a publish may refresh it once too often, but never leaves it stale.
+
+## Too many items
+
+Past 64 items, a response carries one `set-` key in place of its item keys, and the package stores which items the set holds. See [Limits](/keys#limits). Since a link brings only its own key, a page's count is the items it shows, so most pages stay well under the limit.

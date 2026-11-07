@@ -28,7 +28,7 @@ A response carries the keys of what it shows:
 X-Umbraco-Cache-Keys: umbraco, content-e000...0003, content-e000...0004
 ```
 
-That is `umbraco`, the listing keys that select the response, any `x-` keys, and the `content-` and `media-` keys of the items it shows, the items it links to and the media it uses. A listing carries its listing key too:
+That is `umbraco`, the listing keys that select the response, any `x-` keys, and the `content-` and `media-` keys of the items it shows, the items it links to and the media it uses. [How keys are collected](/collection) shows which items count, and how `expand`, links and rich text change that. A listing carries its listing key too:
 
 ```http
 X-Umbraco-Cache-Keys: umbraco, children-e000...0001, content-e000...0003, content-e000...0004
