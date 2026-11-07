@@ -47,7 +47,10 @@ X-Umbraco-Cache-Keys: umbraco, children-e000..., content-e000..., content-e001..
 - the selector keys that select it, for a listing (`type-`, `children-`, or the catch-all `search-`);
 - the site's own `x-` keys, for a tagged action (see Your own APIs);
 - the `content-` and `media-` keys of the items it shows, the items they pick or link to, and the
-  media they use (`ResponseCollector`, `ReferenceReader`, `OutputWalker`).
+  media they use (`ResponseCollector`, `ReferenceReader`, `OutputWalker`). An item the result
+  renders with its properties, because the request expands it (at any depth), counts as shown, so
+  what it references is in too. A picked or linked item the result shows alone does not: a link to a
+  page that picks 90 articles does not carry the 90 articles.
 
 A purge reaches a cached response by the keys it carries, as with any tag-based cache. Nothing is
 stored per response, so nothing has to be written, kept or looked up for a purge to reach a copy,

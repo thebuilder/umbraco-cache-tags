@@ -101,6 +101,11 @@ const checks: Check[] = [
     exactly: [harbourMornings, harbourImage, forestWalks, eveningsAtDusk],
   },
   {
+    path: `${item("articles/harbour-mornings/")}?expand=properties[body]`,
+    why: "expanding rich text: its link to Forest walks shows the link alone, so Forest walks' own image is not shown",
+    exactly: [harbourMornings, harbourImage, forestWalks, eveningsAtDusk],
+  },
+  {
     path: item("guides/"),
     why: "a section: its image and the two guides it features, but not its children",
     exactly: [guides, bridge, byFerry, breakfast],
@@ -140,7 +145,28 @@ const checks: Check[] = [
   {
     path: item("blocks/"),
     why: "a block grid with areas in areas, a block list inside a block, a gallery block with crops, and links",
-    exactly: [blocks, guides, byFerry, breakfast, streetFood, events, bridge, market, lanterns, meadow, ferryTimetable],
+    exactly: [blocks, guides, byFerry, breakfast, streetFood, events, bridge, market, lanterns, meadow, ferryTimetable, readingList],
+  },
+  {
+    path: `${item("blocks/")}?expand=properties[links]`,
+    why: "expanding a multi URL picker: a link shows its target alone, so the 70 notes the linked reading list picks are not shown",
+    exactly: [blocks, guides, byFerry, breakfast, streetFood, events, bridge, market, lanterns, meadow, ferryTimetable, readingList],
+  },
+  {
+    path: `${item("blocks/")}?expand=properties[$all[properties[$all]]]`,
+    why: "expanding everything still leaves a linked page's own picks out",
+    includes: [readingList],
+    excludes: ["type-note", ...pickedNotes],
+  },
+  {
+    path: `${item("")}?expand=properties[featuredArticle]`,
+    why: "an expanded picker shows the featured article's properties: its image, the articles it picks, and the one its body links to",
+    exactly: [home, duskImage, harbourMornings, articles, about, harbourImage, forestWalks, eveningsAtDusk],
+  },
+  {
+    path: `${item("")}?expand=properties[featuredArticle[properties[related]]]`,
+    why: "expanded two levels: the featured article's related articles show their properties too, Forest walks' image among them",
+    exactly: [home, duskImage, harbourMornings, articles, about, harbourImage, forestWalks, eveningsAtDusk, forestImage],
   },
   {
     path: item("photo-essay/"),

@@ -521,6 +521,7 @@ internal sealed class ExampleSiteSeeder(
                 Link.Document("Guides", ExampleContent.Guides),
                 Link.Document("By ferry, with a query string", ExampleContent.ByFerry, "?from=blocks"),
                 Link.Media("Ferry timetable (PDF)", ExampleContent.FerryTimetable),
+                Link.Document("Reading list", ExampleContent.ReadingList),
                 Link.External("Umbraco documentation", "https://docs.umbraco.com/")));
         });
     }
