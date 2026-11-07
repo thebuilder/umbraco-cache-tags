@@ -51,7 +51,7 @@ internal sealed class CacheKeyResultFilter(
     private IReadOnlySet<string> Custom(object? value)
     {
         var keys = new HashSet<string>(named.Keys, StringComparer.Ordinal);
-        OutputWalker.Collect(value, keys);
+        collector.CollectShown(value, keys);
         return keys;
     }
 

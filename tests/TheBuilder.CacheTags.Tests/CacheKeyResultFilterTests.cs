@@ -40,6 +40,30 @@ public sealed class CacheKeyResultFilterTests
     }
 
     [Fact]
+    public async Task A_sites_own_response_carries_what_the_items_it_renders_reference()
+    {
+        // The action returns Featured as IApiContentBuilder builds it, with its properties, and a
+        // pick it doesn't expand. Featured's published values also reference Deep, which the output
+        // can't show (as when it isn't published yet), and its image.
+        ApiContent featured = ResponseCollectorTests.Content(
+            ResponseCollectorTests.Featured,
+            new Dictionary<string, object?> { ["more"] = ResponseCollectorTests.Content(ResponseCollectorTests.Unexpanded) });
+
+        HttpContext http = await RunAsync(new Request(typeof(DictionaryController), "/api/featured", Value: featured, Named: ["x-teaser"], Collector: ResponseCollectorTests.Collector()));
+
+        Assert.Equal(
+            [
+                "umbraco",
+                "x-teaser",
+                "content-e0000000-0000-0000-0000-000000000011",
+                "content-e0000000-0000-0000-0000-000000000012",
+                "content-e0000000-0000-0000-0000-000000000013",
+                "media-f0000000-0000-0000-0000-000000000011",
+            ],
+            http.Response.Headers[Settings.HeaderName].ToString().Split(", "));
+    }
+
+    [Fact]
     public async Task A_header_stops_at_the_tag_limit_but_Umbracos_output_cache_keeps_every_key()
     {
         var named = Enumerable.Range(0, 200).Select(i => $"x-label-{i:D3}").ToList();
@@ -76,7 +100,7 @@ public sealed class CacheKeyResultFilterTests
 
     private sealed record OutputCacheFeature(OutputCacheContext Context) : IOutputCacheFeature;
 
-    private sealed record Request(Type Controller, string Path, string Query = "", object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null, IOutputCacheFeature? OutputCache = null);
+    private sealed record Request(Type Controller, string Path, string Query = "", object? Value = null, IReadOnlyList<string>? Named = null, CacheTagsOptions? Options = null, IOutputCacheFeature? OutputCache = null, ResponseCollector? Collector = null);
 
     /// <summary>Runs the filter over a 200 response to the request.</summary>
     private static async Task<HttpContext> RunAsync(Request request)
@@ -91,7 +115,7 @@ public sealed class CacheKeyResultFilterTests
         var filter = new CacheKeyResultFilter(
             new TestOptions(request.Options ?? Settings),
             Fake.Of<IRequestPreviewService>(),
-            new ResponseCollector(
+            request.Collector ?? new ResponseCollector(
                 null!,
                 Fake.Of<IPublishedContentCache>(),
                 Fake.Of<IPublishedMediaCache>(),

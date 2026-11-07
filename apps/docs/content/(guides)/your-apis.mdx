@@ -33,7 +33,7 @@ public sealed class DictionaryController(ILanguageService languages, ICacheTagsR
 }
 ```
 
-Like a Delivery API response, the response carries `umbraco` and the keys of what it shows: the keys you name, and the keys of the Delivery API items in its result, which the package finds by itself.
+Like a Delivery API response, the response carries `umbraco` and the keys of what it shows: the keys you name, and the keys of the Delivery API items in its result and of what the items it renders with their properties reference, which the package finds by itself. See [How keys are collected](/collection#your-own-apis).
 
 - **Custom keys** start with `x-` and use lowercase letters, digits and hyphens, at most 200 characters. An item's `content-` or `media-` key works too.
 - **Only a 200 is tagged.** The package tags a response before its result runs, so it reads the status from the result: return an `ObjectResult` (`Ok(...)`), a `JsonResult`, a `ContentResult`, a status code result, a file, an `EmptyResult`, or a typed result (`TypedResults.Ok(...)`, `Results<...>`) with a status code. Anything else, such as a redirect, a challenge or a result type the package does not know, gets `no-store` and no key.

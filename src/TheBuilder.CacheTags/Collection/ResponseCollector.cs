@@ -88,15 +88,35 @@ internal sealed class ResponseCollector(
             keys.UnionWith(reader.Read(item, culture));
         }
 
-        // An expanded item renders its properties, and so what they reference, at any depth of
-        // expansion. Only the items the result shows with their properties count: a link, or a picker
-        // the request does not expand, shows the item alone, however much the item itself references.
         var requested = resolved.Select(item => item.Key).ToHashSet();
+        ReadRendered(rendered.Where(id => requested.Contains(id) is false), culture, keys);
+    }
+
+    /// <summary>
+    ///     A site's own action (<see cref="CacheTaggedAttribute" />): the Delivery API items its result
+    ///     shows, and what the documents it renders with their properties reference, as for a Delivery
+    ///     API response. Nothing is resolved for it, so its result is all there is to go by.
+    /// </summary>
+    public void CollectShown(object? result, ISet<string> keys)
+    {
+        var rendered = new HashSet<Guid>();
+        OutputWalker.Collect(result, keys, rendered);
+        if (rendered.Count > 0)
+        {
+            ReadRendered(rendered, variationContext.VariationContext?.Culture, keys);
+        }
+    }
+
+    // An expanded item renders its properties, and so what they reference, at any depth of
+    // expansion. Only the items the result shows with their properties count: a link, or a picker
+    // the request does not expand, shows the item alone, however much the item itself references.
+    private void ReadRendered(IEnumerable<Guid> rendered, string? culture, ISet<string> keys)
+    {
         foreach (Guid id in rendered)
         {
-            if (requested.Contains(id) is false && contentCache.GetById(id) is { } expanded)
+            if (contentCache.GetById(id) is { } item)
             {
-                keys.UnionWith(reader.Read(expanded, culture));
+                keys.UnionWith(reader.Read(item, culture));
             }
         }
     }

@@ -335,7 +335,8 @@ through two public pieces.
 **Tagging.** `[CacheTagged]` on an action or controller tags its responses the way the package tags
 Delivery API responses: `umbraco` and the keys of what the response shows, in the header. The action
 names its keys with the scoped `ICacheTagsResponse`, and the package finds any Delivery API items in
-its result on its own.
+its result on its own, with what the items it renders with their properties reference, as for a
+Delivery API response. Nothing is resolved for such an action, so its result is all there is to go by.
 
 ```csharp
 [ApiController, Route("api/dictionary"), CacheTagged]

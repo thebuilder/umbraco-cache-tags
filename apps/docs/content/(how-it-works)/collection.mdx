@@ -97,6 +97,28 @@ Blocks inside rich text are walked like any other block: their picks, links and 
 
 `fields` limits which properties an expanded item shows. The keys still cover everything the item references, because the package reads the item's published values, not the fields in the JSON. With `expand=properties[featuredArticle]&fields=properties[featuredArticle[properties[title]]]`, the response shows one title, and Home still carries the same 8 keys as without `fields`: Dusk, Articles and About, and Harbour mornings' image and related articles. That is more keys than the response needs, never fewer: a publish may refresh it once too often, but never leaves it stale.
 
+## Your own APIs
+
+A response from your own controller with `[CacheTagged]` is collected the same way: the keys you name, then the Delivery API items in its result and what the items it renders with their properties reference. See [Your own APIs](/your-apis).
+
+The package only recognizes Umbraco's Delivery API models in a result, as `IApiContentBuilder`, `IApiMediaBuilder` and Umbraco's value converters build them. An item in a shape of your own, such as a class holding its id or URL, isn't found. Name its key yourself:
+
+```csharp
+cacheTags.Add($"content-{article.Key:D}");
+```
+
+## Custom property editors
+
+Nothing depends on the document type. What counts is each property's editor:
+
+| The editor | What it adds |
+| --- | --- |
+| A value converter that returns Delivery API models (content, media, links, blocks, rich text) | The keys of what the JSON shows |
+| A reference factory, as Umbraco's own editors have | What its published values reference |
+| Neither, such as an id kept in a text field | Nothing |
+
+An editor that holds references should give Umbraco a reference factory (`IDataValueReferenceFactory`) anyway, because Umbraco's relations and "used by" lists depend on it too.
+
 ## Too many items
 
 Past 64 items, a response carries one `set-` key in place of its item keys, and the package stores which items the set holds. See [Limits](/keys#limits). Since a link brings only its own key, a page's count is the items it shows, so most pages stay well under the limit.
