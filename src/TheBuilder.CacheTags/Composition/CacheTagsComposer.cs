@@ -43,6 +43,8 @@ public sealed class CacheTagsComposer : IComposer
 
         // The package's tables.
         builder.Services.AddSingleton<PackageDatabase>();
+        builder.Services.AddSingleton<KeySetStore>();
+        builder.Services.AddSingleton<KeySetWriter>();
         builder.Services.AddRecurringBackgroundJob<LedgerPruneJob>();
 
         // The ledger, on the server that makes each change.
@@ -114,6 +116,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddSingleton<ICacheTagsChangeLog, CacheTagsChangeLog>();
         builder.Services.AddSingleton<ICacheTagsOutbox, CacheTagsOutbox>();
         builder.Services.AddSingleton<ICacheTagsTargets, CacheTagsTargets>();
+        builder.Services.AddSingleton<ICacheTagsKeySets, CacheTagsKeySets>();
         builder.Services.AddSingleton<IAuthorizationHandler, AdministratorHandler>();
         builder.Services.AddAuthorization(options => options.AddPolicy(
             AdministratorRequirement.Policy,

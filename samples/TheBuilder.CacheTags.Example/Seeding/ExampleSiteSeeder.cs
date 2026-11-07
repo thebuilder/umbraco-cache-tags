@@ -12,8 +12,9 @@ namespace TheBuilder.CacheTags.Example.Seeding;
 
 /// <summary>
 ///     Seeds the rest of the site around what <see cref="ExampleSeeder" /> made: a Guides section with
-///     nested categories and pages, a page of nested blocks, a media-heavy photo essay, culture-variant
-///     events, and a media tree with folders, images and a PDF. Until Winter market (created last)
+///     nested categories and pages, a page of nested blocks, a media-heavy photo essay, a reading list
+///     that picks more notes than a header lists, culture-variant events, and a media tree with
+///     folders, images and a PDF. Until Winter market (created last)
 ///     exists, every item is checked by key and only missing ones are created, so a database seeded
 ///     before this existed gets them too. See ../../README.md for what each item is there to test.
 /// </summary>
@@ -53,6 +54,7 @@ internal sealed class ExampleSiteSeeder(
         CreateGuides(home, courtyard);
         CreateBlocksPage(home);
         CreatePhotoEssay(home, courtyard);
+        CreateReadingList(home);
         CreateEvents(home);
         logger.LogInformation("Seeded the rest of the cache tags example site.");
     }
@@ -213,8 +215,13 @@ internal sealed class ExampleSiteSeeder(
             return type;
         });
 
+        await seed.EnsureContentType(ExampleContent.ReadingListType, () => Document(
+            "readingList", "Reading List", "icon-book", (text, "title", "Title"), (documentPicker, "notes", "Notes")));
+        await seed.EnsureContentType(ExampleContent.NoteType, () => Document("note", "Note", "icon-notepad", (text, "title", "Title")));
+
         await seed.EnsureAllowedChildren(
-            ExampleContent.HomeType, ExampleContent.SectionType, ExampleContent.BlocksPageType, ExampleContent.PhotoEssayType, ExampleContent.EventListType, ExampleContent.GuidePageType);
+            ExampleContent.HomeType, ExampleContent.SectionType, ExampleContent.BlocksPageType, ExampleContent.PhotoEssayType, ExampleContent.EventListType, ExampleContent.GuidePageType, ExampleContent.ReadingListType);
+        await seed.EnsureAllowedChildren(ExampleContent.ReadingListType, ExampleContent.NoteType);
         await seed.EnsureAllowedChildren(ExampleContent.SectionType, ExampleContent.CategoryType);
         await seed.EnsureAllowedChildren(ExampleContent.CategoryType, ExampleContent.GuidePageType);
         await seed.EnsureAllowedChildren(ExampleContent.GuidePageType, ExampleContent.GuidePageType);
@@ -548,6 +555,25 @@ internal sealed class ExampleSiteSeeder(
         image.GetValue<string>(Constants.Conventions.Media.File) is { } file
             ? JsonDocument.Parse(file).RootElement.GetProperty("src").GetString() ?? string.Empty
             : string.Empty;
+
+    // 70 picked notes and the page itself: past the 64 item keys a header lists, so the page carries
+    // one stored set (set-<hash>) in their place. The last note is not picked, so publishing it must
+    // not purge the page.
+    private void CreateReadingList(IContent home)
+    {
+        var picked = Enumerable.Range(0, ExampleContent.PickedNotes).Select(ExampleContent.Note).ToArray();
+        IContent readingList = seed.EnsurePage(ExampleContent.ReadingList, "Reading list", home, "readingList", content =>
+        {
+            content.SetValue("title", "Reading list");
+            content.SetValue("notes", Udis(picked));
+        });
+
+        for (var n = 0; n <= ExampleContent.PickedNotes; n++)
+        {
+            var name = $"Note {n + 1:D2}";
+            seed.EnsurePage(ExampleContent.Note(n), name, readingList, "note", content => content.SetValue("title", name));
+        }
+    }
 
     private void CreateEvents(IContent home)
     {

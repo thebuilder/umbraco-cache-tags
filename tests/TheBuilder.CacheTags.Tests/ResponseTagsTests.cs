@@ -10,30 +10,32 @@ public sealed class ResponseTagsTests
     private const string Harbour = "content-e0000000-0000-0000-0000-000000000003";
     private const string Forest = "content-e0000000-0000-0000-0000-000000000004";
 
-    private static IEnumerable<string> Types(IReadOnlyList<string> items) => ["type-article"];
+    private static Task<IEnumerable<string>> Types(IReadOnlyList<string> items) => Task.FromResult<IEnumerable<string>>(["type-article"]);
 
     [Fact]
-    public void A_response_carries_umbraco_its_selectors_its_custom_keys_and_its_items_in_that_order()
+    public async Task A_response_carries_umbraco_its_selectors_its_custom_keys_and_its_items_in_that_order()
     {
-        IReadOnlyList<string> keys = ResponseTags.For(64, 128, new HashSet<string> { Harbour, "x-label", "search-deliveryapicontentindex", "children-e0000000-0000-0000-0000-000000000002" }, Types);
+        IReadOnlyList<string> keys = await ResponseTags.Of(new HashSet<string> { Harbour, "x-label", "search-deliveryapicontentindex", "children-e0000000-0000-0000-0000-000000000002" })
+            .HeaderAsync(64, 128, Types);
 
         Assert.Equal(["umbraco", "children-e0000000-0000-0000-0000-000000000002", "search-deliveryapicontentindex", "x-label", Harbour], keys);
     }
 
     [Fact]
-    public void A_response_showing_more_items_than_it_lists_carries_their_types()
+    public async Task A_response_showing_more_items_than_it_lists_carries_what_stands_for_them_and_Umbracos_output_cache_every_item()
     {
-        IReadOnlyList<string> keys = ResponseTags.For(1, 128, new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" }, Types);
+        var tags = ResponseTags.Of(new HashSet<string> { Forest, Harbour, "search-deliveryapicontentindex" });
 
-        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], keys);
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], await tags.HeaderAsync(1, 128, Types));
+        Assert.Equal(["umbraco", "search-deliveryapicontentindex", Harbour, Forest], tags.All);
     }
 
     [Fact]
-    public void Items_that_would_push_the_header_past_its_limit_are_listed_as_their_types()
+    public async Task Items_that_would_push_the_header_past_its_limit_are_listed_as_what_stands_for_them()
     {
         var items = Enumerable.Range(1, 127).Select(i => $"content-e0000000-0000-0000-0000-{i:D12}").ToList();
 
-        IReadOnlyList<string> keys = ResponseTags.For(200, 128, new HashSet<string>([.. items, "search-deliveryapicontentindex"]), Types);
+        IReadOnlyList<string> keys = await ResponseTags.Of(new HashSet<string>([.. items, "search-deliveryapicontentindex"])).HeaderAsync(200, 128, Types);
 
         Assert.Equal(["umbraco", "search-deliveryapicontentindex", "type-article"], keys);
     }

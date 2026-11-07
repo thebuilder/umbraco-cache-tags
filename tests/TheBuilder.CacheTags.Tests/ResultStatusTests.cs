@@ -74,7 +74,8 @@ public sealed class ResultStatusTests
             new TestOptions(Settings),
             Fake.Of<IRequestPreviewService>(),
             new ResponseCollector(null!, null!, null!, null!, null!, null!, null!),
-            new CacheTagsResponse());
+            new CacheTagsResponse(),
+            null!);
 
         var http = new DefaultHttpContext();
         http.Request.Path = path;

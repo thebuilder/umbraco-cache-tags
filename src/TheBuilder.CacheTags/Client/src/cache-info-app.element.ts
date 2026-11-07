@@ -8,12 +8,13 @@ import { errorMessage, sharedStyles } from "./shared.js";
 
 /**
  * The Cache box on a document's or media item's Info tab: the item's key, which every cached response
- * that shows the item carries, and purging the item by hand.
+ * that shows the item carries, how many stored key sets hold it, and purging the item by hand.
  */
 @customElement("thebuilder-cache-tags-info-app")
 export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
   @state() private _key?: string;
   @state() private _busy = false;
+  @state() private _sets?: number;
 
   #notification?: typeof UMB_NOTIFICATION_CONTEXT.TYPE;
 
@@ -30,8 +31,25 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
       this.observe(context.unique, (unique) => {
         this._key = unique ? `${prefix}${unique}` : undefined;
         this._busy = false;
+        this._sets = undefined;
+        void this.#loadSets();
       });
     });
+  }
+
+  async #loadSets(): Promise<void> {
+    const key = this._key;
+    if (!key) {
+      return;
+    }
+    try {
+      const { sets } = await api.keySets(key);
+      if (this._key === key) {
+        this._sets = sets;
+      }
+    } catch {
+      // Only administrators may read it; the box works without it.
+    }
   }
 
   async #purge(): Promise<void> {
@@ -65,6 +83,12 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
           <span class="mono">${this._key}</span>
           <uui-button compact look="secondary" label="Purge this item" ?disabled=${this._busy} @click=${() => this.#purge()}></uui-button>
         </div>
+        ${this._sets
+          ? html`<p class="muted">
+              Also in ${this._sets === 1 ? "1 stored set" : `${this._sets} stored sets`}, which pages showing too many items to list carry
+              instead. Purging the item purges them too.
+            </p>`
+          : nothing}
       </uui-box>
     `;
   }

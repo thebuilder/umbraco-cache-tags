@@ -97,15 +97,26 @@ internal sealed class LedgerStore(PackageDatabase database)
     /// <summary>
     ///     Releases a pending change to <paramref name="stage" /> and queues its purges, in one
     ///     transaction, unless another server already has. Returns whether this call did.
+    ///     <paramref name="setsCheckUtc" /> is when the key sets of its items are looked up again
+    ///     (<see cref="SetsChecked" />), or <c>null</c> for never.
     /// </summary>
-    public bool Release(Guid changeId, ChangeStage stage, IReadOnlyList<string> notAcknowledgedBy, DateTime nowUtc, IEnumerable<NewPurge> purges)
+    public bool Release(Guid changeId, ChangeStage stage, IReadOnlyList<string> notAcknowledgedBy, DateTime nowUtc, IEnumerable<NewPurge> purges, DateTime? setsCheckUtc = null)
         => database.Write(db => LedgerSql.Release(
             db,
             changeId,
             stage,
             nowUtc,
             notAcknowledgedBy.Count == 0 ? null : JsonSerializer.Serialize(notAcknowledgedBy, Json),
-            Rows(changeId, nowUtc, purges)));
+            Rows(changeId, nowUtc, purges),
+            setsCheckUtc));
+
+    /// <summary>The released changes whose key sets are due to be looked up again, oldest first.</summary>
+    public IReadOnlyList<LedgerEntry> SetsCheckDue(DateTime nowUtc, int take)
+        => database.Read(db => LedgerSql.SetsCheckDue(db, nowUtc, take)).Select(Entry).ToList();
+
+    /// <summary>Marks a change's key sets looked up again and queues their purges, in one transaction, unless another server already has. Returns whether this call did.</summary>
+    public bool SetsChecked(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
+        => database.Write(db => LedgerSql.SetsChecked(db, changeId, Rows(changeId, nowUtc, purges)));
 
     /// <summary>Queues an indexing change's listing purges, in one transaction, unless another server already has. Returns whether this call did.</summary>
     public bool ReleaseListings(Guid changeId, DateTime nowUtc, IEnumerable<NewPurge> purges)
@@ -116,15 +127,24 @@ internal sealed class LedgerStore(PackageDatabase database)
     ///     sending, and returns how many. For a server that applied the change after it was released
     ///     without it: a frontend that refetched from that server in between cached its old content
     ///     again. A purge still waiting to go out goes after this server evicted, so it is not doubled.
+    ///     <paramref name="also" /> are keys purged with it, at each target it went to: the key sets
+    ///     stored since the release.
     /// </summary>
-    public int Resend(Guid changeId, DateTime nowUtc)
+    public int Resend(Guid changeId, DateTime nowUtc, IReadOnlyList<string> also)
         => database.Write(db =>
         {
-            var again = db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId)
+            List<OutboxRow> rows = db.Fetch<OutboxRow>($"SELECT * FROM {Constants.Tables.Outbox} WHERE EventId = @0 ORDER BY NotBeforeUtc", changeId)
                 .Where(row => row.State == OutboxStates.Sent || (row.State == OutboxStates.Pending && row.LeaseOwner is not null))
+                .ToList();
+            var again = rows
                 .DistinctBy(row => (row.Target, row.Keys))
                 .Select(row => new NewPurge(row.Target, JsonSerializer.Deserialize<string[]>(row.Keys, Json) ?? [], nowUtc))
                 .ToList();
+            if (also.Count > 0)
+            {
+                again.AddRange(rows.Select(row => row.Target).Distinct().SelectMany(target => also.Chunk(NewPurge.MaxKeysPerRequest).Select(chunk => new NewPurge(target, chunk, nowUtc))));
+            }
+
             foreach (OutboxRow row in Rows(changeId, nowUtc, again))
             {
                 db.Insert(row);

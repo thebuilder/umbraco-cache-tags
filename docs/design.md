@@ -20,6 +20,7 @@ case-sensitively, so a key that differed only in case would behave differently p
 | `type-<alias>` | Every listing filtered by a content or media type (alias lowercased) | stale, refresh in background |
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale, refresh in background |
 | `search-<index>` | Every other query against an index (`search-deliveryapicontentindex`) | stale, refresh in background |
+| `set-<hash>` | A stored set of items, carried by a response showing more items than its header lists | expire now |
 | `umbraco` | Everything | stale, refresh in background |
 
 - "Expire now" is `revalidateTag(key, { expire: 0 })` in Next.js: the next request waits for fresh
@@ -50,7 +51,8 @@ X-Umbraco-Cache-Keys: umbraco, children-e000..., content-e000..., content-e001..
 
 A purge reaches a cached response by the keys it carries, as with any tag-based cache. Nothing is
 stored per response, so nothing has to be written, kept or looked up for a purge to reach a copy,
-however long it has been cached, and requests cannot make the package store anything.
+however long it has been cached. The one exception is a response showing more items than its header
+lists, which carries a stored set (Key sets, below), and only once the set is stored.
 
 A listing gets the catch-all `search-` key when nothing narrower selects it:
 
@@ -75,17 +77,49 @@ it.
 
 A frontend or CDN keeps only so many tags per cache entry: Next.js keeps 128 (each at most 256
 characters) and ignores the rest. A header carries at most `MaxHeaderKeys` (128) keys, most needed
-first: `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past 64, or items that would push the header past the limit, are listed as their `type-` keys instead.
-Every change to an item plans its `type-` key, and a route change plans its descendants' `type-` keys
-as well as their content keys, so such a header is still reached, only more often. A response with
-more selector, `x-` or `type-` keys than the limit loses the last of those. Umbraco's output cache
-has no limit, so its entry is tagged with every key the header would carry. Raise
+first: `umbraco`, its selector keys, its `x-` keys, then its item keys. Items past 64, or items that
+would push the header past the limit, are listed as one stored set (`set-<hash>`, see Key sets), or
+as their `type-` keys when sets are off or the set could not be stored in time. Every change to an
+item plans its `type-` key, and a route change plans its descendants' `type-` keys as well as their
+content keys, so a header of types is still reached, only more often. A response with more selector,
+`x-` or `type-` keys than the limit loses the last of those. Umbraco's output cache has no limit, so
+its entry is tagged with every key, each item's included, and never with a set. Raise
 `MaxHeaderKeys` for a target that limits tags by size, such as Cloudflare in front of Umbraco, which
 keeps 16 KB of `Cache-Tag` per response: about 300 keys, fewer with a `KeyPrefix`. A header of 128
 keys is about 6 KB and one of 300 about 15 KB, which a proxy in front of Umbraco must allow (nginx
 needs a `proxy_buffer_size` of 16k or more).
 
 The header name is `CacheTags:HeaderName`.
+
+### Key sets
+
+A response whose items do not fit (`CacheTags:KeySets`, on by default) carries one `set-<hash>` key in
+their place: the first 128 bits of the SHA-256 of its sorted item keys, in hex. The package stores the
+set's items in `theBuilderCacheTagsKeySet` and `theBuilderCacheTagsKeySetItem`, and every purge of an
+item also purges the sets that hold it (Delivery, step 3). A landing page linking 80 articles is then
+purged by a change to one of those articles, not by every publish of an article.
+
+- The response carries `set-` only once its row is written. Writing gets 200 ms; a write that fails
+  or takes longer, or a server past 100 new sets in a minute (logged once a minute), leaves the
+  response with its items' `type-` keys, exactly as with sets off. A missing row can never leave a
+  response stale. Writes that miss the budget are counted in a warning once a minute, so a database
+  too slow for sets shows in the log. Only a new set counts against the cap: marking a stored one seen does not. A set's
+  stored time is read once its write holds the package's lock, so the second look below finds a write
+  that waited for the lock past the release. Nothing is written when the keys before the items
+  already fill the header.
+- The set is content-addressed, so every response showing the same items shares it, and storing it
+  again only marks it seen. A server remembers the sets it stored for a day and skips the database
+  for them, so a set's last-seen time is refreshed at most once a day per server.
+- Rows are in the shared database, so a set one server stored is purged by a change any server
+  records.
+- A set no server has rendered for 90 days is removed by the daily prune, which first records a change
+  that purges its key: a response cached for longer renders again and stores its set again. So
+  retention costs a purge, never a stale response. A set whose purge cannot be recorded (the ledger
+  write fails, or `CacheTags:Enabled` is off) is kept for the next run.
+- Only responses that overflow write anything, and only those that show items by reference: a single
+  item, items by id, or a site's own tagged action. A listing (`Query…` endpoints) lists its items'
+  types instead: its selector key already reaches it when an item joins or leaves, and every page,
+  filter and sort of a listing would store a set of its own.
 
 No keys, and the given `Cache-Control`, on:
 
@@ -116,7 +150,7 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
 }
 ```
 
-- `expire` holds `content-`, `media-` and `x-` keys: one item or piece of custom output, purged
+- `expire` holds `content-`, `media-`, `set-` and `x-` keys: items or custom output, purged
   at once. `stale` holds `type-`, `children-`, `search-` and `umbraco`:
   listings, types or everything, served stale while they refresh. The package decides, so a receiver needs no knowledge of key names.
 - `id` is the purge (one request, retried with the same id); `changeId` is the change it is for.
@@ -177,12 +211,14 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
   `IDocumentNavigationQueryService.TryGetDescendantsKeys`, up to 500, and
   plans `umbraco` past that. A response carries no ancestor keys.
 - A route change also plans the descendants' `type-` keys, read with `IEntityService`. A header past
-  64 items lists its items' types instead of the items, so only those reach it. An unpublish
+  64 items whose set could not be stored lists its items' types instead of the items, so only those
+  reach it. An unpublish
   also takes the descendants out of the listings of their types, including pages of a listing that
   do not show them. When their types cannot be read, it plans `umbraco`.
 - A custom change, or a purge by hand, that names an item's `content-` or `media-` key also plans
-  the item's `type-` key, read with `IEntityService`, since a header past 64 items lists its items'
-  types. When the types cannot be read, it plans `umbraco`.
+  the item's `type-` key, read with `IEntityService`, since a header past 64 items may list its
+  items' types. When the types cannot be read, it plans `umbraco`. Its sets are looked up at release,
+  like any item's.
 - A sort plans no item keys, since the items did not change, but every listing that can show them
   in their new order: the parent's `children-` key, the sorted items' `type-` keys and the catch-all
   `search-` key. It waits for the index like any listing.
@@ -224,13 +260,18 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    timeout, and it evicts them once they are released (step 3).
 3. **Release.** Any server releases a change once every active server that was running when it was
    made has acknowledged it, or after 60 seconds, logging which servers did
-   not. It queues one purge of the planned keys per target (at most 500 keys per request). The
+   not. It queues one purge of the planned keys per target (at most 500 keys per request), with the
+   `set-` keys of every stored set that holds one of the planned items, looked up now rather than
+   when the change was recorded. 30 seconds later, any server looks the items' sets up once more and
+   purges those stored since the release (less 2 seconds for clock skew): a render that read an item
+   just before its server applied the change can store its set just after the first look. The
    listing keys are in it too, deliberately: the items listings show come from the published cache,
    so they are fresh at once, even though their membership and order are not yet. A server that a change was released without evicts the change's responses and listings
    from its own output cache once it has seen a refresh of the change, whether before the release
    (its clock is behind) or up to 15 minutes after (it applied the change late), and then queues the
-   change's purges once more: a frontend that refetched from it in between cached the old content
-   again. It keeps the
+   change's purges once more, with the sets stored since the release: a frontend that refetched from
+   it in between cached the old content again, perhaps on a page whose set it stored after the second
+   look. It keeps the
    refreshes it applied for those 15 minutes, and evicts again for each new one: evicting early only
    costs a cache miss, and the change's own refresh evicts after it. It does not acknowledge the
    change and is not waited for in the listings stage, so its listings may be cached again from its
@@ -252,7 +293,8 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    working from an older list does not resend one another server just failed. A failure is retried
    after 2, 4, 8 ... seconds (at most 10 minutes), counted in the database, and kept as dead after
    10 attempts. A dead purge stays until someone retries it or sets it aside, since a copy it missed
-   is still cached. Released changes and sent or set-aside purges are pruned after 7 days.
+   is still cached. Released changes and sent or set-aside purges are pruned after 7 days, and key sets
+   unseen for 90 days are pruned and purged.
 
 The delivery worker and the heartbeat log an error and carry on, so neither stops the site. Settings
 that fail validation at start stop the site; settings that become invalid on a reload of

@@ -10,8 +10,8 @@ namespace TheBuilder.CacheTags.Delivery;
 /// <summary>
 ///     The loop every server runs: record the changes that failed to record before, acknowledge the
 ///     refreshes it applied, release the changes every server has applied, record which its Delivery
-///     API index has and release their listings once every server's has, and send the purges that are
-///     due. A change moves on a stage on one server only (a conditional update), and a lease makes sure
+///     API index has and release their listings once every server's has, look the key sets of released
+///     changes up once more, and send the purges that are due. A change moves on a stage on one server only (a conditional update), and a lease makes sure
 ///     one server sends each purge.
 /// </summary>
 internal sealed class DeliveryWorker(
@@ -64,8 +64,9 @@ internal sealed class DeliveryWorker(
             await acks.ProcessAsync(cancellationToken);
             var waiting = await releaser.ReleaseAsync(cancellationToken);
             var indexingWaiting = await indexing.ProcessAsync(cancellationToken);
+            var rechecked = releaser.RecheckSets();
             var pending = await sender.SendAsync(cancellationToken);
-            return recorder.HasUnrecorded || acks.HasQueued || waiting > 0 || indexingWaiting > 0 || pending > 0;
+            return recorder.HasUnrecorded || acks.HasQueued || waiting > 0 || indexingWaiting > 0 || rechecked > 0 || pending > 0;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Ledger;
+using TheBuilder.CacheTags.Storage;
 
 namespace TheBuilder.CacheTags.Delivery;
 
@@ -15,10 +18,12 @@ namespace TheBuilder.CacheTags.Delivery;
 /// </summary>
 internal sealed class AckProcessor(
     LedgerStore ledger,
+    KeySetStore keySets,
     OutputCacheEviction eviction,
     IAckTransport transport,
     ServerIdentity identity,
     DeliverySignal signal,
+    IOptionsMonitor<CacheTagsOptions> options,
     TimeProvider time,
     ILogger<AckProcessor> logger)
 {
@@ -253,7 +258,9 @@ internal sealed class AckProcessor(
             // Marked only once queued, so a failed write is tried again on the next refresh.
             if (_resent.Contains(change.Id) is false)
             {
-                resent += ledger.Resend(change.Id, now);
+                // The sets stored since the release too: this server may have rendered a response
+                // showing the old content that stored a set of its own after the second look.
+                resent += ledger.Resend(change.Id, now, Releaser.SetsStoredSinceRelease(keySets, change, options.CurrentValue.KeyPrefix));
                 _resent.Add(change.Id);
             }
 

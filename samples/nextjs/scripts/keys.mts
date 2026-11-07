@@ -11,6 +11,7 @@
 // never read from the package. Needs only the Umbraco sample, freshly seeded, with its Delivery API
 // index filled (about a minute after a first start). Reads UMBRACO_URL from the environment, then
 // .env.local, then .env. Exits 1 when a check fails.
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 
 for (const file of [".env.local", ".env"]) {
@@ -66,6 +67,13 @@ const lake = media("24");
 const meadow = media("25");
 const courtyard = media("26");
 const ferryTimetable = media("30");
+
+// The reading list picks notes 100 to 169 (Note(0) to Note(69) in the seeder), more than the 64 item
+// keys a header lists, so it carries one stored set in their place: set- and the first 32 hex digits
+// of the SHA-256 of its sorted item keys, joined by newlines (docs/design.md, Key sets).
+const readingList = doc("27");
+const pickedNotes = Array.from({ length: 70 }, (_, n) => `content-e0000000-0000-0000-0000-${String(100 + n).padStart(12, "0")}`);
+const readingListSet = `set-${createHash("sha256").update([readingList, ...pickedNotes].sort().join("\n")).digest("hex").slice(0, 32)}`;
 
 type Request = { path: string; culture?: string; headers?: Record<string, string> };
 
@@ -192,6 +200,12 @@ const checks: Check[] = [
     culture: "da-DK",
     why: "a listing in da-DK, which leaves out Winter market",
     includes: [children("23"), midsummer, harbourFestival],
+  },
+  {
+    path: item("reading-list/"),
+    why: "70 picked notes and the page, past the 64 item keys a header lists: one stored set in their place, not the notes' type",
+    exactly: [readingListSet],
+    excludes: ["type-note", ...pickedNotes],
   },
   {
     path: "media?fetch=children:/photos/city/",

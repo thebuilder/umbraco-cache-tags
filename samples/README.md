@@ -94,6 +94,9 @@ Documents (key `e0000000-0000-0000-0000-<last part>`):
 | Midsummer night / Sankthans, culture variant | `/events/midsummer-night/`, `/events/sankthans/` | `000000000024` |
 | Harbour festival / Havnefest, culture variant | `/events/harbour-festival/`, `/events/havnefest/` | `000000000025` |
 | Winter market, **published in en-US only** | `/events/winter-market/` | `000000000026` |
+| Reading list (picks Note 01 to Note 70, its children) | `/reading-list/` | `000000000027` |
+| Note 01 to Note 70, picked by the reading list | `/reading-list/note-01/`, ... | `000000000100` to `000000000169` |
+| Note 71, **not picked** | `/reading-list/note-71/` | `000000000170` |
 
 Media (key `e1000000-0000-0000-0000-<last part>`):
 
@@ -129,6 +132,9 @@ The cases worth checking a purge against, and where they are:
 - **Listings.** Children (`fetch=children:/guides/`, `/events/`), one content type
   (`filter=contentType:guidePage` under Guides), a sort that only `updateDate` decides
   (`sort=updateDate:desc&take=3`: editing any guide can move it in), and ancestors.
+- **More items than a header lists.** The reading list shows itself and 70 notes, past the 64 item
+  keys a header lists, so it carries one stored `set-` key in their place. Renaming a picked note
+  purges it; renaming Note 71, which it does not pick, does not, though both are notes.
 - **Property editors.** Block list, block grid, rich text with blocks, links and images, multi URL
   picker (document with a query string, media, external), multinode tree picker, content picker,
   media picker with crops, tags, dropdown, date.
@@ -296,8 +302,11 @@ to refresh:
     Harbour mornings must stop showing it. The undo restores and publishes it.
 20. The Night media folder is renamed. The Photo essay's listing of the City folder must show the new
     name.
+21. `/reading-list` must carry one `set-` key and not `type-note`. Note 71, which it does not pick, is
+    renamed: once the purge is sent, `/reading-list` must still be cached. Then Note 01, which it
+    picks, is renamed, and `/reading-list` must show the new name.
 
-Cases 1, 13 to 17 and 20 also check that a page showing none of the changed items kept its cache.
+Cases 1, 13 to 17, 20 and 21 also check that a page showing none of the changed items kept its cache.
 Between cases, the script waits until the package has released every change and sent its purges
 (`GET /umbraco/management/api/v1/cache-tags/changes`), so a late purge for one case cannot refresh
 the next case's pages. `E2E_CASES=13,15` runs only those cases.

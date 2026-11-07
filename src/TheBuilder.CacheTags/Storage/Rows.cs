@@ -27,6 +27,12 @@ internal sealed class EventRow
 
     /// <summary>The servers that had not acknowledged when the change was released after the ack timeout, as JSON.</summary>
     [Column(nameof(Missing)), SpecialDbType(SpecialDbTypes.NVARCHARMAX), NullSetting(NullSetting = NullSettings.Null)] public string? Missing { get; set; }
+
+    /// <summary>
+    ///     When the key sets of the change's items are looked up once more, for sets written by renders
+    ///     that read an item before the change and finished after its release. <c>null</c> once done.
+    /// </summary>
+    [Column(nameof(SetsCheckUtc)), NullSetting(NullSetting = NullSettings.Null)] public DateTime? SetsCheckUtc { get; set; }
 }
 
 [TableName(Constants.Tables.Servers), PrimaryKey(nameof(Server), AutoIncrement = false), ExplicitColumns]
@@ -91,4 +97,27 @@ internal sealed class TargetRow
 
     [Column(nameof(CreatedUtc))] public DateTime CreatedUtc { get; set; }
     [Column(nameof(UpdatedUtc))] public DateTime UpdatedUtc { get; set; }
+}
+
+/// <summary>A stored set of items (<c>set-&lt;hash&gt;</c>), which responses showing too many items to list carry.</summary>
+[TableName(Constants.Tables.KeySets), PrimaryKey(nameof(Hash), AutoIncrement = false), ExplicitColumns]
+internal sealed class KeySetRow
+{
+    /// <summary>The hash of the set's sorted item keys, as its key shows it.</summary>
+    [Column(nameof(Hash)), PrimaryKeyColumn(AutoIncrement = false), Length(32)] public string Hash { get; set; } = string.Empty;
+    [Column(nameof(CreatedUtc))] public DateTime CreatedUtc { get; set; }
+
+    /// <summary>When a server last rendered a response carrying the set, refreshed at most once a day per server.</summary>
+    [Column(nameof(LastSeenUtc))] public DateTime LastSeenUtc { get; set; }
+}
+
+/// <summary>One item of a stored set.</summary>
+[TableName(Constants.Tables.KeySetItems), PrimaryKey(nameof(Id), AutoIncrement = true), ExplicitColumns]
+internal sealed class KeySetItemRow
+{
+    [Column(nameof(Id)), PrimaryKeyColumn(AutoIncrement = true)] public long Id { get; set; }
+    [Column(nameof(Hash)), Length(32)] public string Hash { get; set; } = string.Empty;
+
+    /// <summary>The item's <c>content-</c> or <c>media-</c> key.</summary>
+    [Column(nameof(ItemKey)), Length(100)] public string ItemKey { get; set; } = string.Empty;
 }

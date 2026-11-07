@@ -40,16 +40,31 @@ internal static class LedgerSql
         => database.SkipTake<EventRow>(0, take, new Sql($"SELECT * FROM {Constants.Tables.Events} ORDER BY CreatedUtc DESC"));
 
     /// <summary>Releases a pending change to <paramref name="stage" /> and queues its purges, unless another server already has. Returns whether this call did.</summary>
-    public static bool Release(IDatabase database, Guid id, ChangeStage stage, DateTime releasedUtc, string? missing, IEnumerable<OutboxRow> purges)
+    public static bool Release(IDatabase database, Guid id, ChangeStage stage, DateTime releasedUtc, string? missing, IEnumerable<OutboxRow> purges, DateTime? setsCheckUtc = null)
         => Advance(
             database,
             purges,
-            $"UPDATE {Constants.Tables.Events} SET Status = @0, ReleasedUtc = @1, Missing = @2 WHERE Id = @3 AND Status = @4",
+            $"UPDATE {Constants.Tables.Events} SET Status = @0, ReleasedUtc = @1, Missing = @2, SetsCheckUtc = @3 WHERE Id = @4 AND Status = @5",
             stage.ToString(),
             releasedUtc,
             missing ?? (object)DBNull.Value,
+            setsCheckUtc ?? (object)DBNull.Value,
             id,
             nameof(ChangeStage.Pending));
+
+    /// <summary>The released changes whose key sets are due to be looked up again, oldest first.</summary>
+    public static List<EventRow> SetsCheckDue(IDatabase database, DateTime nowUtc, int take)
+        => database.SkipTake<EventRow>(0, take, new Sql(
+            $"SELECT * FROM {Constants.Tables.Events} WHERE SetsCheckUtc IS NOT NULL AND SetsCheckUtc <= @0 ORDER BY SetsCheckUtc",
+            nowUtc));
+
+    /// <summary>Marks a change's key sets looked up again and queues their purges, unless another server already has. Returns whether this call did.</summary>
+    public static bool SetsChecked(IDatabase database, Guid id, IEnumerable<OutboxRow> purges)
+        => Advance(
+            database,
+            purges,
+            $"UPDATE {Constants.Tables.Events} SET SetsCheckUtc = NULL WHERE Id = @0 AND SetsCheckUtc IS NOT NULL",
+            id);
 
     /// <summary>Releases an indexing change's listing purges, unless another server already has. Returns whether this call did.</summary>
     public static bool ReleaseListings(IDatabase database, Guid id, IEnumerable<OutboxRow> purges)

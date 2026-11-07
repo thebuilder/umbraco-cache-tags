@@ -12,6 +12,12 @@ internal static class CacheKeys
     public const string SearchPrefix = "search-";
     public const string All = "umbraco";
 
+    /// <summary>
+    ///     The prefix of a stored set of items (<c>set-3f9a…</c>): a response showing more items than
+    ///     its header lists carries one key for all of them, and the package stores which items it holds.
+    /// </summary>
+    public const string SetPrefix = "set-";
+
     /// <summary>The prefix of keys a site names for its own output (<c>x-dictionary-da-dk</c>).</summary>
     public const string CustomPrefix = "x-";
 
@@ -32,6 +38,9 @@ internal static class CacheKeys
     public static bool IsItem(string key)
         => key.StartsWith(ContentPrefix, StringComparison.Ordinal) || key.StartsWith(MediaPrefix, StringComparison.Ordinal);
 
+    /// <summary>Whether a key names a stored set of items (<c>set-</c>).</summary>
+    public static bool IsSet(string key) => key.StartsWith(SetPrefix, StringComparison.Ordinal);
+
     /// <summary>Whether a key selects listings (<c>type-</c>, <c>children-</c>, <c>search-</c>).</summary>
     public static bool IsSelector(string key)
         => key.StartsWith(TypePrefix, StringComparison.Ordinal)
@@ -39,13 +48,14 @@ internal static class CacheKeys
             || key.StartsWith(SearchPrefix, StringComparison.Ordinal);
 
     /// <summary>
-    ///     Whether a (prefixed) key names one item or piece of custom output, which a purge expires at
-    ///     once, rather than a listing selector or everything, which a purge marks stale.
+    ///     Whether a (prefixed) key names items or custom output (an item, a set of items, an <c>x-</c>
+    ///     key), which a purge expires at once, rather than a listing selector or everything, which a
+    ///     purge marks stale.
     /// </summary>
     public static bool Expires(string key, string prefix)
     {
         var bare = key.StartsWith(prefix, StringComparison.Ordinal) ? key[prefix.Length..] : key;
-        return IsItem(bare) || IsCustom(bare);
+        return IsItem(bare) || IsSet(bare) || IsCustom(bare);
     }
 
     /// <summary>Whether a key is one a site named for its own output (<c>x-</c>).</summary>

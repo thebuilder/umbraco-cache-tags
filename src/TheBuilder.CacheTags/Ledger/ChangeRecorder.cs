@@ -66,6 +66,19 @@ internal sealed class ChangeRecorder(
         }
     }
 
+    /// <summary>Whether changes are recorded at all: off while <c>CacheTags:Enabled</c> is.</summary>
+    public bool Recording => options.CurrentValue.Enabled;
+
+    /// <summary>
+    ///     Records a change in the caller's transaction, or throws, so the caller's own write cannot
+    ///     commit without it. Unlike <see cref="Record" />, nothing is kept in memory to try again.
+    /// </summary>
+    public void RecordNow(Change change)
+    {
+        ledger.Add(change, planner.Plan(change, PurgePlanner.MaxDescendants), identity.Name);
+        signal.Wake();
+    }
+
     /// <summary>Records the changes that failed before, in order, until one fails again.</summary>
     public void RecordUnrecorded()
     {

@@ -35,6 +35,7 @@ CacheTags__Targets__nextjs__Secret=<at least 32 characters>
 | `HeaderName` | `X-Umbraco-Cache-Keys` | The response header that carries the keys. `Cache-Tag` for Cloudflare in front of Umbraco. |
 | `KeyPrefix` | none | A prefix for every key, such as `shop-`, for a site that shares a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |
 | `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 2. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare in front of the Delivery API](/targets#cloudflare-in-front-of-the-delivery-api). |
+| `KeySets` | `true` | Whether a response showing more items than its header lists carries one stored `set-` key for them, so only a change to one of its own items purges it. Off, it carries their `type-` keys. See [Limits](/keys#limits). |
 
 The timings are fixed: a change waits at most 60 seconds for every server to apply it and 5 minutes for every server's index, a server counts as gone 2 minutes after its last heartbeat, and a failed purge is tried 10 times. [How a purge is timed](/timing) explains each.
 

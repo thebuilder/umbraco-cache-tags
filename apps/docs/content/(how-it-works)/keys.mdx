@@ -15,6 +15,7 @@ Every key is lowercase ASCII, because Cloudflare matches tags case-insensitively
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale |
 | `search-<index>` | Every other query against an index, such as a search | stale |
 | `x-<name>` | Whatever a site's own API names. See [Your own APIs](/your-apis) | expire |
+| `set-<hash>` | A stored set of items, for a response that shows too many to list. See [Limits](#limits) | expire |
 | `umbraco` | Everything | stale |
 
 "Expire" means the next request waits for fresh content. "Stale" means the next request may get the old response once while it refreshes. Listings and site-wide changes touch many pages, and listings only change once the index has caught up.
@@ -33,7 +34,7 @@ That is `umbraco`, the listing keys that select the response, any `x-` keys, and
 X-Umbraco-Cache-Keys: umbraco, children-e000...0001, content-e000...0003, content-e000...0004
 ```
 
-When content changes, the package plans the change as keys and purges them. A cached response is reached by the keys it carries, so a purge reaches every copy of it, however long it has been cached. Nothing else has to be stored or looked up for that to hold.
+When content changes, the package plans the change as keys and purges them. A cached response is reached by the keys it carries, so a purge reaches every copy of it, however long it has been cached. Nothing else has to be stored or looked up for that to hold, except for a response that shows too many items to list (see [Limits](#limits)).
 
 ## Catch-all listings
 
@@ -82,7 +83,24 @@ The same key unlocks preview, so keep it on the server and out of source control
 
 ## Limits
 
-Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: `umbraco`, its listing keys, its `x-` keys, then its item keys. Past 64 items, or when the items would push the header past its limit, it lists their `type-` keys instead. Every change to an item, and every purge of its key by hand, purges its `type-` key too, so such a response is still reached, only more often. Umbraco's own output cache keeps every key.
+Next.js keeps at most 128 tags per entry, each at most 256 characters, and drops the rest. A header lists at most `MaxHeaderKeys` (128) keys, with the keys purges need first: `umbraco`, its listing keys, its `x-` keys, then its item keys. Umbraco's own output cache has no limit and keeps every key.
+
+Past 64 items, or when the items would push the header past its limit, a response carries one `set-` key in their place. The package stores which items the set holds, in the Umbraco database, and a change to any of them purges the set too. A landing page linking 80 articles is then purged when one of those articles changes, not on every article publish.
+
+```http
+X-Umbraco-Cache-Keys: umbraco, set-3f9a0c1d2e4b5a6978c0d1e2f3a4b5c6
+```
+
+| Response | Carries |
+| --- | --- |
+| 12 items | `umbraco`, its listing keys, 12 `content-` keys |
+| 80 linked articles | `umbraco`, its listing keys, `set-3f9a…` |
+| 80 linked articles, set not stored in time | `umbraco`, its listing keys, `type-article` |
+| A listing of 80 items | `umbraco`, its listing keys, their `type-` keys |
+
+A response carries a `set-` key only once its set is stored. When the database is slow or failing, or a server has stored 100 new sets in the last minute, the response carries its items' `type-` keys instead. Every change to an item purges its `type-` key, so such a response is still reached, only more often. The log warns once a minute with how many responses missed the time limit, so a database too slow for sets shows up there. Listings list their items' types too: their listing key already reaches them when an item joins or leaves, and every page and filter of a listing would need a set of its own.
+
+Responses that show the same items share one set, so rendering a page again stores nothing new. A set no server has rendered for 90 days is removed and purged, so a response cached longer than that renders again rather than going stale. Turn sets off with `CacheTags:KeySets` to keep everything out of the database.
 
 :::caution
 A full header is about 6 KB. A proxy in front of Umbraco must allow response headers that large. Nginx, for example, answers 502 when they pass its `proxy_buffer_size`, 4 or 8 KB by default, so set it to 16k.

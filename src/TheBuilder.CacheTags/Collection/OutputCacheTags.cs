@@ -10,8 +10,19 @@ namespace TheBuilder.CacheTags.Collection;
 /// </summary>
 internal sealed class OutputCacheTags(IHttpContextAccessor httpContextAccessor) : IDeliveryApiOutputCacheTagProvider
 {
+    private const string ReturnedItem = "TheBuilder.CacheTags.OutputCacheTagsReturned";
+
     public IEnumerable<string> GetTags(IPublishedContent content)
     {
-        return httpContextAccessor.HttpContext?.Items[CacheKeyResultFilter.OutputCacheTagsItem] as IReadOnlyList<string> ?? [];
+        HttpContext? http = httpContextAccessor.HttpContext;
+        if (http?.Items[CacheKeyResultFilter.OutputCacheTagsItem] is not IReadOnlyList<string> keys || http.Items.ContainsKey(ReturnedItem))
+        {
+            return [];
+        }
+
+        // Umbraco adds every item's tags to the same entry, so the response's keys are returned for
+        // its first item only: a response of n items would otherwise hand over n times n keys.
+        http.Items[ReturnedItem] = true;
+        return keys;
     }
 }

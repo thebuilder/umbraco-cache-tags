@@ -17,5 +17,7 @@ internal static class Constants
         public const string Acks = "theBuilderCacheTagsAck";
         public const string Outbox = "theBuilderCacheTagsOutbox";
         public const string Targets = "theBuilderCacheTagsTarget";
+        public const string KeySets = "theBuilderCacheTagsKeySet";
+        public const string KeySetItems = "theBuilderCacheTagsKeySetItem";
     }
 }

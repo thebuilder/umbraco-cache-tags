@@ -58,6 +58,15 @@ public static class ExampleContent
     /// <summary>Published in en-US only.</summary>
     public static readonly Guid WinterMarket = new("e0000000-0000-0000-0000-000000000026");
 
+    /// <summary>Picks every note but the last: more items than a header lists, so it carries a stored set.</summary>
+    public static readonly Guid ReadingList = new("e0000000-0000-0000-0000-000000000027");
+
+    /// <summary>The reading list's notes, its children: e0000000-0000-0000-0000-000000000100 to …170.</summary>
+    public static Guid Note(int n) => new($"e0000000-0000-0000-0000-{100 + n:D12}");
+
+    /// <summary>How many notes the reading list picks. The note after them (<c>Note(PickedNotes)</c>) is not picked.</summary>
+    public const int PickedNotes = 70;
+
     public static readonly Guid PhotosFolder = new("e1000000-0000-0000-0000-000000000010");
     public static readonly Guid CityFolder = new("e1000000-0000-0000-0000-000000000011");
     public static readonly Guid NightFolder = new("e1000000-0000-0000-0000-000000000012");
@@ -88,6 +97,8 @@ public static class ExampleContent
     public static readonly Guid PhotoEssayType = new("e3000000-0000-0000-0000-000000000014");
     public static readonly Guid EventListType = new("e3000000-0000-0000-0000-000000000015");
     public static readonly Guid EventType = new("e3000000-0000-0000-0000-000000000016");
+    public static readonly Guid ReadingListType = new("e3000000-0000-0000-0000-000000000017");
+    public static readonly Guid NoteType = new("e3000000-0000-0000-0000-000000000018");
 
     public static readonly Guid RichTextWithBlocksDataType = new("e5000000-0000-0000-0000-000000000001");
     public static readonly Guid TagsDataType = new("e5000000-0000-0000-0000-000000000002");

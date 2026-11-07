@@ -118,4 +118,6 @@ export const api = {
   /** Sends a target, saved or not, a purge of one key nothing carries. */
   testTarget: (target: TargetDraft) => request<{ success: boolean; error: string | null }>("POST", "targets/test", target),
   discard: (id: string) => request<null>("POST", `purges/${id}/discard`),
+  /** How many stored key sets hold an item, which a purge of it reaches too. */
+  keySets: (key: string) => request<{ key: string; sets: number }>("GET", `keysets?key=${encodeURIComponent(key)}`),
 };
