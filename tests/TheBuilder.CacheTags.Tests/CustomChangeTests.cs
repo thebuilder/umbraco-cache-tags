@@ -30,6 +30,12 @@ public sealed class CustomChangeTests
     }
 
     [Fact]
+    public void A_response_still_may_not_name_a_set_key()
+    {
+        Assert.Throws<ArgumentException>(() => new CacheTagsResponse().Add("set-ad4143dc08ca6d0c40ce5719a8e5c51b"));
+    }
+
+    [Fact]
     public void A_custom_key_is_at_most_two_hundred_characters()
     {
         Assert.True(CacheKeys.IsNameable("x-" + new string('a', 198)));

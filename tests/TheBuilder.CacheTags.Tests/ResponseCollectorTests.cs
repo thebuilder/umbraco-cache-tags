@@ -19,9 +19,9 @@ public sealed class ResponseCollectorTests
     private static readonly Guid Articles = new("e0000000-0000-0000-0000-000000000002");
     private static readonly DeliveryEndpoint Query = new(Media: false, Listing: true);
     private static readonly Guid Home = new("e0000000-0000-0000-0000-000000000010");
-    private static readonly Guid Featured = new("e0000000-0000-0000-0000-000000000011");
+    internal static readonly Guid Featured = new("e0000000-0000-0000-0000-000000000011");
     private static readonly Guid Deep = new("e0000000-0000-0000-0000-000000000012");
-    private static readonly Guid Unexpanded = new("e0000000-0000-0000-0000-000000000013");
+    internal static readonly Guid Unexpanded = new("e0000000-0000-0000-0000-000000000013");
     private static readonly Guid Linked = new("e0000000-0000-0000-0000-000000000014");
     private static readonly Guid FeaturedImage = new("f0000000-0000-0000-0000-000000000011");
     private static readonly Guid DeepImage = new("f0000000-0000-0000-0000-000000000012");
@@ -124,6 +124,20 @@ public sealed class ResponseCollectorTests
 
     private static string[] CollectItem(ApiContent result)
     {
+        ResponseCollector collector = Collector();
+
+        // Umbraco records the item the request resolved; the result is what it renders.
+        var http = new DefaultHttpContext();
+        http.Items["Umbraco.DeliveryApi.OutputCache.ResolvedContentItems"] = new[] { Published(Home) };
+        return collector.Collect(result, http, new DeliveryEndpoint(Media: false, Listing: false)).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>
+    ///     A collector over the published items in <see cref="Sources" />, whose values reference what
+    ///     <see cref="Sources" /> says, through Umbraco's own reference factory collection.
+    /// </summary>
+    internal static ResponseCollector Collector()
+    {
         IDataEditor editor = Fake.Of<IDataEditor>((method, _) => method.Name == "get_Alias" ? "refs" : null);
         IDataValueReference values = Fake.Of<IDataValueReference>((method, args) => method.Name == nameof(IDataValueReference.GetReferences)
             ? ((Udi[])args[0]!).Select(udi => new UmbracoEntityReference(udi)).ToArray()
@@ -138,7 +152,7 @@ public sealed class ResponseCollectorTests
             new PropertyEditorCollection(new DataEditorCollection(() => [editor])),
             new DataValueReferenceFactoryCollection(() => [factory], NullLogger<DataValueReferenceFactoryCollection>.Instance));
 
-        var collector = new ResponseCollector(
+        return new ResponseCollector(
             reader,
             Fake.Of<IPublishedContentCache>((method, args) => method.Name == "GetById" && args[0] is Guid key && Sources.ContainsKey(key) ? Published(key) : null),
             Fake.Of<IPublishedMediaCache>(),
@@ -146,11 +160,6 @@ public sealed class ResponseCollectorTests
             Fake.Of<IApiContentPathResolver>(),
             Fake.Of<IApiMediaQueryService>(),
             Names.Of(["page"]));
-
-        // Umbraco records the item the request resolved; the result is what it renders.
-        var http = new DefaultHttpContext();
-        http.Items["Umbraco.DeliveryApi.OutputCache.ResolvedContentItems"] = new[] { Published(Home) };
-        return collector.Collect(result, http, new DeliveryEndpoint(Media: false, Listing: false)).Order(StringComparer.Ordinal).ToArray();
     }
 
     private static IPublishedContent Published(Guid key)
@@ -170,7 +179,7 @@ public sealed class ResponseCollectorTests
         });
     }
 
-    private static ApiContent Content(Guid id, Dictionary<string, object?>? properties = null)
+    internal static ApiContent Content(Guid id, Dictionary<string, object?>? properties = null)
         => new(id, "name", "page", DateTime.UnixEpoch, DateTime.UnixEpoch, Route, properties ?? []);
 
     private static GuidUdi Doc(Guid id) => new(Umbraco.Cms.Core.Constants.UdiEntityType.Document, id);

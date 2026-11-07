@@ -80,3 +80,25 @@
   border-color: var(--blume-border);
   background: transparent;
 }
+
+/*
+ * Flowchart nodes on How keys are collected: a heavier outline for an item rendered with its
+ * properties, a dashed one for an item only named, and a faint dotted one for what is not carried.
+ */
+blume-mermaid svg .node.rendered rect {
+  stroke-width: 2px !important;
+}
+
+blume-mermaid svg .node.shown rect {
+  stroke-dasharray: 5 3;
+}
+
+blume-mermaid svg .node.dropped rect {
+  fill: transparent !important;
+  stroke: var(--blume-border) !important;
+  stroke-dasharray: 2 3;
+}
+
+blume-mermaid svg .node.dropped .nodeLabel {
+  color: var(--blume-muted-foreground) !important;
+}

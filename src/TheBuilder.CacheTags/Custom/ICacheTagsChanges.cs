@@ -14,8 +14,8 @@ public interface ICacheTagsChanges
 {
     /// <summary>
     ///     Records a change that purges <paramref name="keys" />: custom keys (<c>x-</c> and lowercase
-    ///     letters, digits and hyphens), <c>content-</c> or <c>media-</c> keys of items, or
-    ///     <c>umbraco</c> for everything.
+    ///     letters, digits and hyphens), <c>content-</c> or <c>media-</c> keys of items, <c>set-</c> keys
+    ///     of stored sets as responses carry them, or <c>umbraco</c> for everything.
     /// </summary>
     /// <param name="keys">The keys to purge.</param>
     /// <param name="waitFor">
@@ -49,10 +49,10 @@ internal sealed class CacheTagsChanges(ChangeRecorder recorder, AckProcessor ack
             throw new ArgumentException("A change needs at least one key.", nameof(keys));
         }
 
-        if (named.FirstOrDefault(key => CacheKeys.IsNameable(key) is false) is { } invalid)
+        if (named.FirstOrDefault(key => CacheKeys.IsPurgeable(key) is false) is { } invalid)
         {
             throw new ArgumentException(
-                $"\"{invalid}\" is not a key a site may name: use x- and lowercase letters, digits and hyphens (at most {CacheKeys.MaxCustomKeyLength} characters), an item's content- or media- key, or umbraco.",
+                $"\"{invalid}\" is not a key that can be purged: use x- and lowercase letters, digits and hyphens (at most {CacheKeys.MaxCustomKeyLength} characters), an item's content- or media- key, a set- key from a response, or umbraco.",
                 nameof(keys));
         }
 
