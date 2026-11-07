@@ -411,9 +411,10 @@ jobs:
           UMBRACO_URL: http://localhost:5320
         run: pnpm keys
 
-      # Every change made on B.
+      # Every change made on B. About 8 minutes when healthy, plus up to 2 for the seed's purges to
+      # finish retrying.
       - name: End to end, changing server B
-        timeout-minutes: 10
+        timeout-minutes: 12
         working-directory: samples/nextjs
         env:
           UMBRACO_URL: http://localhost:5321

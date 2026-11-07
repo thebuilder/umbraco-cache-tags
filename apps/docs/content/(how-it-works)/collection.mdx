@@ -114,10 +114,10 @@ Nothing depends on the document type. What counts is each property's editor:
 | The editor | What it adds |
 | --- | --- |
 | A value converter that returns Delivery API models (content, media, links, blocks, rich text) | The keys of what the JSON shows |
-| A reference factory, as Umbraco's own editors have | What its published values reference |
+| Reference support (`IDataValueReference`), as Umbraco's own editors have | What its published values reference |
 | Neither, such as an id kept in a text field | Nothing |
 
-An editor that holds references should give Umbraco a reference factory (`IDataValueReferenceFactory`) anyway, because Umbraco's relations and "used by" lists depend on it too.
+An editor that holds references should support them anyway, on its value editor (`IDataValueReference`) or through a reference factory (`IDataValueReferenceFactory`), because Umbraco's relations and "used by" lists depend on it too.
 
 ## Too many items
 
