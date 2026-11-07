@@ -60,8 +60,9 @@ export class CacheTagsPurgeViewElement extends UmbElementMixin(LitElement) {
       <div class="stack">
         <uui-box headline="Purge keys">
           <p>
-            Purges at every target at once, without waiting for servers. Use your own <span class="mono">x-</span> keys, or the
-            <span class="mono">content-</span> and <span class="mono">media-</span> keys of items. One per line.
+            Purges at every target at once, without waiting for servers. Use your own <span class="mono">x-</span> keys, the
+            <span class="mono">content-</span> and <span class="mono">media-</span> keys of items, or a
+            <span class="mono">set-</span> key from a response's header. One per line.
           </p>
           <uui-textarea
             label="Keys to purge"

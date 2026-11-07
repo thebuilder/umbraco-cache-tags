@@ -24,7 +24,8 @@ public sealed class CacheTagsPurgesController(ICacheTagsChanges changes, ICacheT
 {
     /// <summary>
     ///     Purges the given keys on every target, at once: custom keys (<c>x-</c>), items'
-    ///     <c>content-</c> or <c>media-</c> keys, or <c>umbraco</c> for everything.
+    ///     <c>content-</c> or <c>media-</c> keys, stored sets' <c>set-</c> keys, or <c>umbraco</c> for
+    ///     everything.
     /// </summary>
     [HttpPost("purge")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]

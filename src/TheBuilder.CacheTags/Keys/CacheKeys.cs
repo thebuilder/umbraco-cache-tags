@@ -86,6 +86,17 @@ internal static class CacheKeys
         return prefix is not null && Guid.TryParseExact(key[prefix.Length..], "D", out Guid id) && key == prefix + id.ToString("D");
     }
 
+    /// <summary>
+    ///     Whether a change may purge this key: one a site may name (<see cref="IsNameable" />), or a
+    ///     stored set's <c>set-</c> key as a response carries it (<c>set-</c> and 32 lowercase hex
+    ///     digits), which an administrator may copy from a response header to purge it by hand.
+    /// </summary>
+    public static bool IsPurgeable(string key)
+        => IsNameable(key)
+            || (IsSet(key)
+                && key.Length == SetPrefix.Length + 32
+                && key.AsSpan(SetPrefix.Length).ContainsAnyExcept("0123456789abcdef") is false);
+
     /// <summary>Applies the configured prefix to a key, for the header and the purge payload.</summary>
     public static string WithPrefix(string prefix, string key) => prefix.Length == 0 ? key : prefix + key;
 }

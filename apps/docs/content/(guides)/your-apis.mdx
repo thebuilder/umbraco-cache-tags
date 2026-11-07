@@ -84,7 +84,7 @@ Administrators can purge keys under **Settings > Advanced > Cache tags > Purge**
 
 | Request | Does |
 | --- | --- |
-| `POST /umbraco/management/api/v1/cache-tags/purge` | Purges the keys in the JSON array body at once: `x-` keys, items' `content-` and `media-` keys, or `["umbraco"]` for everything. |
+| `POST /umbraco/management/api/v1/cache-tags/purge` | Purges the keys in the JSON array body at once: `x-` keys, items' `content-` and `media-` keys, stored sets' `set-` keys, or `["umbraco"]` for everything. |
 | `GET .../cache-tags/purges?state=Dead` | Lists purges in a state: `Pending`, `Sent`, `Dead` or `Discarded`. |
 | `POST .../cache-tags/purges/{id}/retry` | Sends a failed or set-aside purge again. |
 | `POST .../cache-tags/purges/{id}/discard` | Sets a pending or failed purge aside. |
