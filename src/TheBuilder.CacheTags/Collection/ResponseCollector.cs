@@ -20,7 +20,8 @@ internal sealed class ResponseCollector(
     IVariationContextAccessor variationContext,
     IApiContentPathResolver contentPaths,
     IApiMediaQueryService mediaQuery,
-    KnownNames names)
+    KnownNames names,
+    SiteRoots roots)
 {
     // Umbraco.Cms.Api.Delivery.Caching.DeliveryApiOutputCacheKeys is internal; these are its values
     // from 17.4.0 on. When they are missing, only the result objects are walked.
@@ -45,7 +46,8 @@ internal sealed class ResponseCollector(
                 http.Request.Query["filter"].Where(filter => filter is not null).Select(filter => filter!),
                 target => ResolveTarget(target, endpoint.Media),
                 alias => names.IsType(alias, endpoint.Media),
-                endpoint.Media));
+                endpoint.Media,
+                RootOf));
         }
 
         return keys;
@@ -138,9 +140,10 @@ internal sealed class ResponseCollector(
     }
 
     /// <summary>
-    ///     The types of the given items, which a change to any of them purges. An item that is not in the
-    ///     published cache (not published yet, or gone) keeps its own key: its publish plans that key,
-    ///     and its type is unknown here.
+    ///     The types of the given items, which a change to any of them purges: a document's within its
+    ///     site root, so another root's changes do not reach it. An item that is not in the published
+    ///     cache (not published yet, or gone) keeps its own key: its publish plans that key, and its type
+    ///     is unknown here.
     /// </summary>
     public SortedSet<string> TypeKeys(IEnumerable<string> itemKeys)
     {
@@ -150,11 +153,26 @@ internal sealed class ResponseCollector(
             IPublishedContent? item = key.StartsWith(CacheKeys.MediaPrefix, StringComparison.Ordinal)
                 ? mediaCache.GetById(Guid.Parse(key[CacheKeys.MediaPrefix.Length..]))
                 : contentCache.GetById(Guid.Parse(key[CacheKeys.ContentPrefix.Length..]));
-            types.Add(item is null ? key : CacheKeys.Type(item.ContentType.Alias));
+            if (item is null)
+            {
+                types.Add(key);
+            }
+            else if (item.ItemType == PublishedItemType.Content && roots.OfPath(item.Path) is { } root)
+            {
+                // Its root's type key, which only a change under that root plans.
+                types.Add(CacheKeys.Type(item.ContentType.Alias, root));
+            }
+            else
+            {
+                types.Add(CacheKeys.Type(item.ContentType.Alias));
+            }
         }
 
         return types;
     }
+
+    // The site root a published document is under, for listings fetched from it.
+    private Guid? RootOf(Guid key) => contentCache.GetById(key) is { } item ? roots.OfPath(item.Path) : null;
 }
 
 /// <summary>

@@ -20,6 +20,76 @@ public sealed class PurgePlannerTests
 
         public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media)
             => typesFail ? throw new InvalidOperationException("The database is busy.") : keys.Select(key => Types[key]);
+
+        // C and what is under it are in the site; the second site has its own root.
+        public IEnumerable<(string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys)
+            => keys.Select(key => (Types.GetValueOrDefault(key, "newsPage"), (Guid?)(key == OtherPage ? OtherSite : Site)));
+
+        public IEnumerable<Guid> Roots() => [Site, OtherSite];
+    }
+
+    private static readonly Guid OtherSite = new("30000000-0000-0000-0000-000000000001");
+    private static readonly Guid OtherPage = new("30000000-0000-0000-0000-000000000002");
+
+    [Fact]
+    public void A_publish_reaches_its_own_roots_listings_and_names_that_root()
+    {
+        PurgePlan plan = Plan(ChangeKind.Published, new ChangedItem(C, "newsPage", Site, Roots: [Site]));
+
+        Assert.Equal(
+            [
+                "children-10000000-0000-0000-0000-000000000001",
+                "content-10000000-0000-0000-0000-00000000000c",
+                "search-deliveryapicontentindex",
+                "search-deliveryapicontentindex-10000000-0000-0000-0000-000000000001",
+                "type-newspage",
+                "type-newspage-10000000-0000-0000-0000-000000000001",
+            ],
+            plan.Keys);
+        Assert.Equal([Site], plan.Roots);
+    }
+
+    [Fact]
+    public void A_move_to_another_root_reaches_both_roots_listings_and_its_descendants_types_in_both()
+    {
+        PurgePlan plan = Plan(ChangeKind.Moved, new ChangedItem(C, "newsPage", OtherSite, OldParentKey: Site, Roots: [OtherSite, Site]));
+
+        Assert.Contains("type-newspage-10000000-0000-0000-0000-000000000001", plan.Keys);
+        Assert.Contains("type-newspage-30000000-0000-0000-0000-000000000001", plan.Keys);
+        Assert.Contains("type-guidepage-10000000-0000-0000-0000-000000000001", plan.Keys);
+        Assert.Contains("type-guidepage-30000000-0000-0000-0000-000000000001", plan.Keys);
+        Assert.Equal([Site, OtherSite], plan.Roots!.Order());
+    }
+
+    [Fact]
+    public void Media_and_changes_recorded_without_roots_may_concern_any_site()
+    {
+        Assert.Null(Plan(ChangeKind.MediaSaved, new ChangedItem(Image, "image", Folder, Roots: [Site])).Roots);
+        Assert.DoesNotContain(Plan(ChangeKind.MediaSaved, new ChangedItem(Image, "image", Folder, Roots: [Site])).Keys, key => key.EndsWith(Site.ToString("D"), StringComparison.Ordinal));
+        Assert.Null(Plan(ChangeKind.Published, new ChangedItem(C, "newsPage", Site)).Roots);
+    }
+
+    [Fact]
+    public void A_named_document_plans_its_type_in_its_root_and_names_the_root_but_a_custom_key_concerns_every_site()
+    {
+        var planner = new PurgePlanner(new Tree());
+        PurgePlan page = planner.Plan(new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.Custom, [], [], null, Keys: [$"content-{OtherPage:D}"]), 500);
+        PurgePlan mixed = planner.Plan(new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.Custom, [], [], null, Keys: [$"content-{OtherPage:D}", "x-dictionary-da-dk"]), 500);
+
+        Assert.Equal(["content-30000000-0000-0000-0000-000000000002", "type-newspage", "type-newspage-30000000-0000-0000-0000-000000000001"], page.Keys);
+        Assert.Equal([OtherSite], page.Roots);
+        Assert.Null(mixed.Roots);
+    }
+
+    [Fact]
+    public void A_type_change_names_the_types_listings_in_every_root()
+    {
+        PurgePlan plan = new PurgePlanner(new Tree()).Plan(new Change(Guid.Empty, DateTime.UnixEpoch, ChangeKind.TypesChanged, [], ["articlePage"], null), 500);
+
+        Assert.Equal(
+            ["type-articlepage", "type-articlepage-10000000-0000-0000-0000-000000000001", "type-articlepage-30000000-0000-0000-0000-000000000001"],
+            plan.Keys);
+        Assert.Null(plan.Roots);
     }
 
     private static PurgePlan Plan(ChangeKind kind, ChangedItem item, int budget = 500, IReadOnlyList<string>? cultures = null, Tree? tree = null)
@@ -161,7 +231,8 @@ public sealed class PurgePlannerTests
             500);
 
         Assert.True(plan.Everything);
-        Assert.Equal(["type-articlepage", "type-image"], plan.Keys);
+        Assert.Contains("type-articlepage", plan.Keys);
+        Assert.Contains("type-image", plan.Keys);
     }
 
     [Fact]

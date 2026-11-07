@@ -83,13 +83,28 @@ internal sealed record Change(
 ///     unpublish.
 /// </param>
 /// <param name="Ancestors">Its ancestors' keys, root first: a refresh of an ancestor's branch also refreshes it.</param>
-internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null);
+/// <param name="Roots">
+///     For a document: the site roots it is under, and was under before a move (the top-level document
+///     of its tree, itself at the top; none in the recycle bin). Its type and catch-all keys are planned
+///     within each, and targets limited to other roots are not sent its change. <c>null</c> for media,
+///     and for a change recorded before roots were.
+/// </param>
+internal sealed record ChangedItem(Guid Key, string TypeAlias, Guid ParentKey, Guid? OldParentKey = null, bool RouteChanged = false, IReadOnlyList<Guid>? Ancestors = null, IReadOnlyList<Guid>? Roots = null);
 
 /// <summary>The keys a change purges. Every response carries the keys of what it shows, so these reach it.</summary>
 /// <param name="Keys">Item keys (<c>content-</c>, <c>media-</c>), selector keys (<c>type-</c>, <c>children-</c>, <c>search-</c>) and a site's own <c>x-</c> keys.</param>
 /// <param name="Everything">Purge every response (<c>umbraco</c>), because the change is too wide to list.</param>
-internal sealed record PurgePlan(IReadOnlyCollection<string> Keys, bool Everything)
+/// <param name="Roots">
+///     The site roots the changed documents are under, or were before a move. A target limited to other
+///     roots (<c>CacheTagsTargetOptions.Roots</c>) is not sent the change. <c>null</c> when the change
+///     may concern any site: media, a site's own keys, type and site-wide changes, everything.
+/// </param>
+internal sealed record PurgePlan(IReadOnlyCollection<string> Keys, bool Everything, IReadOnlyCollection<Guid>? Roots = null)
 {
+    /// <summary>Whether a target limited to <paramref name="targetRoots" /> (none: every root) is sent this change.</summary>
+    public bool Reaches(IReadOnlyCollection<Guid> targetRoots)
+        => targetRoots.Count == 0 || Everything || Roots is null || Roots.Any(targetRoots.Contains);
+
     /// <summary>The keys sent to a target once every server has the change: <c>umbraco</c>, or the planned keys.</summary>
     public IReadOnlyList<string> Purged(string prefix)
         => Everything ? [CacheKeys.WithPrefix(prefix, CacheKeys.All)] : Prefixed(Keys, prefix);

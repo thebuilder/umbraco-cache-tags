@@ -67,6 +67,12 @@ public static class ExampleContent
     /// <summary>How many notes the reading list picks. The note after them (<c>Note(PickedNotes)</c>) is not picked.</summary>
     public const int PickedNotes = 70;
 
+    /// <summary>A second site: a root of its own, next to Home, for the root-scoped listing keys.</summary>
+    public static readonly Guid SecondSite = new("e0000000-0000-0000-0000-000000000200");
+
+    /// <summary>The second site's guide page, which the first site's guide listings must not refresh for.</summary>
+    public static readonly Guid SecondSiteGuide = new("e0000000-0000-0000-0000-000000000201");
+
     public static readonly Guid PhotosFolder = new("e1000000-0000-0000-0000-000000000010");
     public static readonly Guid CityFolder = new("e1000000-0000-0000-0000-000000000011");
     public static readonly Guid NightFolder = new("e1000000-0000-0000-0000-000000000012");

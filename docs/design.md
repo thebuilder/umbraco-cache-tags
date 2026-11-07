@@ -18,8 +18,10 @@ case-sensitively, so a key that differed only in case would behave differently p
 | `content-<guid>` | One document | expire now |
 | `media-<guid>` | One media item | expire now |
 | `type-<alias>` | Every listing filtered by a content or media type (alias lowercased) | stale, refresh in background |
+| `type-<alias>-<root>` | The same, for listings confined to one site root (Site roots, below) | stale, refresh in background |
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale, refresh in background |
 | `search-<index>` | Every other query against an index (`search-deliveryapicontentindex`) | stale, refresh in background |
+| `search-<index>-<root>` | The same, for queries confined to one site root | stale, refresh in background |
 | `set-<hash>` | A stored set of items, carried by a response showing more items than its header lists | expire now |
 | `umbraco` | Everything | stale, refresh in background |
 
@@ -74,6 +76,19 @@ at once:
 ```http
 X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
 ```
+
+### Site roots
+
+An Umbraco instance can hold several sites, one per root: a document at the top of the content tree
+(`SiteRoots`). A content listing whose `fetch` names an item under a root (`children:`,
+`descendants:` or `ancestors:` of it, by path, which follows `Start-Item`, or by id) can only show
+that root's documents, so its `type-` and catch-all `search-` keys are the root's:
+`type-guidepage-<root>`, `search-deliveryapicontentindex-<root>`. A change to a document plans the
+global keys and those of every root it is under, or was under before a move, so another root's
+changes never reach the listing. A listing across every root (no `fetch`, `children:/` at the root
+level, or a `fetch` of an item that does not exist) keeps the global keys. Media has no roots: media
+listings keep the global keys. The `type-` keys a response lists in place of its items (past 64) are
+each item's root's, read from its path.
 
 `items?id=` carries the key of every id asked for, so publishing one that did not exist yet reaches
 it.
@@ -165,6 +180,14 @@ X-Cache-Tags-Signature: sha256=<lowercase hex>
   environments: the host is not signed, so a purge for one receiver is valid at another with the
   same secret and path. The URL must be https, except on localhost. Redirects are not followed.
 
+A target can be limited to site roots (`"Roots": ["<root key>"]`): the roots whose content its frontend
+shows, a shared one it picks from included. A change whose documents are all under other roots is not
+queued for it, nor its listing purge or its sets' second look. Nothing reaches the target for an item
+under a root it does not list, so a site that picks content from another root must list that root.
+Roots of a configured target can also be set in the backoffice, unless configuration sets them: they
+are stored as a row of their own (`RootsOnly`) under the target's name, which is no target by
+itself.
+
 Other target types (a CDN's purge API) implement `IPurgeTarget`, register it, and are configured with
 `"Type": "<their type>"` and their own `Settings`.
 
@@ -228,7 +251,12 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
 - A content type, media type or data type change purges everything (`umbraco`), since any response
   may render an item of the type. Type changes are rare and usually ship with a deploy, so a key per
   type is not worth its place in every header. The plan also names the `type-` keys of the types it
-  alters, for the listing purge below.
+  alters, globally and in every root, for the listing purge below.
+- Each content change names the site roots its documents are under, and were under before a move or
+  a trash (`PurgePlan.Roots`). A target with `Roots` set gets only the changes that name one of its
+  roots (Targets, below). A change that names none may concern any site and goes to every target:
+  media, a site's own keys, a custom change naming anything but documents, type and site-wide
+  changes, and everything.
 - Renaming a content or media type's alias names the `type-` keys of the old alias as well as the
   new one: listings rendered before the rename carry the old one. Umbraco's
   changed notification carries only the new alias, so the old one is read when the type is saving.

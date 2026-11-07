@@ -26,6 +26,8 @@ TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.get -> bool
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.get -> System.Collections.Generic.Dictionary<string!, string!>!
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Roots.get -> System.Collections.Generic.List<System.Guid>!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Roots.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.get -> string!
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.set -> void
 TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Settings.get -> System.Collections.Generic.Dictionary<string!, string!>!
@@ -101,6 +103,7 @@ TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Add(System.Text.Js
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.CacheTagsTargetsController(TheBuilder.CacheTags.ManagementApi.ICacheTagsTargets! targets) -> void
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Delete(string! name) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.List() -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.SetRoots(string! name, System.Guid[]! roots) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Test(System.Text.Json.JsonElement body, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
 TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Update(string! name, System.Text.Json.JsonElement body) -> Microsoft.AspNetCore.Mvc.IActionResult!
 TheBuilder.CacheTags.ManagementApi.ICacheTagsChangeLog

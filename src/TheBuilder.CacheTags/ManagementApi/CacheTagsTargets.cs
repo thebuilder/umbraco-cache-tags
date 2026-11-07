@@ -21,6 +21,8 @@ public interface ICacheTagsTargets
 
     internal bool Delete(string name);
 
+    internal TargetSaveResult SetRoots(string name, IReadOnlyList<Guid> roots);
+
     internal Task<TargetTestResult> TestAsync(TargetDefinition target, CancellationToken cancellationToken);
 }
 
@@ -29,7 +31,8 @@ internal sealed record TargetsView(IReadOnlyList<string> Types, IReadOnlyList<Ta
 
 /// <summary>
 ///     One target. A configured one shows only the names of its headers and settings, never their
-///     values or its secret: those are the site's configuration, not the backoffice's.
+///     values or its secret: those are the site's configuration, not the backoffice's. Its roots can be
+///     set in the backoffice unless configuration sets them (<c>RootsFromConfiguration</c>).
 /// </summary>
 internal sealed record TargetView(
     string Name,
@@ -40,6 +43,8 @@ internal sealed record TargetView(
     TargetValue? Secret,
     IReadOnlyList<NamedValue> Headers,
     IReadOnlyList<NamedValue> Settings,
+    IReadOnlyList<Guid> Roots,
+    bool RootsFromConfiguration,
     string? Problem);
 
 internal sealed record TargetSaveResult(bool Found, string? Error)
@@ -57,7 +62,8 @@ internal sealed class CacheTagsTargets(
     PurgeTargets targets,
     IEnumerable<IPurgeTarget> senders,
     IConfiguration configuration,
-    IOptionsMonitor<CacheTagsOptions> options) : ICacheTagsTargets
+    IOptionsMonitor<CacheTagsOptions> options,
+    Umbraco.Cms.Core.Services.Navigation.IDocumentNavigationQueryService navigation) : ICacheTagsTargets
 {
     /// <summary>The one key a test purge names. Nothing is tagged with it, so purging it changes nothing.</summary>
     public const string TestKey = "x-cache-tags-test";
@@ -67,9 +73,9 @@ internal sealed class CacheTagsTargets(
             targets.Types,
             targets.Current().Values.Select(View).OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase).ToList());
 
-    private static TargetView View(ResolvedTarget target)
+    private TargetView View(ResolvedTarget target)
         => target.Definition is { } stored
-            ? new TargetView(stored.Name, stored.Type, stored.Enabled, FromConfiguration: false, stored.Url, stored.Secret, stored.Headers, stored.Settings, target.Problem)
+            ? new TargetView(stored.Name, stored.Type, stored.Enabled, FromConfiguration: false, stored.Url, stored.Secret, stored.Headers, stored.Settings, stored.Roots, RootsFromConfiguration: false, target.Problem)
             : new TargetView(
                 target.Name,
                 target.Options.Type,
@@ -79,6 +85,8 @@ internal sealed class CacheTagsTargets(
                 Secret: null,
                 target.Options.Headers.Keys.Select(name => new NamedValue(name)).ToList(),
                 target.Options.Settings.Keys.Select(name => new NamedValue(name)).ToList(),
+                target.Options.Roots,
+                RootsFromConfiguration: options.CurrentValue.Targets.TryGetValue(target.Name, out CacheTagsTargetOptions? configured) && configured.Roots.Count > 0,
                 Problem: null);
 
     // A configured URL can carry a token in its query or user info; neither is the backoffice's to show.
@@ -120,6 +128,38 @@ internal sealed class CacheTagsTargets(
 
         targets.Invalidate();
         return TargetSaveResult.Saved;
+    }
+
+    /// <summary>
+    ///     Limits a target to site roots, or to none (every change): a backoffice target's own roots, or
+    ///     those of a configured one, unless configuration sets them.
+    /// </summary>
+    public TargetSaveResult SetRoots(string name, IReadOnlyList<Guid> roots)
+    {
+        roots = Roots(roots);
+        if (InvalidRoots(roots) is { } error)
+        {
+            return TargetSaveResult.Invalid(error);
+        }
+
+        if (options.CurrentValue.Targets.TryGetValue(name, out CacheTagsTargetOptions? configured))
+        {
+            if (configured.Roots.Count > 0)
+            {
+                return TargetSaveResult.Invalid($"CacheTags:Targets:{name}:Roots sets this target's roots; change them there.");
+            }
+
+            store.SetRootsOnly(name, roots);
+            targets.Invalidate();
+            return TargetSaveResult.Saved;
+        }
+
+        if (store.All().FirstOrDefault(target => target.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && target.RootsOnly is false) is not { } stored)
+        {
+            return TargetSaveResult.NotFound;
+        }
+
+        return Update(stored.Name, stored with { Roots = roots });
     }
 
     public bool Delete(string name)
@@ -177,7 +217,23 @@ internal sealed class CacheTagsTargets(
     private string? Invalid(TargetDefinition target)
         => options.CurrentValue.Targets.ContainsKey(target.Name)
             ? $"CacheTags:Targets in configuration already has a target named {target.Name}."
-            : TargetValidator.Validate(target, targets.Types);
+            : TargetValidator.Validate(target, targets.Types) ?? InvalidRoots(target.Roots);
+
+    // A root is a document at the top of the content tree: a document under one is in its root already.
+    private string? InvalidRoots(IReadOnlyList<Guid> roots)
+    {
+        if (roots.Count == 0)
+        {
+            return null;
+        }
+
+        var top = navigation.TryGetRootKeys(out IEnumerable<Guid> keys) ? keys.ToHashSet() : [];
+        return roots.Any(root => top.Contains(root) is false)
+            ? "A site root must be a document at the top of the content tree."
+            : null;
+    }
+
+    private static List<Guid> Roots(IReadOnlyList<Guid>? roots) => (roots ?? []).Where(root => root != Guid.Empty).Distinct().ToList();
 
     // Trimmed names, the registered type's own spelling, and an empty value or setting as none.
     private TargetDefinition Normalise(TargetDefinition target) => target with
@@ -188,6 +244,8 @@ internal sealed class CacheTagsTargets(
         Secret = target.Secret is { } secret ? new TargetValue(Empty(secret.Value), Empty(secret.Setting?.Trim())) : null,
         Headers = (target.Headers ?? []).Where(header => header is not null).Select(Normalise).ToList(),
         Settings = (target.Settings ?? []).Where(setting => setting is not null).Select(Normalise).ToList(),
+        Roots = Roots(target.Roots),
+        RootsOnly = false,
     };
 
     private static NamedValue Normalise(NamedValue value) => new((value.Name ?? string.Empty).Trim(), Empty(value.Value), Empty(value.Setting?.Trim()));

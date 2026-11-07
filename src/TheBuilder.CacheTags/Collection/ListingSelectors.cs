@@ -30,10 +30,16 @@ internal static class ListingSelectors
     /// </param>
     /// <param name="isType">Whether a content or media type with the given alias exists.</param>
     /// <param name="media">Whether this is the media query endpoint.</param>
-    public static IReadOnlyCollection<string> For(string? fetch, IEnumerable<string> filters, Func<string, Guid?> resolve, Func<string, bool> isType, bool media)
+    /// <param name="rootOf">
+    ///     The site root a document is under (the top-level item of its tree, the item itself at the top),
+    ///     or <c>null</c> when it is not known. A listing fetched from an item under a root can only show
+    ///     that root's documents, so its type and catch-all keys are that root's
+    ///     (<see cref="CacheKeys.Type(string, Guid)" />), which another root's changes do not plan.
+    /// </param>
+    public static IReadOnlyCollection<string> For(string? fetch, IEnumerable<string> filters, Func<string, Guid?> resolve, Func<string, bool> isType, bool media, Func<Guid, Guid?>? rootOf = null)
     {
         var keys = new SortedSet<string>(StringComparer.Ordinal);
-        var catchAll = CacheKeys.Search(media ? MediaSearch : ContentIndex);
+        var index = media ? MediaSearch : ContentIndex;
         var typeFilter = media ? "mediaType:" : "contentType:";
         var filterList = filters.ToList();
         var (axis, target) = Split(fetch);
@@ -44,9 +50,13 @@ internal static class ListingSelectors
         Guid? targetKey = target is null ? null : resolve(target);
         if (axis is not null && (axis is not ("children" or "descendants" or "ancestors") || targetKey is null))
         {
-            keys.Add(catchAll);
+            keys.Add(CacheKeys.Search(index));
             return keys;
         }
+
+        // Media has no site roots, and the root level (children:/ with nothing routed there) spans them all.
+        Guid? root = media || rootOf is null || targetKey is not { } fetchedKey || fetchedKey == Guid.Empty ? null : rootOf(fetchedKey);
+        var catchAll = root is { } scope ? CacheKeys.Search(index, scope) : CacheKeys.Search(index);
 
         // A type filter selects only when every alias names a type, and there are at most MaxTypes:
         // any other alias, or more of them, is input that can vary without end. It is checked before
@@ -94,7 +104,7 @@ internal static class ListingSelectors
         {
             foreach (var type in types)
             {
-                keys.Add(CacheKeys.Type(type));
+                keys.Add(root is { } typeRoot ? CacheKeys.Type(type, typeRoot) : CacheKeys.Type(type));
             }
 
             return keys;

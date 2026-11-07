@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using TheBuilder.CacheTags.Collection;
 using TheBuilder.CacheTags.Configuration;
 using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Keys;
 using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.ManagementApi;
 using TheBuilder.CacheTags.Migrations;
@@ -34,6 +35,7 @@ public sealed class CacheTagsComposer : IComposer
         // Collecting.
         builder.Services.AddSingleton<ReferenceReader>();
         builder.Services.AddSingleton<KnownNames>();
+        builder.Services.AddSingleton<SiteRoots>();
         builder.Services.AddScoped<ResponseCollector>();
         builder.Services.AddScoped<CacheTagsResponse>();
         builder.Services.AddScoped<ICacheTagsResponse>(services => services.GetRequiredService<CacheTagsResponse>());

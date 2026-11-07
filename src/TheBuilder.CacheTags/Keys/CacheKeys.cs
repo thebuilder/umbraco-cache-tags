@@ -30,9 +30,19 @@ internal static class CacheKeys
 
     public static string Type(string alias) => TypePrefix + alias.ToLowerInvariant();
 
+    /// <summary>
+    ///     A type's key within one site root (<c>type-article-&lt;root&gt;</c>): listings confined to the
+    ///     root's tree, and the types a response under it lists in place of its items. A change to an item
+    ///     plans its root's key as well as the global one, so another root's changes never reach it.
+    /// </summary>
+    public static string Type(string alias, Guid root) => Type(alias) + "-" + root.ToString("D");
+
     public static string Children(Guid parentKey) => ChildrenPrefix + parentKey.ToString("D");
 
     public static string Search(string indexName) => SearchPrefix + indexName.ToLowerInvariant();
+
+    /// <summary>The catch-all key within one site root (<c>search-deliveryapicontentindex-&lt;root&gt;</c>), as <see cref="Type(string, Guid)" />.</summary>
+    public static string Search(string indexName, Guid root) => Search(indexName) + "-" + root.ToString("D");
 
     /// <summary>Whether a key names one item (expired at once) rather than a set of responses.</summary>
     public static bool IsItem(string key)

@@ -317,6 +317,57 @@ public sealed class TargetTests : IDisposable
     }
 
     [Fact]
+    public void Backoffice_roots_limit_a_configured_target_unless_configuration_sets_its_own()
+    {
+        Guid site = new("10000000-0000-0000-0000-000000000001");
+        Guid other = new("30000000-0000-0000-0000-000000000001");
+        var configured = new Dictionary<string, CacheTagsTargetOptions>
+        {
+            ["vercel"] = new() { Url = "https://configured.example.com/" },
+            ["fixed"] = new() { Url = "https://fixed.example.com/", Roots = [other] },
+        };
+        var clashes = new List<string>();
+
+        Dictionary<string, ResolvedTarget> merged = PurgeTargets.Merge(
+            configured,
+            [
+                new TargetDefinition { Name = "vercel", RootsOnly = true, Roots = [site] },
+                new TargetDefinition { Name = "fixed", RootsOnly = true, Roots = [site] },
+                new TargetDefinition { Name = "gone", RootsOnly = true, Roots = [site] },
+            ],
+            target => new ResolvedTarget(target.Name, new CacheTagsTargetOptions(), FromConfiguration: false),
+            clashes.Add);
+
+        Assert.Equal([site], merged["vercel"].Options.Roots);
+        Assert.Equal("https://configured.example.com/", merged["vercel"].Options.Url);
+        Assert.True(merged["vercel"].FromConfiguration);
+        Assert.Empty(configured["vercel"].Roots);
+        Assert.Equal([other], merged["fixed"].Options.Roots);
+        Assert.False(merged.ContainsKey("gone"));
+        Assert.Empty(clashes);
+    }
+
+    [Fact]
+    public void A_configured_targets_roots_are_stored_until_set_to_none_and_its_purges_stay()
+    {
+        using var database = new TestDatabase();
+        var store = new TargetStore(database.Package, TimeProvider.System);
+        Guid site = new("10000000-0000-0000-0000-000000000001");
+        Guid other = new("30000000-0000-0000-0000-000000000001");
+        database.Sql.Insert(new OutboxRow { Id = Guid.NewGuid(), EventId = Guid.NewGuid(), Target = "vercel", State = OutboxStates.Pending, CreatedUtc = DateTime.UnixEpoch, NotBeforeUtc = DateTime.UnixEpoch });
+
+        store.SetRootsOnly("vercel", [site]);
+        store.SetRootsOnly("vercel", [other]);
+        TargetDefinition stored = Assert.Single(store.All());
+        Assert.True(stored.RootsOnly);
+        Assert.Equal([other], stored.Roots);
+
+        store.SetRootsOnly("vercel", []);
+        Assert.Empty(store.All());
+        Assert.Equal(OutboxStates.Pending, Assert.Single(database.Sql.Fetch<OutboxRow>("SELECT * FROM theBuilderCacheTagsOutbox")).State);
+    }
+
+    [Fact]
     public void A_target_with_a_problem_still_gets_its_purges_queued_so_the_failure_shows()
     {
         var targets = new[]
@@ -325,7 +376,27 @@ public sealed class TargetTests : IDisposable
             new ResolvedTarget("paused", new CacheTagsTargetOptions { Enabled = false }, FromConfiguration: false),
         };
 
-        Assert.Equal(["vercel"], NewPurge.ToTargets(targets, ["content-a"], DateTime.UnixEpoch).Select(purge => purge.Target));
+        Assert.Equal(["vercel"], NewPurge.ToTargets(targets, new PurgePlan(["content-a"], Everything: false), ["content-a"], DateTime.UnixEpoch).Select(purge => purge.Target));
+    }
+
+    [Fact]
+    public void A_target_limited_to_roots_is_sent_only_changes_under_them_and_those_that_may_concern_any_site()
+    {
+        Guid site = new("10000000-0000-0000-0000-000000000001");
+        Guid other = new("30000000-0000-0000-0000-000000000001");
+        var targets = new[]
+        {
+            new ResolvedTarget("every", new CacheTagsTargetOptions(), FromConfiguration: true),
+            new ResolvedTarget("site", new CacheTagsTargetOptions { Roots = [site] }, FromConfiguration: true),
+        };
+
+        string[] Sent(PurgePlan plan) => NewPurge.ToTargets(targets, plan, ["content-a"], DateTime.UnixEpoch).Select(purge => purge.Target).ToArray();
+
+        Assert.Equal(["every", "site"], Sent(new PurgePlan(["content-a"], Everything: false, [site])));
+        Assert.Equal(["every"], Sent(new PurgePlan(["content-a"], Everything: false, [other])));
+        Assert.Equal(["every", "site"], Sent(new PurgePlan(["content-a"], Everything: false, [other, site])));
+        Assert.Equal(["every", "site"], Sent(new PurgePlan(["media-a"], Everything: false)));
+        Assert.Equal(["every", "site"], Sent(new PurgePlan([], Everything: true, [other])));
     }
 
     // The store's SQL, against SQLite.

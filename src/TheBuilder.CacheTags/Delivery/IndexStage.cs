@@ -59,7 +59,7 @@ internal sealed class IndexStage(
             }
 
             IReadOnlyList<string> keys = change.Plan.Listings(settings.KeyPrefix);
-            if (ledger.ReleaseListings(change.Id, now, NewPurge.ToTargets(targets.Current().Values, keys, now)) is false)
+            if (ledger.ReleaseListings(change.Id, now, NewPurge.ToTargets(targets.Current().Values, change.Plan, keys, now)) is false)
             {
                 continue;
             }

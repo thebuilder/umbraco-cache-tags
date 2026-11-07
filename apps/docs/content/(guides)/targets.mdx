@@ -21,7 +21,7 @@ A target is where the package sends purges. Add targets in the backoffice under 
 }
 ```
 
-Every target gets every purge. Set `"Enabled": false` to pause a target without removing it.
+Every target gets every purge, unless it is limited to some site roots (see [Several sites](#several-sites)). Set `"Enabled": false` to pause a target without removing it.
 
 ## In the backoffice
 
@@ -66,6 +66,22 @@ A backoffice target can only connect to public internet addresses, so an adminis
 The limit doesn't apply to targets in `appsettings.json`, or to target types you register, which make their own requests.
 
 To check the address it connects to, a backoffice target connects directly, not through `HTTPS_PROXY` or the system proxy, unless `AllowPrivateNetworkTargets` is on. If your site reaches the internet only through a proxy, configure its targets in `appsettings.json`, which use the proxy as usual.
+
+## Several sites
+
+When one Umbraco serves several sites, each with its own root and frontend, limit each site's target to its roots. A change to content under other roots only is then not sent to it.
+
+```json appsettings.json
+"site-a": {
+  "Url": "https://site-a.example.com/api/cache-tags",
+  "Secret": "<at least 32 characters>",
+  "Roots": ["e0000000-0000-0000-0000-000000000001"]
+}
+```
+
+A root is a document at the top of the content tree. List every root the site shows content from, including a shared one it picks from, such as a global settings folder: a change to content under a root the target does not list never reaches that frontend. Media, the [dictionary and your own keys](/your-apis), type changes and site-wide changes still go to every target, since any site may show them.
+
+In the backoffice, pick the roots in a target's **Site roots** field. A target from `appsettings.json` has a **Roots** button for the same, unless `appsettings.json` sets its `Roots`. The package keeps those roots in the database, so every server uses them.
 
 ## Request headers
 

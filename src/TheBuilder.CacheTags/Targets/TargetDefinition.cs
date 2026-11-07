@@ -28,6 +28,16 @@ internal sealed record TargetDefinition
     /// <summary>For other types: their settings, such as Cloudflare's ZoneId and ApiToken.</summary>
     public IReadOnlyList<NamedValue> Settings { get; init; } = [];
 
+    /// <summary>The site roots whose content the target's frontend shows; none for every change (<c>CacheTagsTargetOptions.Roots</c>).</summary>
+    public IReadOnlyList<Guid> Roots { get; init; } = [];
+
+    /// <summary>
+    ///     Set for a row that holds only the <see cref="Roots" /> of a target configured in
+    ///     <c>CacheTags:Targets</c>, which has none of its own there: the backoffice limits it to roots
+    ///     without changing anything else about it. Never a target by itself.
+    /// </summary>
+    public bool RootsOnly { get; init; }
+
     /// <summary>Set, instead of everything else, for a stored row that could not be read.</summary>
     [JsonIgnore]
     public bool Unreadable { get; init; }

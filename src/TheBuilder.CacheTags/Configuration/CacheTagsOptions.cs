@@ -80,6 +80,15 @@ public sealed class CacheTagsTargetOptions
     public Dictionary<string, string> Settings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    ///     The keys of the site roots (top-level documents) whose content the frontend behind this target
+    ///     shows, for an Umbraco instance with several sites. A change to documents under other roots only
+    ///     is not sent to it. Media, a site's own keys, and type and site-wide changes go to every target.
+    ///     List every root the site shows content from, a shared one it picks from included. Defaults to
+    ///     none: every change.
+    /// </summary>
+    public List<Guid> Roots { get; set; } = [];
+
+    /// <summary>
     ///     Whether this target may only connect to public network addresses: set for targets added in
     ///     the backoffice, unless <see cref="CacheTagsOptions.AllowPrivateNetworkTargets" />.
     /// </summary>

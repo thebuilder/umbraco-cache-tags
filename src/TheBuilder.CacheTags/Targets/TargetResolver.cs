@@ -61,6 +61,7 @@ internal static class TargetResolver
             Url = target.Url,
             Secret = target.Secret is { } secret ? Read("The signing secret", secret.Value, secret.Setting) : string.Empty,
             PublicNetworkOnly = allowPrivateNetwork is false,
+            Roots = [.. target.Roots],
         };
         foreach (NamedValue header in target.Headers)
         {
