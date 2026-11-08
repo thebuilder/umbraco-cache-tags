@@ -262,7 +262,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
             ${target.fromConfiguration
               ? target.rootsFromConfiguration
                 ? nothing
-                : html`<uui-button compact look="secondary" label="Roots" @click=${() => this.#openRoots(target)}></uui-button>`
+                : html`<uui-button compact look="secondary" label="Edit roots" @click=${() => this.#openRoots(target)}></uui-button>`
               : html`<uui-button compact look="secondary" label="Edit" @click=${() => this.#open(target)}></uui-button>`}
             ${target.fromConfiguration
               ? nothing
@@ -488,6 +488,10 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       uui-input,
       uui-select {
         width: 100%;
+      }
+      /* Match Umbraco's own property descriptions, which are darker than the form layout item's default. */
+      uui-form-layout-item [slot="description"] {
+        color: var(--uui-color-text-alt);
       }
       .tags,
       .actions {
