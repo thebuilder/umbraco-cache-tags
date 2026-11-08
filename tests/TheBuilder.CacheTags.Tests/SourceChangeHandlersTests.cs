@@ -23,6 +23,7 @@ public sealed class SourceChangeHandlersTests : IDisposable
     private static readonly Guid ArticleType = new("e3000000-0000-0000-0000-000000000003");
     private static readonly Guid Site = new("10000000-0000-0000-0000-000000000001");
     private static readonly Guid C = new("10000000-0000-0000-0000-00000000000c");
+    private static readonly Guid OtherSite = new("30000000-0000-0000-0000-000000000001");
     private static readonly IShortStringHelper Strings = new DefaultShortStringHelper(new DefaultShortStringHelperConfig().WithDefault(new RequestHandlerSettings()));
 
     private readonly TestDatabase _database = new();
@@ -51,7 +52,7 @@ public sealed class SourceChangeHandlersTests : IDisposable
         _handlers = new SourceChangeHandlers(
             recorder,
             new PendingOperations(),
-            Fake.Of<IIdKeyMap>((method, args) => method.Name == nameof(IIdKeyMap.GetKeyForId) && args is [1059, _] ? Attempt<Guid>.Succeed(Site) : null),
+            Fake.Of<IIdKeyMap>((method, args) => method.Name == nameof(IIdKeyMap.GetKeyForId) && args is [1059, _] ? Attempt<Guid>.Succeed(Site) : args is [2000, _] ? Attempt<Guid>.Succeed(OtherSite) : null),
             Fake.Of<IDocumentUrlService>(),
             Fake.Of<IDefaultCultureAccessor>(),
             Strings,
@@ -81,11 +82,47 @@ public sealed class SourceChangeHandlersTests : IDisposable
                 "content-10000000-0000-0000-0000-000000000013",
                 "content-10000000-0000-0000-0000-000000000014",
                 "search-deliveryapicontentindex",
+                "search-deliveryapicontentindex-10000000-0000-0000-0000-000000000001",
                 "type-category",
+                "type-category-10000000-0000-0000-0000-000000000001",
                 "type-guidepage",
+                "type-guidepage-10000000-0000-0000-0000-000000000001",
                 "type-parkingpage",
+                "type-parkingpage-10000000-0000-0000-0000-000000000001",
             ],
             recorded.Plan.Keys);
+
+        // C's site root (1059), so a target limited to another root is not sent the change.
+        Assert.Equal([new Guid("10000000-0000-0000-0000-000000000001")], recorded.Plan.Roots);
+    }
+
+    [Fact]
+    public void Moving_an_item_to_another_site_names_both_roots_and_plans_both_roots_listings()
+    {
+        var category = new ContentType(Strings, -1) { Id = 1050, Alias = "category" };
+        var content = new Content("Getting around", 2000, category) { Id = 1060, Key = C, Path = "-1,2000,1060", Published = true };
+
+        // The overload with the new parent's key is not in every supported Umbraco version.
+#pragma warning disable CS0618
+        var move = new MoveEventInfo<IContent>(content, "-1,1059,1060", 2000);
+#pragma warning restore CS0618
+        _handlers.Handle(new ContentMovedNotification(move, new EventMessages()));
+
+        LedgerEntry recorded = Assert.Single(_ledger.Latest(10));
+        Assert.Equal([Site, OtherSite], recorded.Plan.Roots!.Order());
+        Assert.Contains("type-category-10000000-0000-0000-0000-000000000001", recorded.Plan.Keys);
+        Assert.Contains("type-category-30000000-0000-0000-0000-000000000001", recorded.Plan.Keys);
+    }
+
+    [Fact]
+    public void Trashing_an_item_names_the_root_it_left()
+    {
+        var category = new ContentType(Strings, -1) { Id = 1050, Alias = "category" };
+        var content = new Content("Getting around", -20, category) { Id = 1060, Key = C, Path = "-1,-20,1060" };
+
+        _handlers.Handle(new ContentMovedToRecycleBinNotification(new MoveToRecycleBinEventInfo<IContent>(content, "-1,1059,1060"), new EventMessages()));
+
+        Assert.Equal([Site], Assert.Single(_ledger.Latest(10)).Plan.Roots);
     }
 
     [Fact]
@@ -102,7 +139,16 @@ public sealed class SourceChangeHandlersTests : IDisposable
         Assert.Equal(["article", "post"], recorded.Change.TypeAliases);
         Assert.Equal(["article"], recorded.Change.RenamedAliases);
         Assert.True(recorded.Plan.Everything);
-        Assert.Equal(["type-article", "type-post"], recorded.Plan.Keys);
+        Assert.Equal(
+            [
+                "type-article",
+                "type-article-10000000-0000-0000-0000-000000000001",
+                "type-article-30000000-0000-0000-0000-000000000001",
+                "type-post",
+                "type-post-10000000-0000-0000-0000-000000000001",
+                "type-post-30000000-0000-0000-0000-000000000001",
+            ],
+            recorded.Plan.Keys);
     }
 
     [Fact]

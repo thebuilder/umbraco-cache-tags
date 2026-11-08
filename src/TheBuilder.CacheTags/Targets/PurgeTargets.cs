@@ -78,6 +78,18 @@ internal sealed class PurgeTargets(
             StringComparer.OrdinalIgnoreCase);
         foreach (TargetDefinition target in stored)
         {
+            if (target.RootsOnly)
+            {
+                // The backoffice's roots for a configured target, unless configuration sets its own. A
+                // row left after the target left configuration is no target.
+                if (targets.TryGetValue(target.Name, out ResolvedTarget? configuredTarget) && configuredTarget.Options.Roots.Count == 0)
+                {
+                    targets[target.Name] = configuredTarget with { BackofficeRoots = target.Roots };
+                }
+
+                continue;
+            }
+
             if (targets.ContainsKey(target.Name))
             {
                 clash(target.Name);

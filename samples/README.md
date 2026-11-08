@@ -97,6 +97,8 @@ Documents (key `e0000000-0000-0000-0000-<last part>`):
 | Reading list (picks Note 01 to Note 70, its children) | `/reading-list/` | `000000000027` |
 | Note 01 to Note 70, picked by the reading list | `/reading-list/note-01/`, ... | `000000000100` to `000000000169` |
 | Note 71, **not picked** | `/reading-list/note-71/` | `000000000170` |
+| Second site, **a second root** next to Home (shown at `/second-site` in the Next.js sample) | read by id | `000000000200` |
+| Ferry to the island, the second site's guide page | read by id | `000000000201` |
 
 Media (key `e1000000-0000-0000-0000-<last part>`):
 
@@ -135,6 +137,9 @@ The cases worth checking a purge against, and where they are:
 - **More items than a header lists.** The reading list shows itself and 70 notes, past the 64 item
   keys a header lists, so it carries one stored `set-` key in their place. Renaming a picked note
   purges it; renaming Note 71, which it does not pick, does not, though both are notes.
+- **Several sites.** The second site is a root of its own, with a guide page like the first site's.
+  A listing fetched from inside a root carries that root's keys (`type-guidepage-<root>`), so
+  renaming its guide leaves the first site's guide listings on `/guides` cached.
 - **Expansion.** `pnpm keys` also asks for Home with its featured article expanded, one and two levels
   deep, for Harbour mornings with its rich text expanded, and for the Blocks page with its links
   expanded. A link shows its target alone, so Forest walks' image stays out of Harbour mornings' keys,
@@ -309,8 +314,11 @@ to refresh:
 21. `/reading-list` must carry one `set-` key and not `type-note`. Note 71, which it does not pick, is
     renamed: once the purge is sent, `/reading-list` must still be cached. Then Note 01, which it
     picks, is renamed, and `/reading-list` must show the new name.
+22. `/second-site`'s guide listing must carry `type-guidepage-<second site>`, and `/guides`' listings
+    their own root's keys rather than the global ones. The second site's guide is renamed:
+    `/second-site` must show the new name, and once the purge is sent `/guides` must still be cached.
 
-Cases 1, 13 to 17, 20 and 21 also check that a page showing none of the changed items kept its cache.
+Cases 1, 13 to 17 and 20 to 22 also check that a page showing none of the changed items kept its cache.
 Between cases, the script waits until the package has released every change and sent its purges
 (`GET /umbraco/management/api/v1/cache-tags/changes`), so a late purge for one case cannot refresh
 the next case's pages. `E2E_CASES=13,15` runs only those cases.

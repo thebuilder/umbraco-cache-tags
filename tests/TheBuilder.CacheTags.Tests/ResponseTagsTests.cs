@@ -80,6 +80,25 @@ public sealed class RequestedItemsTests
     }
 
     [Fact]
+    public void A_document_listed_as_its_type_is_listed_as_its_type_within_its_site_root()
+    {
+        // Its path's first id is its root, 1059: only a change under that root plans the key.
+        IPublishedContentType article = Fake.Of<IPublishedContentType>((method, _) => method.Name == "get_Alias" ? "article" : null);
+        IPublishedContent shown = Fake.Of<IPublishedContent>((method, _) => method.Name switch
+        {
+            "get_ContentType" => article,
+            "get_ItemType" => PublishedItemType.Content,
+            "get_Path" => "-1,1059,1077",
+            _ => null,
+        });
+        IPublishedContentCache cache = Fake.Of<IPublishedContentCache>((method, arguments) =>
+            method.Name == "GetById" && arguments.Length > 0 && arguments[^1] is Guid id && id == new Guid(Shown) ? shown : null);
+        var collector = new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, null!, Roots.Of(new Dictionary<int, Guid> { [1059] = new("10000000-0000-0000-0000-000000000001") }));
+
+        Assert.Equal(["type-article-10000000-0000-0000-0000-000000000001"], collector.TypeKeys([$"content-{Shown}"]));
+    }
+
+    [Fact]
     public void Items_listed_as_their_types_keep_their_own_key_when_their_type_cannot_be_read()
     {
         // The missing item is not published yet: its publish plans its content- key, not a type.
@@ -87,7 +106,7 @@ public sealed class RequestedItemsTests
         IPublishedContent shown = Fake.Of<IPublishedContent>((method, _) => method.Name == "get_ContentType" ? article : null);
         IPublishedContentCache cache = Fake.Of<IPublishedContentCache>((method, arguments) =>
             method.Name == "GetById" && arguments.Length > 0 && arguments[^1] is Guid id && id == new Guid(Shown) ? shown : null);
-        var collector = new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, null!);
+        var collector = new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, null!, Roots.None);
 
         Assert.Equal([$"content-{Missing}", "type-article"], collector.TypeKeys([$"content-{Shown}", $"content-{Missing}"]));
     }

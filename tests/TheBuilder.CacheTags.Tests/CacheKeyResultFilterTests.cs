@@ -122,7 +122,8 @@ public sealed class CacheKeyResultFilterTests
                 variation,
                 Fake.Of<IApiContentPathResolver>(),
                 Fake.Of<IApiMediaQueryService>(),
-                names),
+                names,
+                Roots.None),
             named,
             null!);
 

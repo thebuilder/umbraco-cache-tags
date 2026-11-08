@@ -213,3 +213,16 @@ internal sealed class TestOptions(Func<CacheTagsOptions> read) : IOptionsMonitor
 
     public IDisposable? OnChange(Action<CacheTagsOptions, string?> listener) => null;
 }
+
+/// <summary>Site roots for tests: none known, or a document id's root by its path.</summary>
+internal static class Roots
+{
+    /// <summary>No document's root is known, so every key stays global.</summary>
+    public static TheBuilder.CacheTags.Keys.SiteRoots None => new(Fake.Of<Umbraco.Cms.Core.Services.IIdKeyMap>());
+
+    /// <summary>Document ids' keys, so a path's root resolves to its key.</summary>
+    public static TheBuilder.CacheTags.Keys.SiteRoots Of(IReadOnlyDictionary<int, Guid> keys)
+        => new(Fake.Of<Umbraco.Cms.Core.Services.IIdKeyMap>((method, args) => method.Name == "GetKeyForId" && args[0] is int id && keys.TryGetValue(id, out Guid key)
+            ? Umbraco.Cms.Core.Attempt.Succeed(key)
+            : Umbraco.Cms.Core.Attempt<Guid>.Fail()));
+}

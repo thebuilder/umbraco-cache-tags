@@ -42,9 +42,11 @@ internal sealed class ExampleSiteSeeder(
             return;
         }
 
-        // Created last, so when it exists everything else does.
+        // Created last, so when it exists everything else does. The second site came later, so a
+        // database seeded before it gets it too.
         if (seed.Get(ExampleContent.WinterMarket) is not null)
         {
+            CreateSecondSite();
             return;
         }
 
@@ -55,6 +57,7 @@ internal sealed class ExampleSiteSeeder(
         CreateBlocksPage(home);
         CreatePhotoEssay(home, courtyard);
         CreateReadingList(home);
+        CreateSecondSite();
         CreateEvents(home);
         logger.LogInformation("Seeded the rest of the cache tags example site.");
     }
@@ -574,6 +577,27 @@ internal sealed class ExampleSiteSeeder(
             var name = $"Note {n + 1:D2}";
             seed.EnsurePage(ExampleContent.Note(n), name, readingList, "note", content => content.SetValue("title", name));
         }
+    }
+
+    // A second root next to Home, as an instance with several sites has. Its guide is a guidePage like
+    // the first site's, so a global type-guidepage key would refresh the first site's guide listings
+    // for it; their root-scoped keys must not.
+    private void CreateSecondSite()
+    {
+        IContent site = seed.EnsurePage(ExampleContent.SecondSite, "Second site", null, "home", content =>
+        {
+            content.SetValue("title", "Second site");
+            content.SetValue("intro", "Another site in the same Umbraco, with a root of its own.");
+        });
+
+        seed.EnsurePage(ExampleContent.SecondSiteGuide, "Ferry to the island", site, "guidePage", content => Guide(
+            content,
+            "Ferry to the island",
+            "The small ferry leaves from the north pier.",
+            null,
+            "<p>Buy a ticket on board; it is cheaper both ways.</p>",
+            "Easy",
+            ["ferry"]));
     }
 
     private void CreateEvents(IContent home)

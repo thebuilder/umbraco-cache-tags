@@ -69,6 +69,9 @@ const keys = {
   // The reading list picks notes 100 to 169, more than a header lists; note 170 it does not pick.
   pickedNote: "e0000000-0000-0000-0000-000000000100",
   unpickedNote: "e0000000-0000-0000-0000-000000000170",
+  // A second site's root, next to Home, and its one guide page.
+  secondSite: "e0000000-0000-0000-0000-000000000200",
+  secondSiteGuide: "e0000000-0000-0000-0000-000000000201",
   // Not seeded: the article case 2 creates, and deletes again. e9 keys are kept for this script.
   newArticle: "e9000000-0000-0000-0000-000000000001",
 };
@@ -970,6 +973,38 @@ const cases: Case[] = [
     async undo() {
       await renameDocument(keys.unpickedNote, original);
       await renameDocument(keys.pickedNote, original);
+    },
+  },
+  {
+    name: "Renaming the second site's guide refreshes that site's guide listing, and leaves the first site's guide listings cached",
+    async run(report) {
+      const secondGuides = `content?fetch=descendants:${keys.secondSite}&filter=contentType:guidePage&sort=name:asc`;
+      const [second, guides] = await settle(["/second-site", "/guides"]);
+      const tags = (p: Page, request: string) => p.fetches.find((f) => f.request === request)?.tags ?? "";
+      const firstGuides = tags(guides, "content?fetch=descendants:/guides/&filter=contentType:guidePage&sort=name:asc&take=50");
+      const recent = tags(guides, "content?fetch=descendants:/guides/&sort=updateDate:desc&take=3");
+      report.checks([
+        direct(
+          "Each site's guide listing carries its own root's type key, not the global one",
+          tags(second, secondGuides).includes(`type-guidepage-${keys.secondSite}`) &&
+            /\btype-guidepage-e0000000-0000-0000-0000-000000000001\b/.test(firstGuides) &&
+            !/\btype-guidepage(,|$)/.test(firstGuides),
+          `second site: ${tags(second, secondGuides)}; /guides: ${firstGuides}`,
+        ),
+        direct(
+          "The first site's untyped guide listing carries its root's catch-all, not the global one",
+          /\bsearch-deliveryapicontentindex-e0000000-0000-0000-0000-000000000001\b/.test(recent) && !/\bsearch-deliveryapicontentindex(,|$)/.test(recent),
+          `tags: ${recent}`,
+        ),
+      ]);
+
+      await renameDocument(keys.secondSiteGuide, (name) => original(name) + marker);
+      report.checks(await waitFor([contains("/second-site", "guides", `Ferry to the island${marker}`, true)]));
+      await delivered();
+      report.checks(await holdsNow([kept(guides)]));
+    },
+    async undo() {
+      await renameDocument(keys.secondSiteGuide, original);
     },
   },
 ];

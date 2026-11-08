@@ -32,11 +32,15 @@ export interface TargetDraft {
   secret: TargetValue | null;
   headers: NamedValue[];
   settings: NamedValue[];
+  /** The site roots (top-level documents) whose content the target's frontend shows; none for every change. */
+  roots: string[];
 }
 
 /** A target as listed. One from configuration shows only its header and setting names. */
 export interface TargetView extends TargetDraft {
   fromConfiguration: boolean;
+  /** Whether configuration sets the roots, so the backoffice cannot change them. */
+  rootsFromConfiguration: boolean;
   /** Why purges to it fail on this server, such as a secret that is not set. */
   problem: string | null;
 }
@@ -115,6 +119,8 @@ export const api = {
   addTarget: (target: TargetDraft) => request<null>("POST", "targets", target),
   updateTarget: (target: TargetDraft) => request<null>("PUT", `targets/${encodeURIComponent(target.name)}`, target),
   deleteTarget: (name: string) => request<null>("DELETE", `targets/${encodeURIComponent(name)}`),
+  /** Limits any target, a configured one too, to site roots; none for every change. */
+  setTargetRoots: (name: string, roots: string[]) => request<null>("PUT", `targets/${encodeURIComponent(name)}/roots`, roots),
   /** Sends a target, saved or not, a purge of one key nothing carries. */
   testTarget: (target: TargetDraft) => request<{ success: boolean; error: string | null }>("POST", "targets/test", target),
   discard: (id: string) => request<null>("POST", `purges/${id}/discard`),

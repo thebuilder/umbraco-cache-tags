@@ -103,4 +103,36 @@ public sealed class ListingSelectorsTests
     {
         Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For(fetch, ["contentType:article"], Resolve, IsType, media: false));
     }
+
+    private static readonly Guid Site = new("10000000-0000-0000-0000-000000000001");
+
+    // /articles/ is in the site; the root level has no root.
+    private static Guid? RootOf(Guid key) => key == Articles ? Site : null;
+
+    [Fact]
+    public void A_listing_fetched_from_inside_a_root_carries_that_roots_type_keys_not_the_global_ones()
+    {
+        Assert.Equal(
+            ["content-e0000000-0000-0000-0000-000000000002", "type-article-10000000-0000-0000-0000-000000000001"],
+            ListingSelectors.For("descendants:/articles/", ["contentType:article"], Resolve, IsType, media: false, RootOf));
+    }
+
+    [Fact]
+    public void A_descendants_listing_without_a_type_filter_carries_its_roots_catch_all()
+    {
+        Assert.Equal(
+            ["content-e0000000-0000-0000-0000-000000000002", "search-deliveryapicontentindex-10000000-0000-0000-0000-000000000001"],
+            ListingSelectors.For("descendants:/articles/", [], Resolve, IsType, media: false, RootOf));
+        Assert.Contains(
+            "search-deliveryapicontentindex-10000000-0000-0000-0000-000000000001",
+            ListingSelectors.For("children:/articles/", ["name:harbour"], Resolve, IsType, media: false, RootOf));
+    }
+
+    [Fact]
+    public void A_listing_across_every_root_keeps_the_global_keys()
+    {
+        Assert.Equal(["type-article"], ListingSelectors.For(null, ["contentType:article"], Resolve, IsType, media: false, RootOf));
+        Assert.Equal(["search-deliveryapicontentindex"], ListingSelectors.For("descendants:/missing/", [], Resolve, IsType, media: false, RootOf));
+        Assert.Equal(["media-e0000000-0000-0000-0000-000000000002", "search-media"], ListingSelectors.For("descendants:/articles/", [], Resolve, IsType, media: true, RootOf));
+    }
 }

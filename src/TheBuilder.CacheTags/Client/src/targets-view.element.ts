@@ -3,6 +3,7 @@ import { css, customElement, html, LitElement, nothing, state } from "@umbraco-c
 import { umbConfirmModal } from "@umbraco-cms/backoffice/modal";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import { UmbTextStyles } from "@umbraco-cms/backoffice/style";
+import "@umbraco-cms/backoffice/document";
 import { api, type NamedValue, type TargetDraft, type TargetValue, type TargetView } from "./api.js";
 import { errorMessage, sharedStyles } from "./shared.js";
 
@@ -16,6 +17,7 @@ const newTarget = (): TargetDraft => ({
   secret: { value: "" },
   headers: [],
   settings: [],
+  roots: [],
 });
 
 /** The settings a Cloudflare target needs, in the order the form shows them. */
@@ -48,6 +50,9 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
   @state() private _draft: TargetDraft | null = null;
   /** Whether the draft is a target that exists, whose name is fixed. */
   @state() private _editing = false;
+  /** A configured target whose roots are being edited, or null. */
+  @state() private _rootsOf: TargetView | null = null;
+  @state() private _roots: string[] = [];
   @state() private _busy = false;
   @state() private _formError?: string;
 
@@ -89,6 +94,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
           secret: target.secret ?? { value: "" },
           headers: target.headers.map((header) => ({ ...header })),
           settings: target.settings.map((setting) => ({ ...setting })),
+          roots: [...target.roots],
         }
       : newTarget();
   }
@@ -127,6 +133,27 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       await this.#load();
     } catch (error) {
       this._formError = errorMessage(error, "Could not save the target.");
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  #openRoots(target: TargetView): void {
+    this._formError = undefined;
+    this._rootsOf = target;
+    this._roots = [...target.roots];
+  }
+
+  async #saveRoots(): Promise<void> {
+    const name = this._rootsOf!.name;
+    this._busy = true;
+    try {
+      await api.setTargetRoots(name, this._roots);
+      this.#notification?.peek("positive", { data: { message: `Saved the roots of ${name}.` } });
+      this._rootsOf = null;
+      await this.#load();
+    } catch (error) {
+      this._formError = errorMessage(error, "Could not save the roots.");
     } finally {
       this._busy = false;
     }
@@ -174,7 +201,9 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
   }
 
   render() {
-    return html`<div class="stack">${this._draft ? this.#renderEditor(this._draft) : this.#renderList()}</div>`;
+    return html`<div class="stack">
+      ${this._draft ? this.#renderEditor(this._draft) : this._rootsOf ? this.#renderRootsEditor(this._rootsOf) : this.#renderList()}
+    </div>`;
   }
 
   #renderList() {
@@ -222,13 +251,18 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
           <div class="tags">
             <uui-tag look="secondary" color=${target.enabled ? "positive" : "default"}>${target.enabled ? "Enabled" : "Disabled"}</uui-tag>
             ${target.fromConfiguration ? html`<uui-tag look="secondary" title="Set in appsettings.json; change it there">appsettings</uui-tag>` : nothing}
+            ${target.roots.length > 0
+              ? html`<uui-tag look="secondary" title="Sent only changes to content under these site roots">${target.roots.length} ${target.roots.length === 1 ? "root" : "roots"}</uui-tag>`
+              : nothing}
             ${target.problem ? html`<uui-tag look="secondary" color="danger">Problem</uui-tag>` : nothing}
           </div>
         </uui-table-cell>
         <uui-table-cell>
           <div class="actions">
             ${target.fromConfiguration
-              ? nothing
+              ? target.rootsFromConfiguration
+                ? nothing
+                : html`<uui-button compact look="secondary" label="Roots" @click=${() => this.#openRoots(target)}></uui-button>`
               : html`<uui-button compact look="secondary" label="Edit" @click=${() => this.#open(target)}></uui-button>`}
             ${target.fromConfiguration
               ? nothing
@@ -272,6 +306,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
             <uui-toggle id="enabled" label="Send purges to this target" .checked=${draft.enabled} @change=${(event: Event) => this.#patch({ enabled: (event.target as HTMLInputElement).checked })}></uui-toggle>
           </uui-form-layout-item>
           ${draft.type === "webhook" ? this.#renderWebhook(draft) : draft.type === "cloudflare" ? this.#renderCloudflare(draft) : this.#renderSettings(draft)}
+          ${this.#renderRoots(draft.roots, (roots) => this.#patch({ roots }))}
           ${this._formError ? html`<p class="error">${this._formError}</p>` : nothing}
           <div class="row buttons">
             <uui-button look="primary" label="Save" @click=${() => this.#save()}></uui-button>
@@ -281,6 +316,46 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
           </div>
         </fieldset>
       </uui-box>
+    `;
+  }
+
+  /** The roots of a target from appsettings.json, the one thing about it the backoffice can change. */
+  #renderRootsEditor(target: TargetView) {
+    return html`
+      <uui-box headline=${target.name}>
+        <fieldset ?disabled=${this._busy}>
+          <p class="muted">
+            This target is set in <span class="mono">appsettings.json</span>. Its roots are kept in the database, so every server uses
+            them.
+          </p>
+          ${this.#renderRoots(this._roots, (roots) => {
+            this._roots = roots;
+            this._formError = undefined;
+          })}
+          ${this._formError ? html`<p class="error">${this._formError}</p>` : nothing}
+          <div class="row buttons">
+            <uui-button look="primary" label="Save" @click=${() => this.#saveRoots()}></uui-button>
+            <uui-button look="secondary" label="Cancel" @click=${() => (this._rootsOf = null)}></uui-button>
+          </div>
+        </fieldset>
+      </uui-box>
+    `;
+  }
+
+  #renderRoots(roots: string[], change: (roots: string[]) => void) {
+    return html`
+      <uui-form-layout-item>
+        <uui-label slot="label" for="roots">Site roots</uui-label>
+        <span slot="description">
+          For an Umbraco instance with several sites: every top-level page whose content this frontend shows, including shared
+          ones such as settings or a footer. Changes under roots not picked here never reach this frontend. Leave empty to send every
+          change.
+        </span>
+        <umb-input-document
+          id="roots"
+          .selection=${roots}
+          @change=${(event: Event) => change([...(event.target as HTMLElement & { selection: string[] }).selection])}></umb-input-document>
+      </uui-form-layout-item>
     `;
   }
 

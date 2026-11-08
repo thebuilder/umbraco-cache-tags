@@ -9,7 +9,12 @@ namespace TheBuilder.CacheTags.Targets;
 /// <param name="FromConfiguration">Whether it is configured in appsettings rather than the backoffice.</param>
 /// <param name="Problem">Why purges to it fail on this server, or null. Never names a secret.</param>
 /// <param name="Definition">For a backoffice target, what is stored.</param>
-internal sealed record ResolvedTarget(string Name, CacheTagsTargetOptions Options, bool FromConfiguration, string? Problem = null, TargetDefinition? Definition = null);
+/// <param name="BackofficeRoots">For a configured target without roots of its own: the roots the backoffice set for it.</param>
+internal sealed record ResolvedTarget(string Name, CacheTagsTargetOptions Options, bool FromConfiguration, string? Problem = null, TargetDefinition? Definition = null, IReadOnlyList<Guid>? BackofficeRoots = null)
+{
+    /// <summary>The site roots it is limited to; none for every change.</summary>
+    public IReadOnlyList<Guid> Roots => Options.Roots.Count > 0 ? Options.Roots : BackofficeRoots ?? [];
+}
 
 /// <summary>Turns a backoffice target into the options its <see cref="Delivery.IPurgeTarget" /> sends with.</summary>
 internal static class TargetResolver
@@ -61,6 +66,7 @@ internal static class TargetResolver
             Url = target.Url,
             Secret = target.Secret is { } secret ? Read("The signing secret", secret.Value, secret.Setting) : string.Empty,
             PublicNetworkOnly = allowPrivateNetwork is false,
+            Roots = [.. target.Roots],
         };
         foreach (NamedValue header in target.Headers)
         {

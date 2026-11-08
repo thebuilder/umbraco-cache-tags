@@ -62,7 +62,8 @@ public sealed class DeliveryPipelineTests : IAsyncLifetime
                         provider.GetRequiredService<IVariationContextAccessor>(),
                         Fake.Of<IApiContentPathResolver>(),
                         Fake.Of<IApiMediaQueryService>(),
-                        provider.GetRequiredService<KnownNames>()));
+                        provider.GetRequiredService<KnownNames>(),
+                        Roots.None));
 
                     // Members sign in with a header here; how they sign in does not matter to the filter.
                     services.AddAuthentication(MemberHeader.SchemeName).AddScheme<AuthenticationSchemeOptions, MemberHeader>(MemberHeader.SchemeName, null);

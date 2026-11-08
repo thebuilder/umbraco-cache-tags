@@ -519,7 +519,7 @@ public sealed partial class KeySetTests : IDisposable
         var filter = new CacheKeyResultFilter(
             new TestOptions(options ?? new CacheTagsOptions()),
             Fake.Of<IRequestPreviewService>(),
-            new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, Names.Of(["article"])),
+            new ResponseCollector(null!, cache, Fake.Of<IPublishedMediaCache>(), Fake.Of<IVariationContextAccessor>(), null!, null!, Names.Of(["article"]), Roots.None),
             named,
             writer ?? Writer());
 
@@ -589,5 +589,7 @@ public sealed partial class KeySetTests : IDisposable
         public IEnumerable<Guid> Of(Guid key) => [];
 
         public IEnumerable<string> TypesOf(IReadOnlyCollection<Guid> keys, bool media) => [];
+
+        public IEnumerable<(Guid Key, string Alias, Guid? Root)> TypesAndRootsOf(IReadOnlyCollection<Guid> keys) => [];
     }
 }

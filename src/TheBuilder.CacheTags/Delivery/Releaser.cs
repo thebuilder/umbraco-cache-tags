@@ -81,7 +81,7 @@ internal sealed class Releaser(
         var items = Items(change.Plan);
         IReadOnlyList<string> sets = items.Count == 0 ? [] : keySets.SetsOf(items);
         IReadOnlyList<string> keys = [.. change.Plan.Purged(settings.KeyPrefix), .. sets.Select(set => CacheKeys.WithPrefix(settings.KeyPrefix, set))];
-        IReadOnlyList<NewPurge> purges = NewPurge.ToTargets(targets.Current().Values, keys, now);
+        IReadOnlyList<NewPurge> purges = NewPurge.ToTargets(targets.Current().Values, change.Plan, keys, now);
 
         // The listing selectors are in this purge too, so the items listings show are fresh at once;
         // their membership and order follow in the indexing stage.
@@ -123,7 +123,7 @@ internal sealed class Releaser(
         {
             // Sets stored before the release were found then; these were stored since.
             IReadOnlyList<string> keys = SetsStoredSinceRelease(keySets, change, settings.KeyPrefix);
-            if (ledger.SetsChecked(change.Id, now, NewPurge.ToTargets(targets.Current().Values, keys, now)) && keys.Count > 0)
+            if (ledger.SetsChecked(change.Id, now, NewPurge.ToTargets(targets.Current().Values, change.Plan, keys, now)) && keys.Count > 0)
             {
                 logger.LogInformation("Cache tags change {ChangeId}: {SetCount} key sets stored since its release purged.", change.Id, keys.Count);
             }

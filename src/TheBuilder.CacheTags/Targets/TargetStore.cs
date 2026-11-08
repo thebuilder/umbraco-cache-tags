@@ -16,6 +16,25 @@ internal sealed class TargetStore(PackageDatabase database, TimeProvider time)
     public bool Update(TargetDefinition target) => database.Write(db => TargetSql.Update(db, target, time.GetUtcNow().UtcDateTime));
 
     /// <summary>
+    ///     Stores the backoffice's roots for a target configured in <c>CacheTags:Targets</c>
+    ///     (<see cref="TargetDefinition.RootsOnly" />), or removes them when there are none. Its purges
+    ///     are the configured target's, so removing the row keeps them.
+    /// </summary>
+    public void SetRootsOnly(string name, IReadOnlyList<Guid> roots)
+        => database.Write(db =>
+        {
+            if (roots.Count == 0)
+            {
+                TargetSql.Delete(db, name, keepPurges: true);
+                return true;
+            }
+
+            var row = new TargetDefinition { Name = name, RootsOnly = true, Roots = roots };
+            DateTime now = time.GetUtcNow().UtcDateTime;
+            return TargetSql.Update(db, row, now) || TargetSql.Add(db, row, now);
+        });
+
+    /// <summary>
     ///     Deletes a target, and sets its unsent purges aside unless <paramref name="keepPurges" />: a
     ///     configured target of the same name owns them. Returns false when there is none with the name.
     /// </summary>

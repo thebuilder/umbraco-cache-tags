@@ -159,7 +159,8 @@ public sealed class ResponseCollectorTests
             Fake.Of<IVariationContextAccessor>(),
             Fake.Of<IApiContentPathResolver>(),
             Fake.Of<IApiMediaQueryService>(),
-            Names.Of(["page"]));
+            Names.Of(["page"]),
+            Roots.None);
     }
 
     private static IPublishedContent Published(Guid key)
@@ -195,7 +196,8 @@ public sealed class ResponseCollectorTests
             Fake.Of<IVariationContextAccessor>(),
             Fake.Of<IApiContentPathResolver>(),
             Fake.Of<IApiMediaQueryService>(),
-            Names.Of(["article", "page"]));
+            Names.Of(["article", "page"]),
+            Roots.None);
 
         var http = new DefaultHttpContext();
         http.Request.QueryString = new QueryString(query);

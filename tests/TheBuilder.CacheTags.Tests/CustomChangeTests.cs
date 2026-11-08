@@ -70,7 +70,7 @@ public sealed class CustomChangeTests
             500);
 
         Assert.Equal(
-            ["content-10000000-0000-0000-0000-000000000013", "media-20000000-0000-0000-0000-000000000001", "type-guidepage", "type-image"],
+            ["content-10000000-0000-0000-0000-000000000013", "media-20000000-0000-0000-0000-000000000001", "type-guidepage", "type-guidepage-10000000-0000-0000-0000-000000000001", "type-image"],
             plan.Keys);
     }
 

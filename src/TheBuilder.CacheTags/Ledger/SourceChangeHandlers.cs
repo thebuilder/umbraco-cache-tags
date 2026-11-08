@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using TheBuilder.CacheTags.Delivery;
+using TheBuilder.CacheTags.Keys;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Models;
@@ -104,13 +105,13 @@ internal sealed class SourceChangeHandlers(
         => Guard(at => Record(
             at,
             ChangeKind.Moved,
-            notification.MoveInfoCollection.Where(move => move.Entity.Published).Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
+            notification.MoveInfoCollection.Where(move => move.Entity.Published).Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document), originalPath: move.OriginalPath)).ToList()));
 
     public void Handle(ContentMovedToRecycleBinNotification notification)
         => Guard(at => Record(
             at,
             ChangeKind.Trashed,
-            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document))).ToList()));
+            notification.MoveInfoCollection.Select(move => Item(move.Entity, OldParent(move.OriginalPath, UmbracoObjectTypes.Document), originalPath: move.OriginalPath)).ToList()));
 
     // An item deleted from the recycle bin was purged when it was trashed.
     public void Handle(ContentDeletedNotification notification)
@@ -248,7 +249,7 @@ internal sealed class SourceChangeHandlers(
     private void RecordEverything(DateTime at, string reason, IEnumerable<string> sources)
         => recorder.Record(new Change(Guid.CreateVersion7(), at, ChangeKind.Everything, [], [], null, reason, Sources: sources.Distinct().ToList()));
 
-    private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false)
+    private ChangedItem Item(IContentBase item, Guid? oldParent = null, bool routeChanged = false, string? originalPath = null)
     {
         UmbracoObjectTypes type = item is IMedia ? UmbracoObjectTypes.Media : UmbracoObjectTypes.Document;
 
@@ -258,8 +259,19 @@ internal sealed class SourceChangeHandlers(
             .Select(id => int.TryParse(id, out var ancestor) ? KeyOf(ancestor, type) : Guid.Empty)
             .Where(key => key != Guid.Empty)
             .ToList();
-        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors);
+        return new ChangedItem(item.Key, item.ContentType.Alias, KeyOf(item.ParentId, type), oldParent, routeChanged, ancestors, type == UmbracoObjectTypes.Document ? Roots(item.Path, originalPath) : null);
     }
+
+    // The site roots a document is under now and, after a move, was under before: the first id of each
+    // path ("-1,<root>,..."). The recycle bin ("-1,-20,...") is no root.
+    private List<Guid> Roots(string path, string? originalPath)
+        => new[] { path, originalPath }
+            .Select(SiteRoots.RootId)
+            .OfType<int>()
+            .Select(id => KeyOf(id, UmbracoObjectTypes.Document))
+            .Where(key => key != Guid.Empty)
+            .Distinct()
+            .ToList();
 
     // A path is "-1,1069,1077": the parent is the next-to-last id.
     private Guid? OldParent(string? originalPath, UmbracoObjectTypes type)

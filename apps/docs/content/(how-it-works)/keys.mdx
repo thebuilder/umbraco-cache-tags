@@ -12,8 +12,10 @@ Every key is lowercase ASCII, because Cloudflare matches tags case-insensitively
 | `content-<guid>` | One document | expire |
 | `media-<guid>` | One media item | expire |
 | `type-<alias>` | Every listing filtered by a content or media type | stale |
+| `type-<alias>-<root>` | The same, for listings inside one site root. See [Several sites](#several-sites) | stale |
 | `children-<guid>` | Every listing of a parent's children (`fetch=children:`) | stale |
 | `search-<index>` | Every other query against an index, such as a search | stale |
+| `search-<index>-<root>` | The same, for queries inside one site root | stale |
 | `x-<name>` | Whatever a site's own API names. See [Your own APIs](/your-apis) | expire |
 | `set-<hash>` | A stored set of items, for a response that shows too many to list. See [Limits](#limits) | expire |
 | `umbraco` | Everything | stale |
@@ -45,6 +47,27 @@ X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
 ```
 
 Every publish plans the `search-` key, which purges all of them at once. The same goes for a `fetch` of an item that does not exist yet (by path or by id), and a content type filter naming a type that does not exist or more than 2 types. A request for items by id (`items?id=`) carries the key of every id asked for, so publishing one that did not exist yet reaches it.
+
+## Several sites
+
+An Umbraco with several sites has a root for each, a document at the top of the content tree. A listing fetched from inside a root can only show that root's content, so its `type-` and `search-` keys are scoped to the root:
+
+```http
+GET /umbraco/delivery/api/v2/content?fetch=descendants:/guides/&filter=contentType:guidePage
+X-Umbraco-Cache-Keys: umbraco, type-guidepage-e000...0001, content-e000...0012, ...
+```
+
+A change to a document plans the global keys and its own root's. Publishing a guide in Site A purges:
+
+| A cached response on Site B | Purged? |
+| --- | --- |
+| A listing inside Site B's root, such as `fetch=descendants:` filtered by type | No, it carries Site B's scoped keys |
+| A listing across every root, such as a search or a type filter with no `fetch` | Yes, it carries the global keys |
+| A page that picks or links that guide | Yes, it carries the guide's own `content-` key |
+
+A move between roots plans both roots' keys. The types a response lists in place of its items (see [Limits](#limits)) are scoped to each item's root too. `children-` keys name a parent and item keys an item, so they never needed scoping, and media has no roots, so media keys stay global.
+
+This keeps one site's edits from emptying another site's listings. To also keep the purge requests themselves away from another site's frontend, limit each target to its roots (see [Purge targets](/targets#several-sites)).
 
 ## Which responses get keys
 

@@ -48,6 +48,17 @@ public sealed class CacheTagsTargetsController(ICacheTagsTargets targets) : Cont
             ? BadRequest(new { error = "The body is not a target." })
             : Result(targets.Update(name, target), StatusCodes.Status204NoContent);
 
+    /// <summary>
+    ///     Limits a target to the site roots whose content its frontend shows (a JSON array of document
+    ///     keys, empty for every change). Works for configured targets too, unless configuration sets
+    ///     their roots.
+    /// </summary>
+    [HttpPut("targets/{name}/roots")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult SetRoots(string name, [FromBody] Guid[] roots) => Result(targets.SetRoots(name, roots ?? []), StatusCodes.Status204NoContent);
+
     /// <summary>Removes a backoffice target, setting its unsent purges aside.</summary>
     [HttpDelete("targets/{name}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

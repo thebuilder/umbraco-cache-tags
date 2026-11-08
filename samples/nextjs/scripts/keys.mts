@@ -37,6 +37,8 @@ const forestWalks = doc("04");
 const eveningsAtDusk = doc("05");
 const about = doc("06");
 const guides = doc("10");
+const secondSite = `content-e0000000-0000-0000-0000-000000000200`;
+const secondSiteGuide = `content-e0000000-0000-0000-0000-000000000201`;
 const gettingAround = doc("11");
 const byBike = doc("12");
 const bikeParking = doc("13");
@@ -208,13 +210,26 @@ const checks: Check[] = [
   },
   {
     path: "content?fetch=descendants:/guides/&filter=contentType:guidePage",
-    why: "a listing filtered by type: the type- key",
-    includes: ["type-guidepage", byBike, bikeParking, byFerry, onFoot, breakfast, lateDinners],
+    why: "a listing filtered by type inside the first site's root: that root's type- key, not the global one",
+    includes: [`type-guidepage-${home.slice("content-".length)}`, byBike, bikeParking, byFerry, onFoot, breakfast, lateDinners],
+    excludes: ["type-guidepage"],
   },
   {
     path: "content?fetch=descendants:/guides/&sort=updateDate:desc&take=3",
-    why: "a page of a sorted listing: any guide can move into it, so it is reached through the index's catch-all key",
-    includes: ["search-deliveryapicontentindex"],
+    why: "a page of a sorted listing: any guide can move into it, so it is reached through its root's catch-all key",
+    includes: [`search-deliveryapicontentindex-${home.slice("content-".length)}`],
+    excludes: ["search-deliveryapicontentindex"],
+  },
+  {
+    path: `content?fetch=descendants:${secondSite.slice("content-".length)}&filter=contentType:guidePage`,
+    why: "the same listing in the second site: its own root's type- key, so neither site's guides refresh the other's",
+    includes: [`type-guidepage-${secondSite.slice("content-".length)}`, secondSiteGuide],
+    excludes: ["type-guidepage", `type-guidepage-${home.slice("content-".length)}`],
+  },
+  {
+    path: "content?filter=contentType:guidePage",
+    why: "a type listing across every root: the global type- key",
+    includes: ["type-guidepage"],
   },
   {
     path: "content?filter=search:harbour",

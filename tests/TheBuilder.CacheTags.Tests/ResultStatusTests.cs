@@ -73,7 +73,7 @@ public sealed class ResultStatusTests
         var filter = new CacheKeyResultFilter(
             new TestOptions(Settings),
             Fake.Of<IRequestPreviewService>(),
-            new ResponseCollector(null!, null!, null!, null!, null!, null!, null!),
+            new ResponseCollector(null!, null!, null!, null!, null!, null!, null!, null!),
             new CacheTagsResponse(),
             null!);
 
