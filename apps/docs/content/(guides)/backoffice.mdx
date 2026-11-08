@@ -33,7 +33,7 @@ Purges that failed their last attempt are listed at the top, and stay until you 
 ![Purge, with content-e0000000-0000-0000-0000-000000000003 and x-dictionary-en-us typed in, a Purge 2 keys button, and Purge everything below](../screenshots/purge.png)
 </Frame>
 
-Purge keys by hand, one per line. You can purge your own `x-` keys, items' `content-` and `media-` keys, a stored set's `set-` key copied from a response's header, and `umbraco` for everything. Purging an item's key purges its type's listings too, so a long listing that shows the item is reached.
+Purge keys by hand, one per line. You can purge your own `x-` keys, items' `content-` and `media-` keys, a stored set's `set-` key copied from a response's header, and `umbraco` for everything. Purging an item's key purges its type's listings too, so a long listing that shows the item is reached. A script or deploy step can do the same through the [Management API](/management-api).
 
 :::caution
 After **Purge everything**, every cached response is fetched again from Umbraco, so expect more load for a while.

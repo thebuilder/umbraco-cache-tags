@@ -31,12 +31,13 @@ Listings, such as an article list or a search, come from each server's Delivery 
 - Umbraco CMS 17.4 or later, Umbraco 18 included, on .NET 10, with the Delivery API enabled.
 - SQL Server, or SQLite for a single server. Every Umbraco server, delivery servers included, needs write access to the package's tables.
 - A frontend or CDN that can tag its cache entries and purge by tag. The [Next.js guide](/nextjs) has a complete receiver.
-- Recommended: call the Delivery API from your frontend's server, not from browsers. See [Call the Delivery API from your server](/keys#call-the-delivery-api-from-your-server).
+- Recommended: call the Delivery API from your frontend's server, not from browsers. See [Go live](/go-live#call-the-delivery-api-from-your-server).
 
 ## Where to go next
 
 - [Why Cache Tags](/why) compares it with caching on a timer, purging everything and purging by path.
 - [Quickstart](/quickstart) installs the package and purges a first page.
-- [Keys](/keys) explains what each key covers.
+- [Purge targets](/targets) sends purges to your frontend, Cloudflare, or a target of your own.
 - [Your own APIs](/your-apis) tags responses from your site's own controllers, such as a dictionary endpoint.
-- [Troubleshooting](/troubleshooting) covers the problems people run into first.
+- [Go live](/go-live) covers what your setup has to allow before you cache for days.
+- [Keys](/keys) and [How keys are collected](/collection) explain what a response carries, and why.

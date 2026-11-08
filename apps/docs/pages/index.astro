@@ -22,15 +22,19 @@ const marketplaceUrl = cacheTagsPackage.links.marketplace;
 // What the sample site sends and receives for one article.
 const tagged = `GET /umbraco/delivery/api/v2/content/item/articles/harbour-mornings/
 
-X-Umbraco-Cache-Keys: response-2de23a3a68340e675d917313029cab2e, umbraco`;
+X-Umbraco-Cache-Keys: umbraco, content-e000...0003, content-e000...0004, content-e000...0005, media-e100...0001`;
 const purge = `{
   "version": 1,
-  "expire": [
-    "content-e0000000-0000-0000-0000-000000000003",
-    "response-2de23a3a68340e675d917313029cab2e",
-    "response-bedaf32c19e04d2a8b1e5c7a0f3d9e61"
-  ],
-  "stale": ["children-e0000000-0000-0000-0000-000000000002"]
+  "id": "<purge id>",
+  "changeId": "<change id>",
+  "expire": ["content-e000...0003"],
+  "stale": [
+    "children-e000...0002",
+    "search-deliveryapicontentindex",
+    "search-deliveryapicontentindex-e000...0001",
+    "type-article",
+    "type-article-e000...0001"
+  ]
 }`;
 const fetchHelper = `const response = await fetch(url);
 cacheTag(...response.headers.get("x-umbraco-cache-keys").split(", "));`;

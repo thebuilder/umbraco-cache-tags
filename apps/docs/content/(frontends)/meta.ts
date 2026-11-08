@@ -1,7 +1,7 @@
 import { defineMeta } from "blume";
 
 export default defineMeta({
-  title: "Frontends",
-  pages: ["nextjs"],
+  title: "Frontends and CDNs",
+  pages: ["nextjs", "cloudflare"],
   collapsed: false,
 });

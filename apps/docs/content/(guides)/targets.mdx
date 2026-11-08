@@ -5,7 +5,7 @@ seo:
   image: /og/targets.png
 ---
 
-A target is where the package sends purges. Add targets in the backoffice under **Settings > Advanced > Cache tags > Targets**, or by name under `CacheTags:Targets` in `appsettings.json`. The built-in types are `webhook`, the default, and `cloudflare`. You can register your own.
+A target is where the package sends purges. Add targets in the backoffice under **Settings > Advanced > Cache tags > Targets**, or by name under `CacheTags:Targets` in `appsettings.json`. The built-in types are `webhook`, the default, which posts a [signed request](/webhook) to your frontend, and [`cloudflare`](/cloudflare). You can register your own.
 
 ```json appsettings.json
 {
@@ -113,77 +113,6 @@ A webhook can send its own headers with every purge, such as a gateway's API key
 ```
 
 A target sends at most 20 headers, each value on one line. The package refuses headers it sets itself, such as `Host`, `Content-Type`, `User-Agent` and the signature headers. The signature, not a header, proves that a purge came from Umbraco.
-
-## The webhook
-
-```http
-POST https://www.example.com/api/cache-tags
-Content-Type: application/json
-User-Agent: TheBuilder.CacheTags/<version>
-X-Cache-Tags-Timestamp: 1792663200
-X-Cache-Tags-Signature: sha256=<lowercase hex>
-
-{
-  "version": 1,
-  "id": "<purge id>",
-  "changeId": "<change id>",
-  "expire": ["content-e000...", "x-dictionary-da-dk"],
-  "stale": ["type-article", "children-e000..."]
-}
-```
-
-<ParamField header="X-Cache-Tags-Timestamp" type="integer">
-When the package signed the purge, in Unix seconds. Refuse a purge more than 5 minutes off your clock.
-</ParamField>
-
-<ParamField header="X-Cache-Tags-Signature" type="string">
-`sha256=` and the lowercase hex HMAC-SHA256 of `POST\n<path>\n<timestamp>\n<raw body>`, keyed with the secret's UTF-8 bytes.
-</ParamField>
-
-<ParamField body="version" type="integer">
-Always `1` for now. A receiver that does not know the version must answer with an error, so the purge fails and shows under **Failed purges** instead of being lost.
-</ParamField>
-
-<ParamField body="id" type="string">
-The purge. A retry sends the same id, so a receiver can ignore a purge it has already handled.
-</ParamField>
-
-<ParamField body="changeId" type="string">
-The change the purge is for. One change can send several purges.
-</ParamField>
-
-<ParamField body="expire" type="string[]">
-Keys that name one item or a site's own output: `content-`, `media-` and `x-` keys. Purge them now.
-</ParamField>
-
-<ParamField body="stale" type="string[]">
-Listing keys (`type-`, `children-`, `search-`) and `umbraco`. Serve them stale while they refresh if the receiver can, or purge them too.
-</ParamField>
-
-Any 2xx answer counts as delivered. Anything else, or no answer within 10 seconds, counts as a failure, and the package tries again after 2, 4, 8 and more seconds.
-
-- Use a secret of at least 32 characters, such as one from `openssl rand -base64 32`, and a different one in each environment. The signature does not cover the host, so with the same secret and path, a purge for one receiver is valid at another.
-- The URL must be https, except on localhost. The package does not follow redirects.
-
-The [Next.js guide](/nextjs#the-purge-webhook) has a receiver to copy.
-
-## Cloudflare
-
-The `cloudflare` type purges a Cloudflare zone by cache tag. Create an API token with the **Zone > Cache Purge** permission for the zone.
-
-Cloudflare reads tags from a `Cache-Tag` response header. The package posts the keys to `POST /client/v4/zones/{zone}/purge_cache` as `tags`, at most 100 per call. If a call fails, for example because of a bad token or a rate limit, the package retries it like any purge, and the backoffice shows the error with the purge.
-
-:::note
-Cloudflare has no "serve stale" purge, so the package purges the `stale` keys at once too.
-:::
-
-### Cloudflare in front of your frontend
-
-This is the setup to prefer, with the Delivery API called from the frontend's server only. The frontend copies each response's keys into its own `Cache-Tag` header. Add Cloudflare as a target alongside your frontend's webhook, since both caches hold the page.
-
-### Cloudflare in front of the Delivery API
-
-This works for a public Delivery API only, since Cloudflare would serve a response fetched with an API key to anyone, and browsers can still call the API directly. Set `CacheTags:HeaderName` to `Cache-Tag`, and raise `CacheTags:MaxHeaderKeys` to about 300: Cloudflare keeps 16 KB of tags per response. A proxy between Cloudflare and Umbraco must then allow response headers of about 15 KB, such as nginx with a `proxy_buffer_size` of 16k.
 
 ## Your own target
 
