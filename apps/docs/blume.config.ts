@@ -37,6 +37,8 @@ export default defineConfig({
       { label: "Changelog", path: "/changelog", href: "/changelog" },
     ],
   },
+  // Pages that moved keep their old URLs working.
+  redirects: [{ from: "/verify", to: "/go-live", status: 301 }],
   deployment: {
     site: "https://cache-tags.thebuilder.dk",
   },

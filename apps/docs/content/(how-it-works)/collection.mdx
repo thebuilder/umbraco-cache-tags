@@ -95,7 +95,7 @@ Blocks inside rich text are walked like any other block: their picks, links and 
 
 ## Fields
 
-`fields` limits which properties an expanded item shows. The keys still cover everything the item references, because the package reads the item's published values, not the fields in the JSON. With `expand=properties[featuredArticle]&fields=properties[featuredArticle[properties[title]]]`, the response shows one title, and Home still carries the same 8 keys as without `fields`: Dusk, Articles and About, and Harbour mornings' image and related articles. That is more keys than the response needs, never fewer: a publish may refresh it once too often, but never leaves it stale.
+`fields` hides properties from the JSON, but never drops keys. The package reads an expanded item's published values, not the fields in the response, so the keys still cover everything the item references. Home expanded with only its featured article's title shown still carries the same 8 keys as without `fields`. That is more keys than the response needs, never fewer: a publish may refresh it once too often, but never leaves it stale.
 
 ## Your own APIs
 

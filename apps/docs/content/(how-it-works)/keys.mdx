@@ -40,13 +40,20 @@ When content changes, the package plans the change as keys and purges them. A ca
 
 ## Catch-all listings
 
-A listing selected by a search, a name filter, or any filter other than a content type, or a listing with no parent or content type to select it, such as all descendants of a path, can change with any publish. It carries the catch-all `search-` key:
+Some listings can change with any publish:
+
+- a listing selected by a search, a name filter, or any filter other than a content type
+- a listing with no parent or content type to select it, such as all descendants of a path
+- a `fetch` of an item that does not exist yet, by path or by id
+- a content type filter naming a type that does not exist, or more than 2 types
+
+They carry the catch-all `search-` key, and every publish plans it, which purges all of them at once:
 
 ```http
 X-Umbraco-Cache-Keys: umbraco, search-deliveryapicontentindex, content-e000...
 ```
 
-Every publish plans the `search-` key, which purges all of them at once. The same goes for a `fetch` of an item that does not exist yet (by path or by id), and a content type filter naming a type that does not exist or more than 2 types. A request for items by id (`items?id=`) carries the key of every id asked for, so publishing one that did not exist yet reaches it.
+A request for items by id (`items?id=`) carries the key of every id asked for, so publishing one that did not exist yet reaches it.
 
 ## Several sites
 
@@ -69,6 +76,18 @@ A move between roots plans both roots' keys. The types a response lists in place
 
 This keeps one site's edits from emptying another site's listings. To also keep the purge requests themselves away from another site's frontend, limit each target to its roots (see [Purge targets](/targets#several-sites)).
 
+## What a change purges
+
+A publish purges the item's own key, its parent's `children-` key, its type's `type-` keys and the `search-` keys, globally and for its root. A move also purges the old parent's `children-` key. A change to an item's URL, such as a move, a rename or an unpublish, also purges its descendants, since their URLs change with it. These reach further:
+
+| Change | Purges |
+| --- | --- |
+| Domain, language or public access | `umbraco`, as stale |
+| Content type, media type or data type | `umbraco`, as stale, since any response may render an item of the type |
+| A route change with more than 500 descendants | `umbraco`, as stale |
+| Content type alias rename | `umbraco`, and again the old and new alias's listings once every index has the new alias, up to a minute later |
+| Sort | The parent's `children-` listings, the sorted items' `type-` listings and every `search-` listing, once every index has the new order |
+
 ## Which responses get keys
 
 | Response | Gets |
@@ -81,28 +100,6 @@ This keeps one site's edits from emptying another site's listings. To also keep 
 ## How long a response may be cached
 
 As long as you like. A purge reaches a cached response by the keys it carries, so a long lifetime only matters for a purge that never arrives, such as one to a target that stayed down. In Next.js, `cacheLife("days")` or `cacheLife("weeks")` is a sensible safety net.
-
-## Call the Delivery API from your server
-
-Fetch from your frontend's server, not from browsers. No purge reaches a browser's copy. To enforce it, turn off public access:
-
-```json appsettings.json
-{
-  "Umbraco": {
-    "CMS": {
-      "DeliveryApi": {
-        "PublicAccess": false
-      }
-    }
-  }
-}
-```
-
-Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environment (`Umbraco__CMS__DeliveryApi__ApiKey`), and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`.
-
-:::caution
-The same key unlocks preview, so keep it on the server and out of source control.
-:::
 
 ## Limits
 
@@ -121,14 +118,14 @@ X-Umbraco-Cache-Keys: umbraco, set-3f9a0c1d2e4b5a6978c0d1e2f3a4b5c6
 | 80 linked articles, set not stored in time | `umbraco`, its listing keys, `type-article` |
 | A listing of 80 items | `umbraco`, its listing keys, their `type-` keys |
 
-A response carries a `set-` key only once its set is stored. When the database is slow or failing, or a server has stored 100 new sets in the last minute, the response carries its items' `type-` keys instead. Every change to an item purges its `type-` key, so such a response is still reached, only more often. The log warns once a minute with how many responses missed the time limit, so a database too slow for sets shows up there. Listings list their items' types too: their listing key already reaches them when an item joins or leaves, and every page and filter of a listing would need a set of its own.
+A listing lists its items' types, not a set: its listing key already reaches it when an item joins or leaves, and every page and filter of a listing would need a set of its own. Responses that show the same items share one set, so rendering a page again stores nothing new.
 
-Responses that show the same items share one set, so rendering a page again stores nothing new. A set no server has rendered for 90 days is removed and purged, so a response cached longer than that renders again rather than going stale. Turn sets off with `CacheTags:KeySets` to keep everything out of the database.
+<Expandable title="When a set isn't stored">
+A response carries a `set-` key only once its set is stored. When the database is slow or failing, or a server has stored 100 new sets in the last minute, the response carries its items' `type-` keys instead. Every change to an item purges its `type-` key, so such a response is still reached, only more often. The log warns once a minute with how many responses missed the time limit.
+
+A set no server has rendered for 90 days is removed and purged, so a response cached longer than that renders again rather than going stale. Turn sets off with `CacheTags:KeySets` to keep everything out of the database.
+</Expandable>
 
 :::caution
-A full header is about 6 KB. A proxy in front of Umbraco must allow response headers that large. Nginx, for example, answers 502 when they pass its `proxy_buffer_size`, 4 or 8 KB by default, so set it to 16k.
+A full header is about 6 KB, more than some proxies allow by default. See [Go live](/go-live#what-your-setup-needs).
 :::
-
-## A prefix
-
-`CacheTags:KeyPrefix` puts a prefix on every key, such as `shop-`, for a site that shares a CDN zone with another site using the same key names.

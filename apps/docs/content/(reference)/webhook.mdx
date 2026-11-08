@@ -1,0 +1,76 @@
+---
+title: Webhook
+description: The signed request a webhook target sends for each purge, and how any frontend can receive it.
+seo:
+  image: /og/webhook.png
+---
+
+A `webhook` target posts each purge to its URL, signed with the target's secret. [Purge targets](/targets) covers adding one.
+
+```http
+POST https://www.example.com/api/cache-tags
+Content-Type: application/json
+User-Agent: TheBuilder.CacheTags/<version>
+X-Cache-Tags-Timestamp: 1792663200
+X-Cache-Tags-Signature: sha256=<lowercase hex>
+
+{
+  "version": 1,
+  "id": "<purge id>",
+  "changeId": "<change id>",
+  "expire": ["content-e000...", "x-dictionary-da-dk"],
+  "stale": ["type-article", "children-e000..."]
+}
+```
+
+<ParamField header="X-Cache-Tags-Timestamp" type="integer">
+When the package signed the purge, in Unix seconds. Refuse a purge more than 5 minutes off your clock.
+</ParamField>
+
+<ParamField header="X-Cache-Tags-Signature" type="string">
+`sha256=` and the lowercase hex HMAC-SHA256 of `POST\n<path>\n<timestamp>\n<raw body>`, keyed with the secret's UTF-8 bytes.
+</ParamField>
+
+<ParamField body="version" type="integer">
+Always `1` for now. A receiver that does not know the version must answer with an error, so the purge fails and shows under **Failed purges** instead of being lost.
+</ParamField>
+
+<ParamField body="id" type="string">
+The purge. A retry sends the same id, so a receiver can ignore a purge it has already handled.
+</ParamField>
+
+<ParamField body="changeId" type="string">
+The change the purge is for. One change can send several purges.
+</ParamField>
+
+<ParamField body="expire" type="string[]">
+Keys that name one item or a site's own output: `content-`, `media-`, `set-` and `x-` keys. Purge them now.
+</ParamField>
+
+<ParamField body="stale" type="string[]">
+Listing keys (`type-`, `children-`, `search-`) and `umbraco`. Serve them stale while they refresh if the receiver can, or purge them too.
+</ParamField>
+
+Any 2xx answer counts as delivered. Anything else, or no answer within 10 seconds, counts as a failure, and the package tries again after 2, 4, 8 and more seconds.
+
+- Use a secret of at least 32 characters, such as one from `openssl rand -base64 32`, and a different one in each environment. The signature does not cover the host, so with the same secret and path, a purge for one receiver is valid at another.
+- The URL must be https, except on localhost. The package does not follow redirects.
+
+## Receive it in any frontend
+
+The [Next.js guide](/nextjs#the-purge-webhook) has a receiver to copy. Anywhere else, a receiver does four things:
+
+<Steps>
+  <Step title="Check the signature">
+    Read the raw body before parsing it. Compute the HMAC-SHA256 of `POST`, the request path, the timestamp header and the raw body, joined by newlines, and compare it with the signature header in constant time.
+  </Step>
+  <Step title="Check the timestamp and version">
+    Refuse a purge signed more than 5 minutes ago, so a recorded one cannot be replayed, and a `version` other than `1`.
+  </Step>
+  <Step title="Purge the keys">
+    Expire every key in `expire`. Mark every key in `stale` as stale, or expire it too if your cache has no stale state.
+  </Step>
+  <Step title="Answer 2xx">
+    Any other answer makes the package retry, so answer 2xx only once the keys are purged.
+  </Step>
+</Steps>

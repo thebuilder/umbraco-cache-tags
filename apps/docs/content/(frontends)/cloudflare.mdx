@@ -1,0 +1,41 @@
+---
+title: Cloudflare
+description: Purge a Cloudflare zone by cache tag, in front of your frontend or in front of the Delivery API.
+seo:
+  image: /og/cloudflare.png
+---
+
+The `cloudflare` target type purges a Cloudflare zone by cache tag. Create an API token with the **Zone > Cache Purge** permission for the zone, and add the target:
+
+```json appsettings.json
+{
+  "CacheTags": {
+    "Targets": {
+      "cdn": {
+        "Type": "cloudflare",
+        "Settings": { "ZoneId": "<zone id>", "ApiToken": "<token>" }
+      }
+    }
+  }
+}
+```
+
+Keep the token out of source control, as `CacheTags__Targets__cdn__Settings__ApiToken` or a [named secret](/targets#in-the-backoffice).
+
+Cloudflare reads tags from a `Cache-Tag` response header. The package posts the keys to `POST /client/v4/zones/{zone}/purge_cache` as `tags`, at most 100 per call. A failed call, such as one with a bad token or a rate limit, is retried like any purge, and the backoffice shows the error with the purge.
+
+:::note
+Cloudflare has no "serve stale" purge, so the package purges the `stale` keys at once too.
+:::
+
+## In front of your frontend
+
+This is the setup to prefer, with the Delivery API called from the frontend's server only. The frontend sends a `Cache-Tag` header on each page with the keys of every Delivery API response the page used. Add Cloudflare as a target alongside your frontend's webhook, since both caches hold the page.
+
+## In front of the Delivery API
+
+This works for a public Delivery API only, since Cloudflare would serve a response fetched with an API key to anyone, and browsers can still call the API directly.
+
+- Set `CacheTags:HeaderName` to `Cache-Tag`.
+- Raise `CacheTags:MaxHeaderKeys` to about 300. Cloudflare keeps 16 KB of tags per response.
+- A proxy between Cloudflare and Umbraco must allow response headers of about 15 KB, such as nginx with a `proxy_buffer_size` of 16k.

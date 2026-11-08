@@ -1,0 +1,66 @@
+---
+title: Go live
+description: Look at one header, roll out in steps, and check the few things your own setup has to allow.
+seo:
+  image: /og/go-live.png
+---
+
+Every change the package handles is tested end to end on every commit: pickers, blocks, rich text, media, cultures, listings, renames, unpublishing and the recycle bin, on one server, on two, and with Umbraco's output cache on. What your site adds is its own setup, so take a quick look there too.
+
+## Look at a header
+
+```sh
+curl -sD - -o /dev/null https://cms.example.com/umbraco/delivery/api/v2/content/item/some/page/ | grep -i x-umbraco-cache-keys
+```
+
+It lists `umbraco`, the page's own key, and the keys of what the page shows. [How keys are collected](/collection) explains which items count, and how `expand` changes that.
+
+If a CDN or proxy sits in front of Umbraco, request the page through it too and check the header arrives whole.
+
+## Roll out in steps
+
+<Steps>
+  <Step title="Without a target">
+    Install the package and add no target. It records each change and the keys it would purge under **Settings > Advanced > Cache tags > Changes**, and sends nothing.
+  </Step>
+  <Step title="With a target">
+    Add your target and tag your frontend's cache, but keep your revalidate time. Publish a page and watch it, and the pages that show it, refresh.
+  </Step>
+  <Step title="A long cache">
+    Once that looks right, raise the revalidate time. Keep a safety revalidate, such as a day.
+  </Step>
+</Steps>
+
+To roll back at any step, remove the target.
+
+## What your setup needs
+
+- **Fetch from your server.** No purge reaches a browser's copy. See [below](#call-the-delivery-api-from-your-server).
+- **Room for the header.** A full header is about 6 KB. A proxy in front of Umbraco must allow response headers that large. Nginx answers 502 when they pass its `proxy_buffer_size`, 4 or 8 KB by default, so set it to 16k.
+- **Clocks in sync**, as NTP keeps them. A server whose clock is more than 2 seconds behind makes every change wait the full 60 seconds. See [Several servers](/timing#several-servers).
+- **SQL Server.** SQLite allows one writer at a time, and locks up under load. Use it for local development only.
+- **Secrets in configuration**, as environment variables or in your host's secret store, never typed into the backoffice. See [Purge targets](/targets#in-the-backoffice).
+
+Nothing is specific to Umbraco Cloud. The package finds its servers by their heartbeats, so an environment needs no extra setup whether it runs one instance or several. Each environment has its own database, so give each one its own target and secret.
+
+## Call the Delivery API from your server
+
+Fetch from your frontend's server, not from browsers. To enforce it, turn off public access:
+
+```json appsettings.json
+{
+  "Umbraco": {
+    "CMS": {
+      "DeliveryApi": {
+        "PublicAccess": false
+      }
+    }
+  }
+}
+```
+
+Set the key in `Umbraco:CMS:DeliveryApi:ApiKey` from user secrets or the environment (`Umbraco__CMS__DeliveryApi__ApiKey`), and send it in an `Api-Key` header from your fetch. A request without it gets a 401 with `no-store`.
+
+:::caution
+The same key unlocks preview, so keep it on the server and out of source control.
+:::

@@ -130,24 +130,7 @@ sequenceDiagram
 
 Both cases leave stale content in the cache with nothing left to purge it. Cache Tags waits until every server serves the change, and purges listings again once every server's index has it. See [How a purge is timed](/timing).
 
-## What Cache Tags does
-
-<Steps>
-  <Step title="Each response names what it shows">
-    The Delivery API sends the keys of the items a response shows, the items they pick, and the listings that select it, in the `X-Umbraco-Cache-Keys` header. Your frontend tags its cache entry with them. In Next.js that is one `cacheTag` call in your fetch helper.
-  </Step>
-  <Step title="A change is planned as keys">
-    A publish, move, sort, unpublish or type change becomes the keys of every response it touches, and only those.
-  </Step>
-  <Step title="It waits for every server">
-    The purge goes out once every Umbraco server serves the change, and listings once every server's index has it.
-  </Step>
-  <Step title="Your frontend purges by key">
-    A signed webhook calls one route in your frontend, or the package purges Cloudflare by tag.
-  </Step>
-</Steps>
-
-Pages stay cached until a change reaches them, with no timer. Umbraco answers only the requests a change made necessary, and the backoffice shows each change, the servers it waited for and the purges it sent.
+Pages stay cached until a change reaches them, with no timer. Umbraco answers only the requests a change made necessary, and the backoffice shows each change, the servers it waited for and the purges it sent. [Overview](/overview#how-it-fits-together) shows how the pieces fit together.
 
 ## When you may not need it
 

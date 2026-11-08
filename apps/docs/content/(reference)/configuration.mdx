@@ -34,10 +34,10 @@ CacheTags__Targets__nextjs__Secret=<at least 32 characters>
 | `AllowPrivateNetworkTargets` | `false` | Lets targets added in the backoffice connect to private and reserved addresses, such as `localhost`. See [Purge targets](/targets#in-the-backoffice). |
 | `HeaderName` | `X-Umbraco-Cache-Keys` | The response header that carries the keys. `Cache-Tag` for Cloudflare in front of Umbraco. |
 | `KeyPrefix` | none | A prefix for every key, such as `shop-`, for a site that shares a CDN zone with another. Lowercase letters, digits and hyphens, ending in a hyphen. |
-| `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 2. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare in front of the Delivery API](/targets#cloudflare-in-front-of-the-delivery-api). |
+| `MaxHeaderKeys` | `128` | The most keys a header lists, most needed first, at least 2. 128 is Next.js's limit per cache entry. Raise it when Cloudflare caches the Delivery API directly. See [Cloudflare](/cloudflare#in-front-of-the-delivery-api). |
 | `KeySets` | `true` | Whether a response showing more items than its header lists carries one stored `set-` key for them, so only a change to one of its own items purges it. Off, it carries their `type-` keys. See [Limits](/keys#limits). |
 
-The timings are fixed: a change waits at most 60 seconds for every server to apply it and 5 minutes for every server's index, a server counts as gone 2 minutes after its last heartbeat, and a failed purge is tried 10 times. [How a purge is timed](/timing) explains each.
+The timings are fixed. [How a purge is timed](/timing#at-a-glance) lists them.
 
 ## Target settings
 
@@ -54,3 +54,9 @@ The timings are fixed: a change waits at most 60 seconds for every server to app
 :::caution
 Keep secrets and tokens out of `appsettings.json` in source control. Set them as environment variables, such as `CacheTags__Targets__nextjs__Secret`, or in your host's secret store.
 :::
+
+## Removing the package
+
+Put your frontend back on a revalidate timer first, since purges stop. Then set `Enabled` to `false` to stop tagging and purging while the package is still installed.
+
+Uninstalling the NuGet package leaves its data behind: the tables whose names start with `theBuilderCacheTags`, and its row in `umbracoLock`. Drop them by hand once no server runs the package.
