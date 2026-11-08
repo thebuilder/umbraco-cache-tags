@@ -59,4 +59,4 @@ Keep secrets and tokens out of `appsettings.json` in source control. Set them as
 
 Put your frontend back on a revalidate timer first, since purges stop. Then set `Enabled` to `false` to stop tagging and purging while the package is still installed.
 
-Uninstalling the NuGet package leaves its data behind: the tables whose names start with `theBuilderCacheTags`, and its row in `umbracoLock`. Drop them by hand once no server runs the package.
+Uninstalling the NuGet package leaves its data behind: the tables whose names start with `theBuilderCacheTags`, its row in `umbracoLock`, and its migration state, the `Umbraco.Core.Upgrader.State+TheBuilder.CacheTags` row in `umbracoKeyValue`. Remove all three by hand once no server runs the package. A migration state left behind stops a later install from creating the tables again.

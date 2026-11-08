@@ -5,7 +5,7 @@ seo:
   image: /og/nextjs.png
 ---
 
-The package's keys work as Next.js cache tags. Tag each cached Delivery API response with `cacheTag`, and call `revalidateTag` from the purge webhook. This needs Next.js 16 with [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) turned on. Older versions tag a fetch before it runs, so they can't take the tags from the response.
+The package's keys work as Next.js cache tags. Tag each cached Delivery API response with `cacheTag`, and call `revalidateTag` from the purge webhook. This needs Next.js 16 with [Cache Components](https://nextjs.org/docs/app/getting-started/cache-components) turned on. Without Cache Components, a fetch is tagged before it runs, so the tags can't come from the response.
 
 The repository's [sample site](https://github.com/thebuilder/umbraco-cache-tags/tree/main/samples/nextjs) is a complete setup, and its end-to-end tests run against it.
 

@@ -78,7 +78,7 @@ This keeps one site's edits from emptying another site's listings. To also keep 
 
 ## What a change purges
 
-A publish purges the item's own key, its parent's `children-` key, its type's `type-` keys and the `search-` keys, globally and for its root. A move also purges the old parent's `children-` key. A change to an item's URL, such as a move, a rename or an unpublish, also purges its descendants, since their URLs change with it. These reach further:
+A publish purges the item's own key, its parent's `children-` key, its type's `type-` keys and the `search-` keys, globally and for its root. A move also purges the old parent's `children-` key. A change to an item's URL, such as a move, an unpublish or a new URL segment, also purges its descendants, since their URLs change with it. These reach further:
 
 | Change | Purges |
 | --- | --- |
