@@ -15,3 +15,11 @@ allowBuilds:
 minimumReleaseAgeExclude:
   # Our own packages are trusted, so new releases install right away.
   - '@thebuilder/*'
+packageExtensions:
+  # @astrojs/astro2tsx lists @emnapi/core but not @emnapi/runtime, which its wasm runtime needs as a
+  # peer. pnpm then fills that peer with the 2.0.0-beta.2 that Vite 8.3.7's rolldown brings, and
+  # `blume check` fails with "this.bridge.setLastError is not a function". Give it the 1.x runtime
+  # that matches its @emnapi/core.
+  '@astrojs/astro2tsx@0.1':
+    dependencies:
+      '@emnapi/runtime': 1.11.3

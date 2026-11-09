@@ -12,13 +12,13 @@
     "check:og": "umbraco-docs-og --check"
   },
   "dependencies": {
-    "@thebuilder/umbraco-docs": "^1.6.0",
-    "blume": "^2.2.4",
+    "@thebuilder/umbraco-docs": "^1.7.0",
+    "blume": "^2.2.7",
     "vgpu": "^0.6.0"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
-    "playwright": "^1.64.0",
-    "sharp": "^0.35.4"
+    "@types/node": "^26.6.6",
+    "playwright": "^1.65.0",
+    "sharp": "^0.35.5"
   }
 }

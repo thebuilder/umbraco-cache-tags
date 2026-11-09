@@ -8,7 +8,7 @@
          CI overrides it to test the lowest release and the newest of each major. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
     <!-- The sample site runs a fixed, patched release rather than the lowest the range allows. -->
-    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.7.1</SampleUmbracoVersion>
+    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.8.1</SampleUmbracoVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- Build time only: fails the build when the public C# API differs from the PublicAPI.*.txt
@@ -25,9 +25,9 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <!-- The tests only: the mapping store's SQL runs against an in-memory SQLite database. -->
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.14" />
     <!-- The tests only: the result filter runs in a real ASP.NET pipeline. -->
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.14" />
     <!-- The sample and the tests only, which run SQLite. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
     <PackageVersion Include="Umbraco.Cms" Version="$(SampleUmbracoVersion)" />
