@@ -347,6 +347,14 @@ challenge or a forbid) counts as not a 200, as does a result type it does not kn
 Every package write takes the package's own Umbraco write lock first (`umbracoLock` id -91730).
 On SQLite, two transactions that each read and then write deadlock otherwise.
 
+On SQLite a package write that begins its own transaction also waits until no other transaction on
+the database is open, and transactions that begin while it runs wait for it (`SqliteWriteGate`, an
+NPoco transaction interceptor Umbraco adds to every SQLite database). From 17.8 Umbraco opens SQLite
+without a shared cache, and some of its saves (a data type's, for one) read before they write
+without a lock. A commit from another connection in between leaves that save on an old snapshot:
+its write fails with `SQLITE_BUSY_SNAPSHOT`, which Umbraco retries as a busy database for minutes.
+No wait in the gate lasts longer than 5 seconds, after which the transaction goes ahead regardless.
+
 ```json
 "CacheTags": {
   "Targets": {

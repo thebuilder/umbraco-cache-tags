@@ -36,3 +36,5 @@ The package purges listings twice, with the change and again once every server's
 ## SQLite says the database is locked
 
 Under load, Umbraco on SQLite can report `database table is locked` and stop answering until you restart it. SQLite allows one writer at a time, and the package writes too, as it records, acknowledges and sends each change. Use SQL Server for anything but local development.
+
+On Umbraco 17.8 and later, a save could also hang for minutes when it overlapped the package's own writes, most often the first save after a publish. The package now holds its writes back until the site's open transactions have finished, so if you see this, update the package.
