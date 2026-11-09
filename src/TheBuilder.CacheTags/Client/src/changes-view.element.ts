@@ -21,6 +21,9 @@ const stageOf = (change: ChangeEntry) =>
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
+/** Whether two lists name the same servers, so the second adds nothing worth showing. */
+const sameServers = (a: string[], b: string[]) => a.length === b.length && a.every((server) => b.includes(server));
+
 /** Recent changes, what each planned and where its purges are, and the purges that failed. */
 @customElement("thebuilder-cache-tags-changes-view")
 export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
@@ -104,7 +107,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     this._busy = true;
     try {
       await (action === "retry" ? api.retry(purge.id) : api.discard(purge.id));
-      this.#notification?.peek("positive", { data: { message: action === "retry" ? "The purge is sent again." : "The purge is set aside." } });
+      this.#notification?.peek("positive", { data: { message: action === "retry" ? "Sent again." : "Set aside." } });
       await this.#load();
     } catch (error) {
       this.#notification?.peek("danger", { data: { message: errorMessage(error, "Could not change the purge.") } });
@@ -119,7 +122,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
         ${this._failed.length > 0
           ? html`
               <uui-box headline="Failed purges">
-                <p>These were given up after their last attempt. Send them again once the target answers, or set them aside.</p>
+                <p>These ran out of attempts. Send them again once the target is back, or set them aside.</p>
                 ${this._failed.map((purge) => this.#renderPurge(purge))}
               </uui-box>
             `
@@ -131,7 +134,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
           ${!this._loading && this._changes.length === 0 && !this._error ? html`<p class="muted">No changes recorded yet.</p>` : nothing}
           ${repeat(this._changes, (change) => change.id, (change) => this.#renderChange(change))}
         </uui-box>
-        <p class="muted">How a change becomes a purge: <a href=${DOCS} target="_blank" rel="noopener">the documentation</a>.</p>
+        <p class="muted"><a href=${DOCS} target="_blank" rel="noopener">How a change becomes a purge</a></p>
       </div>
     `;
   }
@@ -156,21 +159,23 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
             ${change.notAcknowledgedBy.length > 0 ? html`<uui-tag look="secondary" color="danger" title="Some servers had not applied it when it was purged">Ack timeout</uui-tag>` : nothing}
             ${failed ? html`<uui-tag look="secondary" color="danger">Purge failed</uui-tag>` : nothing}
           </span>
-          <span class="muted purges">${change.purges.length === 0 ? "no purges" : `${sent} of ${plural(change.purges.length, "purge")} sent`}</span>
+          <span class="muted purges">${change.purges.length === 0 ? "No purges" : sent === change.purges.length ? plural(sent, "purge") : `${sent} of ${change.purges.length} sent`}</span>
         </summary>
         <div class="details">
           <dl>
-            <dt>Planned</dt>
+            <dt>Keys</dt>
             <dd>${planned.map((key) => html`<span class="param">${key}</span>`)}</dd>
             ${change.change.cultures ? html`<dt>Cultures</dt><dd>${change.change.cultures.join(", ")}</dd>` : nothing}
-            <dt>Applied by</dt>
+            <dt>Servers</dt>
             <dd>
               ${change.waitsForServers
                 ? change.acknowledgedBy.join(", ") || html`<span class="muted">no server yet</span>`
-                : html`<span class="muted">purged without waiting for servers</span>`}
+                : html`<span class="muted">Purged right away</span>`}
             </dd>
             ${change.notAcknowledgedBy.length > 0 ? html`<dt>Purged without</dt><dd class="error">${change.notAcknowledgedBy.join(", ")}</dd>` : nothing}
-            ${change.indexedBy.length > 0 ? html`<dt>Indexed by</dt><dd>${change.indexedBy.join(", ")}</dd>` : nothing}
+            ${change.indexedBy.length > 0 && !sameServers(change.indexedBy, change.acknowledgedBy)
+              ? html`<dt>Indexed by</dt><dd>${change.indexedBy.join(", ")}</dd>`
+              : nothing}
             ${change.change.waitFor ? html`<dt>Waits for</dt><dd><span class="param">${change.change.waitFor}</span></dd>` : nothing}
           </dl>
           ${change.purges.length > 0 ? html`<h4>Purges</h4>${change.purges.map((purge) => this.#renderPurge(purge))}` : nothing}
@@ -184,7 +189,7 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     return html`
       <div class="purge">
         <uui-tag look="secondary" color=${color}>${purge.state}</uui-tag>
-        <span><strong>${purge.target}</strong> <span class="muted">${plural(purge.keys.length, "key")}, ${plural(purge.attempts, "attempt")}${purge.sentUtc ? `, sent ${time(purge.sentUtc)}` : ""}</span></span>
+        <span><strong>${purge.target}</strong> <span class="muted">${plural(purge.keys.length, "key")}${purge.attempts > 1 ? `, ${purge.attempts} attempts` : ""}${purge.sentUtc ? `, ${time(purge.sentUtc)}` : ""}</span></span>
         ${purge.lastError ? html`<span class="error">${purge.lastError}</span>` : nothing}
         <span class="actions">
           ${purge.state === "Dead" || purge.state === "Discarded"

@@ -217,7 +217,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
         ${this._error ? html`<p class="error">${this._error}</p>` : nothing}
         ${this._loading && this._targets.length === 0 ? html`<uui-loader></uui-loader>` : nothing}
         ${!this._loading && this._targets.length === 0 && !this._error
-          ? html`<p>No targets yet, so changes are recorded but nothing is purged. Add one to start purging.</p>`
+          ? html`<p>No targets yet, so nothing is purged.</p>`
           : nothing}
         ${this._targets.length > 0
           ? html`
@@ -325,8 +325,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       <uui-box headline=${target.name}>
         <fieldset ?disabled=${this._busy}>
           <p class="muted">
-            This target is set in <span class="mono">appsettings.json</span>. Its roots are kept in the database, so every server uses
-            them.
+            Set in <span class="mono">appsettings.json</span>. Roots picked here are saved in the database.
           </p>
           ${this.#renderRoots(this._roots, (roots) => {
             this._roots = roots;
@@ -347,9 +346,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       <uui-form-layout-item>
         <uui-label slot="label" for="roots">Site roots</uui-label>
         <span slot="description">
-          For an Umbraco instance with several sites: every top-level page whose content this frontend shows, including shared
-          ones such as settings or a footer. Changes under roots not picked here never reach this frontend. Leave empty to send every
-          change.
+          Only send changes under these roots. Include shared roots such as settings or a footer. Leave empty to send every change.
         </span>
         <umb-input-document
           id="roots"
@@ -383,7 +380,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
       </uui-form-layout-item>
       ${this.#renderNamedValues("Request headers", "Sent with every purge, such as a gateway's API key or x-vercel-protection-bypass.", draft.headers, (headers) => this.#patch({ headers }), "x-vercel-protection-bypass", "Add header")}
       <p class="muted small">
-        Keep secrets under <span class="mono">${SECRETS}</span> in the site's configuration. A value typed here is stored in the database in plain text and shown to administrators.
+        A value typed here is stored in plain text. Keep secrets under <span class="mono">${SECRETS}</span> in configuration instead.
       </p>
     `;
   }
@@ -404,7 +401,7 @@ export class CacheTagsTargetsViewElement extends UmbElementMixin(LitElement) {
         ${this.#renderValue("token", "API token", setting("ApiToken"), (value) => update("ApiToken", value), "CloudflareToken")}
       </uui-form-layout-item>
       <p class="muted small">
-        Keep the token under <span class="mono">${SECRETS}</span> in the site's configuration. A value typed here is stored in the database in plain text and shown to administrators.
+        A token typed here is stored in plain text. Keep it under <span class="mono">${SECRETS}</span> in configuration instead.
       </p>
     `;
   }
