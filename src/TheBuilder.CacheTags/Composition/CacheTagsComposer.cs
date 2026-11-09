@@ -46,6 +46,8 @@ public sealed class CacheTagsComposer : IComposer
 
         // The package's tables.
         builder.Services.AddSingleton<PackageDatabase>();
+        builder.Services.AddSingleton<SqliteWriteGate>();
+        builder.Services.AddSingleton<Umbraco.Cms.Infrastructure.Persistence.IProviderSpecificInterceptor>(services => services.GetRequiredService<SqliteWriteGate>());
         builder.Services.AddSingleton<KeySetStore>();
         builder.Services.AddSingleton<KeySetWriter>();
         builder.Services.AddRecurringBackgroundJob<LedgerPruneJob>();

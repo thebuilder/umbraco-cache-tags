@@ -43,6 +43,8 @@ internal sealed class PackageDatabase(IScopeProvider scopeProvider, IRuntimeStat
 
     public T Write<T>(Func<IDatabase, T> write)
     {
+        // On SQLite, a transaction of its own waits for the site's open ones (see SqliteWriteGate).
+        using IDisposable gate = SqliteWriteGate.PackageWrite();
         using IScope scope = scopeProvider.CreateScope();
         scope.EagerWriteLock(LockId);
         T result = write(scope.Database);

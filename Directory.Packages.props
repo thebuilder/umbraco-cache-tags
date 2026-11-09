@@ -13,7 +13,7 @@
     <UmbracoOpenApi>Swashbuckle</UmbracoOpenApi>
     <UmbracoOpenApi Condition="$(UmbracoVersion.StartsWith('18'))">AspNetCore</UmbracoOpenApi>
     <!-- The sample site runs a fixed, patched release rather than the lowest the range allows. -->
-    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.7.1</SampleUmbracoVersion>
+    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.8.1</SampleUmbracoVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- Build time only: fails the build when the public C# API differs from the PublicAPI.*.txt
