@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Extensions.Logging;
 using NPoco;
 using Umbraco.Cms.Infrastructure.Persistence;
@@ -25,6 +26,9 @@ internal sealed class SqliteWriteGate(ILogger<SqliteWriteGate> logger, TimeSpan?
 {
     /// <summary>The longest any transaction waits here, for the package's write or for the others.</summary>
     public static readonly TimeSpan DefaultWaitLimit = TimeSpan.FromSeconds(5);
+
+    // How often a waiting transaction looks again for ones that ended without saying so.
+    private static readonly TimeSpan RecheckInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly TimeSpan _waitLimit = waitLimit ?? DefaultWaitLimit;
 
@@ -58,8 +62,14 @@ internal sealed class SqliteWriteGate(ILogger<SqliteWriteGate> logger, TimeSpan?
             DateTime deadline = DateTime.UtcNow + _waitLimit;
 
             // The package waits for every other transaction; the others wait for the package's write.
-            while (_packageWrite is not null || (package && _open.Count > 0))
+            while (true)
             {
+                ForgetEnded();
+                if (_packageWrite is null && (package is false || _open.Count == 0))
+                {
+                    break;
+                }
+
                 TimeSpan left = deadline - DateTime.UtcNow;
                 if (left <= TimeSpan.Zero)
                 {
@@ -70,7 +80,7 @@ internal sealed class SqliteWriteGate(ILogger<SqliteWriteGate> logger, TimeSpan?
                     break;
                 }
 
-                Monitor.Wait(_lock, left);
+                Monitor.Wait(_lock, left < RecheckInterval ? left : RecheckInterval);
             }
 
             if (package && _packageWrite is null)
@@ -101,6 +111,22 @@ internal sealed class SqliteWriteGate(ILogger<SqliteWriteGate> logger, TimeSpan?
             Monitor.PulseAll(_lock);
         }
     }
+
+    // NPoco says nothing when a commit throws, and its Dispose closes the connection without saying so
+    // either. A transaction whose connection is closed has ended: forget it, or every later
+    // transaction would wait the full limit for it.
+    private void ForgetEnded()
+    {
+        if (_packageWrite is not null && IsOpen(_packageWrite) is false)
+        {
+            _packageWrite = null;
+        }
+
+        _open.RemoveWhere(database => IsOpen(database) is false);
+    }
+
+    private static bool IsOpen(IDatabase database)
+        => database.Transaction is { Connection.State: ConnectionState.Open };
 
     private sealed class WriteScope : IDisposable
     {

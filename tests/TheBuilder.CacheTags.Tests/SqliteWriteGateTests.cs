@@ -119,6 +119,49 @@ public sealed class SqliteWriteGateTests : IDisposable
         site.AbortTransaction();
     }
 
+    [Fact]
+    public async Task A_package_write_whose_commit_failed_does_not_hold_the_site_back()
+    {
+        var gate = new SqliteWriteGate(NullLogger<SqliteWriteGate>.Instance, TimeSpan.FromSeconds(3));
+
+        // NPoco reports nothing when a commit throws; the scope then closes the connection.
+        using (SqliteWriteGate.PackageWrite())
+        {
+            Database failed = Open(gate);
+            failed.BeginTransaction();
+            failed.Execute("INSERT INTO packageRows (x) VALUES (1)");
+            failed.Connection!.Close();
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await Task.Run(() =>
+        {
+            Database site = Open(gate);
+            site.BeginTransaction();
+            site.Execute("INSERT INTO siteRows (x) VALUES (1)");
+            site.CompleteTransaction();
+        }).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"The save waited {watch.Elapsed} for a write that had ended.");
+    }
+
+    [Fact]
+    public async Task A_site_transaction_whose_commit_failed_does_not_hold_the_package_back()
+    {
+        var gate = new SqliteWriteGate(NullLogger<SqliteWriteGate>.Instance, TimeSpan.FromSeconds(3));
+        PackageDatabase package = Package(gate);
+
+        Database failed = Open(gate);
+        failed.BeginTransaction();
+        failed.ExecuteScalar<int>("SELECT COUNT(*) FROM siteRows");
+        failed.Connection!.Close();
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await Task.Run(() => package.Write(db => db.Execute("INSERT INTO packageRows (x) VALUES (1)"))).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"The write waited {watch.Elapsed} for a transaction that had ended.");
+    }
+
     // A connection the way Umbraco opens one on SQLite: transactions are deferred.
     private Database Open(SqliteWriteGate? gate)
     {
