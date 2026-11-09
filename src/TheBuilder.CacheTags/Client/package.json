@@ -8,9 +8,9 @@
     "watch": "tsc && vite build --watch"
   },
   "devDependencies": {
-    "@umbraco-cms/backoffice": "17.7.1",
+    "@umbraco-cms/backoffice": "17.8.1",
     "typescript": "^6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.6"
   },
   "packageManager": "pnpm@11.13.1"
 }
