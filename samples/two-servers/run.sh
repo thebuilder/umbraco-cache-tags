@@ -24,6 +24,10 @@ stop() {
   docker compose -f "$here/compose.yaml" down
 }
 
+# Each server applies the other's changes when it next syncs Umbraco's cache instructions: every 5
+# to 10 seconds by default, which every edit on B would then wait for. Syncing every second keeps
+# the suite waiting on the package rather than on Umbraco's timer. SQL Server only: on SQLite this
+# sync can deadlock with a save (see the one-server job in .github/workflows/verify.yml).
 start() {
   local server="$1" port="$2"
   (
@@ -33,6 +37,7 @@ start() {
     ConnectionStrings__umbracoDbDSN="$connection" \
     ConnectionStrings__umbracoDbDSN_ProviderName=Microsoft.Data.SqlClient \
     Umbraco__CMS__WebRouting__UmbracoApplicationUrl="http://localhost:$port" \
+    Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations="00:00:01" \
       nohup dotnet TheBuilder.CacheTags.Example.dll >"$out/$server.log" 2>&1 &
     echo $! >"$out/$server.pid"
   )
