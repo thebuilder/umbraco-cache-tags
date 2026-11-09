@@ -64,7 +64,7 @@ internal static class KeysHeaderDocs
         response.Headers[settings.HeaderName] = new OpenApiHeader
         {
             Description = "The cache keys of what this response shows, comma separated. Tag the cached response with them. "
-                + "Absent on preview and signed-in member responses. See https://cache-tags.thebuilder.dk/keys",
+                + "Absent on preview and private responses. See https://cache-tags.thebuilder.dk/keys",
             Schema = new OpenApiSchema { Type = JsonSchemaType.String },
         };
     }

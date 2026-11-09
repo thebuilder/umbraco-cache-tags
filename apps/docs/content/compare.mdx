@@ -18,7 +18,7 @@ Last checked on 9 November 2026, against CacheKeys 1.2.0.
 | **Where the keys go** | Each content item's `properties.cacheKeys`, in the JSON body and the OpenAPI schema | An `X-Umbraco-Cache-Keys` header, also in the OpenAPI schema |
 | **Responses with keys** | Content items, including each item in a listing | Content and media, and [your own APIs](/your-apis) |
 | **Listings** | A `childKeys` property on the listing page's document type | `children-`, `type-` and `search-` keys, with no setup |
-| **Keys per response** | No limit | At most 128, then one [stored set](/keys#limits) |
+| **Keys per response** | No limit | At most 128, and one [stored set](/keys#limits) in place of more than 64 items |
 | **Purging** | Your own code, using its resolver | Built in, to a signed webhook, Cloudflare or a [target of your own](/targets) |
 | **Several servers** | Up to your purge code | Purges once every server serves the change |
 | **Backoffice** | None | Each change, the servers it waited for and the purges it sent |
