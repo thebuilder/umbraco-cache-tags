@@ -102,37 +102,3 @@ blume-mermaid svg .node.dropped rect {
 blume-mermaid svg .node.dropped .nodeLabel {
   color: var(--blume-muted-foreground) !important;
 }
-
-/*
- * Cells in the Compare page's table: a dot colored by how well an option covers the row. The
- * answer is written in each cell too, so the colors only reinforce it.
- */
-.mark {
-  --mark-color: var(--blume-border);
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  white-space: nowrap;
-}
-
-.mark::before {
-  content: "";
-  flex: none;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 999px;
-  background: var(--mark-color);
-  transform: translateY(-0.05rem);
-}
-
-.mark[data-state="yes"] {
-  --mark-color: #16a34a;
-}
-
-.mark[data-state="some"] {
-  --mark-color: #d97706;
-}
-
-.mark[data-state="no"] {
-  --mark-color: #dc2626;
-}
