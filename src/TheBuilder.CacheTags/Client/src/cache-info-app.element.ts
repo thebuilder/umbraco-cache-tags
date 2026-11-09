@@ -61,7 +61,7 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
     try {
       await api.purge([key]);
       this.#notification?.peek("positive", {
-        data: { message: "Purge sent to every target. Cached responses that show this item render fresh on their next request." },
+        data: { message: "Purged. Pages that show this item render fresh on their next request." },
       });
     } catch (error) {
       this.#notification?.peek("danger", { data: { message: errorMessage(error, "Could not purge.") } });
@@ -78,15 +78,14 @@ export class CacheTagsInfoAppElement extends UmbElementMixin(LitElement) {
     }
     return html`
       <uui-box headline="Cache">
-        <p class="muted">Every cached response that shows this item carries its key. Publishing or purging the item purges them.</p>
+        <p class="muted">Publishing or purging this item refreshes every cached page that shows it.</p>
         <div class="row">
           <span class="mono">${this._key}</span>
-          <uui-button compact look="secondary" label="Purge this item" ?disabled=${this._busy} @click=${() => this.#purge()}></uui-button>
+          <uui-button compact look="secondary" label="Purge" ?disabled=${this._busy} @click=${() => this.#purge()}></uui-button>
         </div>
         ${this._sets
-          ? html`<p class="muted">
-              Also in ${this._sets === 1 ? "1 stored set" : `${this._sets} stored sets`}, which pages showing too many items to list carry
-              instead. Purging the item purges them too.
+          ? html`<p class="muted" title="Pages with too many items to list carry one set- key for them.">
+              Also purges ${this._sets === 1 ? "1 key set" : `${this._sets} key sets`}.
             </p>`
           : nothing}
       </uui-box>

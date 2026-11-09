@@ -60,9 +60,8 @@ export class CacheTagsPurgeViewElement extends UmbElementMixin(LitElement) {
       <div class="stack">
         <uui-box headline="Purge keys">
           <p>
-            Purges at every target at once, without waiting for servers. Use your own <span class="mono">x-</span> keys, the
-            <span class="mono">content-</span> and <span class="mono">media-</span> keys of items, or a
-            <span class="mono">set-</span> key from a response's header. One per line.
+            One key per line: your own <span class="mono">x-</span> keys, or <span class="mono">content-</span>,
+            <span class="mono">media-</span> and <span class="mono">set-</span> keys. Sent to every target right away.
           </p>
           <uui-textarea
             label="Keys to purge"
@@ -76,7 +75,7 @@ export class CacheTagsPurgeViewElement extends UmbElementMixin(LitElement) {
           </div>
         </uui-box>
         <uui-box headline="Purge everything">
-          <p>For when something changed that no key covers. Every cached response is fetched again, so expect more load on Umbraco for a while.</p>
+          <p>Every cached page renders fresh, so expect extra load on Umbraco for a while.</p>
           <uui-button look="primary" color="danger" label="Purge everything" ?disabled=${this._busy} @click=${() => this.#purgeEverything()}></uui-button>
         </uui-box>
       </div>

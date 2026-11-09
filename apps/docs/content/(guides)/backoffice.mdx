@@ -9,11 +9,11 @@ Administrators find the package under **Settings > Advanced > Cache tags**, with
 
 ## Changes
 
-<Frame caption="A publish of Harbour mornings, with the keys it planned, the server that applied and indexed it, and its two purges.">
-![Changes, with a publish of Harbour mornings open: the keys it planned, the server that applied and indexed it, and its two purges to the nextjs target](../screenshots/changes.png)
+<Frame caption="A publish of Harbour mornings, with its keys, the server that applied it, and its two purges.">
+![Changes, with a publish of Harbour mornings open: its keys, the server that applied it, and its two purges to the nextjs target](../screenshots/changes.png)
 </Frame>
 
-Changes lists the latest changes, newest first. Open one to see the keys it planned, which servers applied it and have it in their index, and each purge with its attempts and any error.
+Changes lists the latest changes, newest first. Open one to see its keys, the servers that applied it, and each purge with any error.
 
 | Status | Means |
 | --- | --- |
@@ -24,7 +24,7 @@ Changes lists the latest changes, newest first. Open one to see the keys it plan
 The view refreshes itself until the change is purged. [How a purge is timed](/timing) explains each stage.
 
 :::note
-Purges that failed their last attempt are listed at the top, and stay until you act on them. **Retry** sends one again once the target answers, and **Set aside** hides it.
+Purges that ran out of attempts are listed at the top until you act on them. **Send again** once the target is back, or **Set aside** to hide one.
 :::
 
 ## Purge
@@ -56,7 +56,7 @@ The tab lists every target, those from `appsettings.json` too, read-only. **Add 
 ## The Info tab
 
 <Frame caption="The Cache box on Harbour mornings' Info tab.">
-![The Cache box: the item's key content-e0000000-0000-0000-0000-000000000003 and a Purge this item button](../screenshots/info.png)
+![The Cache box: the item's key content-e0000000-0000-0000-0000-000000000003 and a Purge button](../screenshots/info.png)
 </Frame>
 
-A document's or media item's **Info** tab has a **Cache** box with the item's key and **Purge this item**. Every cached response that shows the item carries that key, so publishing or purging the item reaches each of them. When stored sets hold the item, the box says how many: pages that show too many items to list carry one of those instead (see [Limits](/keys#limits)), and publishing or purging the item purges them too.
+A document's or media item's **Info** tab has a **Cache** box with the item's key and a **Purge** button. Publishing or purging the item refreshes every cached page that shows it. When the item is in [key sets](/keys#limits), the box says how many it also purges.
