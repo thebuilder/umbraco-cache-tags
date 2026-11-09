@@ -28,6 +28,11 @@
     <PackageReference Include="Umbraco.Cms.Web.Common" />
     <PackageReference Include="Umbraco.Cms.Api.Common" />
     <PackageReference Include="Umbraco.Cms.Api.Management" />
+    <!-- Compile only, to document the keys header in Umbraco's OpenAPI documents (KeysHeaderDocs).
+         Umbraco 17 brings Swashbuckle and Umbraco 18 Microsoft.AspNetCore.OpenApi, so a site has
+         one of them from Umbraco and the package ships neither. -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Condition="'$(UmbracoOpenApi)' == 'Swashbuckle'" PrivateAssets="all" ExcludeAssets="runtime;build;buildTransitive;analyzers" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Condition="'$(UmbracoOpenApi)' == 'AspNetCore'" PrivateAssets="all" ExcludeAssets="runtime;build;analyzers" />
     <!-- Security floors for dependencies inherited from the supported Umbraco range. -->
     <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.OpenApi" />

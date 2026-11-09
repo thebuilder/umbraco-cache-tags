@@ -36,6 +36,8 @@ That is `umbraco`, the listing keys that select the response, any `x-` keys, and
 X-Umbraco-Cache-Keys: umbraco, children-e000...0001, content-e000...0003, content-e000...0004
 ```
 
+The Delivery API's OpenAPI document lists the header on each response that carries it, so a typed client sees it too.
+
 When content changes, the package plans the change as keys and purges them. A cached response is reached by the keys it carries, so a purge reaches every copy of it, however long it has been cached. Nothing else has to be stored or looked up for that to hold, except for a response that shows too many items to list (see [Limits](#limits)).
 
 ## Catch-all listings

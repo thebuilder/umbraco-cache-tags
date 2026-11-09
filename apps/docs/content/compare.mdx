@@ -1,0 +1,42 @@
+---
+title: Compare
+description: How Cache Tags compares with Kraftvaerk's CacheKeys package and with Umbraco on its own.
+seo:
+  image: /og/compare.png
+---
+
+[Kraftvaerk.Umbraco.Headless.CacheKeys](https://github.com/kraftvaerk/kraftvaerk.umbraco.headless.cachekeys) was a good first take on cache keys for Umbraco, and Cache Tags starts from the same idea: a response names what it shows, and a change purges by those names. If you use neither, see [Umbraco on its own](#umbraco-on-its-own).
+
+:::note
+Last checked on 9 November 2026, against CacheKeys 1.2.0.
+:::
+
+## At a glance
+
+| | CacheKeys | Cache Tags |
+| --- | --- | --- |
+| **Where the keys go** | Each content item's `properties.cacheKeys`, in the JSON body and the OpenAPI schema | An `X-Umbraco-Cache-Keys` header, also in the OpenAPI schema |
+| **Responses with keys** | Content items, including each item in a listing | Content and media, and [your own APIs](/your-apis) |
+| **Listings** | A `childKeys` property on the listing page's document type | `children-`, `type-` and `search-` keys, with no setup |
+| **Keys per response** | No limit | At most 128, and one [stored set](/keys#limits) in place of more than 64 items |
+| **Purging** | Your own code, using its resolver | Built in, to a signed webhook, Cloudflare or a [target of your own](/targets) |
+| **Several servers** | Up to your purge code | Purges once every server serves the change |
+| **Backoffice** | None | Each change, the servers it waited for and the purges it sent |
+| **Database** | Nothing stored | Tables in the Umbraco database |
+| **Umbraco** | 16 and 17 | 17.4 and later |
+
+## CacheKeys
+
+CacheKeys is small and stores nothing. It turns pickers, blocks, relations and media into `content-` and `media-` keys, and runs on Umbraco 16. Every item in a listing carries its own keys, and they work with anything that reads JSON, such as [nuxt-multi-cache](https://nuxt-multi-cache.dulnan.net/). Its resolver is public, so your own code can ask for any item's keys. For one server and a frontend you are happy to write purge code for, it can be all you need.
+
+What it leaves to you:
+
+- **Purging.** Its README leaves invalidation to each project. Its resolver gives you a changed item's keys. Sending them, retrying a failed purge and waiting for other servers is your code. Cache Tags does this for you. See [How a purge is timed](/timing).
+- **Reading the keys.** They sit in each content item's `properties.cacheKeys`, so a CDN that purges by header, such as Cloudflare, needs code in front to read them. Media responses and your own APIs get none.
+- **Listings.** A listing page needs a `childKeys` property on its document type. A query such as `fetch=children:` gets no key of its own, and a new child is in no cached key list yet, so your purge code has to reach the listing. Cache Tags gives listings [their own keys](/keys).
+- **Long key lists.** `childKeys` collects the keys of every child and their dependencies, up to 20 levels down, with no limit on how many. Next.js keeps 128 tags per entry and drops the rest. Cache Tags switches to one [stored set](/keys#limits) instead.
+- **Drafts.** Keys are read from each item's latest saved values, not its published ones, so a picker changed in an unpublished draft changes the keys of the published response.
+
+## Umbraco on its own
+
+The Delivery API output cache and webhooks are enough when a few minutes of stale content is fine, or the site is small enough to purge everything. A webhook names the changed item, not the pages that show it, and leaves before the other servers serve the change. [Why Cache Tags](/why) shows what that costs.

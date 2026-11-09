@@ -25,4 +25,13 @@
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-v76p-62qx-wwq2" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
   </ItemGroup>
+  <!-- Microsoft.AspNetCore.OpenApi's XML comment source generator comes in with the package even when
+       its analyzers are excluded, and adds transformer classes that implement its interfaces. Umbraco
+       loads every type of the package at startup, so on Umbraco 17, which lacks that package, those
+       classes would stop the site. Nothing here wants XML comments in an OpenAPI document. -->
+  <Target Name="RemoveOpenApiSourceGenerator" AfterTargets="ResolveLockFileAnalyzers">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'Microsoft.AspNetCore.OpenApi.SourceGenerators'" />
+    </ItemGroup>
+  </Target>
 </Project>

@@ -42,6 +42,7 @@ public sealed class CacheTagsComposer : IComposer
         builder.Services.AddScoped<CacheKeyResultFilter>();
         builder.Services.Configure<MvcOptions>(options => options.Filters.AddService<CacheKeyResultFilter>());
         builder.Services.AddSingleton<IDeliveryApiOutputCacheTagProvider, OutputCacheTags>();
+        KeysHeaderDocs.Register(builder.Services);
 
         // The package's tables.
         builder.Services.AddSingleton<PackageDatabase>();

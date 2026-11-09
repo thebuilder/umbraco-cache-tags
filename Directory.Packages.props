@@ -7,6 +7,11 @@
          output cache eviction and the resolved-items stash the package relies on.
          CI overrides it to test the lowest release and the newest of each major. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
+    <!-- The OpenAPI generator the Umbraco being built against brings: Swashbuckle up to 17,
+         Microsoft.AspNetCore.OpenApi from 18. The package documents its header for both, so each
+         project references the other one itself, for compiling only. -->
+    <UmbracoOpenApi>Swashbuckle</UmbracoOpenApi>
+    <UmbracoOpenApi Condition="$(UmbracoVersion.StartsWith('18'))">AspNetCore</UmbracoOpenApi>
     <!-- The sample site runs a fixed, patched release rather than the lowest the range allows. -->
     <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.7.1</SampleUmbracoVersion>
   </PropertyGroup>
@@ -23,6 +28,10 @@
          (GHSA-v5pm-xwqc-g5wc; GHSA-7hqp-7c5m-4vq6 and others). Microsoft.OpenApi is raised to the
          floor Umbraco 18 sets, which Umbraco 17 accepts. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <!-- Compile only: the OpenAPI generator of the other Umbraco major (see UmbracoOpenApi), at the
+         lowest version that major brings. -->
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="10.1.7" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <!-- The tests only: the mapping store's SQL runs against an in-memory SQLite database. -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
