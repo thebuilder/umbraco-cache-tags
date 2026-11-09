@@ -149,17 +149,20 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
       <details
         class="change"
         ?open=${this.#open.has(change.id)}
-        @toggle=${(event: Event) =>
-          (event.target as HTMLDetailsElement).open ? this.#open.add(change.id) : this.#open.delete(change.id)}>
+        @toggle=${(event: Event) => {
+          (event.target as HTMLDetailsElement).open ? this.#open.add(change.id) : this.#open.delete(change.id);
+          this.requestUpdate();
+        }}>
         <summary>
+          <uui-symbol-expand ?open=${this.#open.has(change.id)}></uui-symbol-expand>
           <span class="when muted">${time(change.createdUtc)}</span>
           <span class="what"><strong>${change.kind}</strong> <span class="muted">${what}</span></span>
           <span class="tags">
             <uui-tag look="secondary" color=${stage.color} title=${stage.hint}>${stage.label}</uui-tag>
             ${change.notAcknowledgedBy.length > 0 ? html`<uui-tag look="secondary" color="danger" title="Some servers had not applied it when it was purged">Ack timeout</uui-tag>` : nothing}
             ${failed ? html`<uui-tag look="secondary" color="danger">Purge failed</uui-tag>` : nothing}
+            <span class="muted purges">${change.purges.length === 0 ? "No purges" : sent === change.purges.length ? plural(sent, "purge") : `${sent} of ${change.purges.length} sent`}</span>
           </span>
-          <span class="muted purges">${change.purges.length === 0 ? "No purges" : sent === change.purges.length ? plural(sent, "purge") : `${sent} of ${change.purges.length} sent`}</span>
         </summary>
         <div class="details">
           <dl>
@@ -177,8 +180,8 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
               ? html`<dt>Indexed by</dt><dd>${change.indexedBy.join(", ")}</dd>`
               : nothing}
             ${change.change.waitFor ? html`<dt>Waits for</dt><dd><span class="param">${change.change.waitFor}</span></dd>` : nothing}
+            ${change.purges.length > 0 ? html`<dt>Purges</dt><dd class="purge-list">${change.purges.map((purge) => this.#renderPurge(purge))}</dd>` : nothing}
           </dl>
-          ${change.purges.length > 0 ? html`<h4>Purges</h4>${change.purges.map((purge) => this.#renderPurge(purge))}` : nothing}
         </div>
       </details>
     `;
@@ -208,6 +211,10 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
     sharedStyles,
     css`
       .change {
+        /* The summary's columns, so the details line up under what changed. */
+        --chevron: 0.75rem;
+        --when: 11rem;
+        --gap: var(--uui-size-space-4);
         border-top: 1px solid var(--uui-color-border);
       }
       .change:first-of-type {
@@ -215,34 +222,47 @@ export class CacheTagsChangesViewElement extends UmbElementMixin(LitElement) {
       }
       summary {
         display: grid;
-        grid-template-columns: 11rem 1fr auto 9rem;
-        gap: var(--uui-size-space-4);
+        grid-template-columns: var(--chevron) var(--when) 1fr auto;
+        gap: var(--gap);
         align-items: center;
         padding: var(--uui-size-space-3) 0;
         cursor: pointer;
+        list-style: none;
+      }
+      summary::-webkit-details-marker {
+        display: none;
+      }
+      uui-symbol-expand {
+        width: var(--chevron);
+        color: var(--uui-color-text-alt);
       }
       .when,
       .purges {
         font-variant-numeric: tabular-nums;
       }
-      .purges {
-        text-align: right;
-      }
       .tags {
         display: flex;
-        gap: var(--uui-size-space-2);
+        gap: var(--uui-size-space-3);
+        align-items: center;
+        justify-content: flex-end;
       }
       .details {
-        padding: 0 0 var(--uui-size-space-4) 11rem;
+        padding: 0 0 var(--uui-size-space-4) calc(var(--chevron) + var(--when) + 2 * var(--gap));
       }
-      h4 {
-        margin: var(--uui-size-space-4) 0 var(--uui-size-space-2);
+      .details dl {
+        align-items: baseline;
+      }
+      .purge-list {
+        display: grid;
+        gap: var(--uui-size-space-2);
       }
       .purge {
         display: flex;
         gap: var(--uui-size-space-3);
         align-items: center;
         flex-wrap: wrap;
+      }
+      uui-box > .purge {
         padding: var(--uui-size-space-2) 0;
       }
       .actions {
