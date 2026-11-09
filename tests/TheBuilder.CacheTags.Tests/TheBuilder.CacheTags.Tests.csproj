@@ -12,6 +12,10 @@
     <!-- Umbraco's own Delivery API request services. Aliased, because the tests' stand-ins for its
          controllers (DeliveryControllers.cs) have the same names. -->
     <PackageReference Include="Umbraco.Cms.Api.Delivery" Aliases="UmbracoDelivery" />
+    <!-- Compile only, as in the package: at run time the OpenAPI generator comes from the Umbraco
+         release the tests build against (KeysHeaderDocsTests). -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Condition="'$(UmbracoOpenApi)' == 'Swashbuckle'" ExcludeAssets="runtime;build;buildTransitive;analyzers" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Condition="'$(UmbracoOpenApi)' == 'AspNetCore'" ExcludeAssets="runtime;build;analyzers" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
   </ItemGroup>

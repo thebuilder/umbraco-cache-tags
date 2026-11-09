@@ -15,7 +15,7 @@ Last checked on 9 November 2026, against CacheKeys 1.2.0.
 
 | | CacheKeys | Cache Tags |
 | --- | --- | --- |
-| **Where the keys go** | Each content item's `properties.cacheKeys`, in the JSON body and the OpenAPI schema | An `X-Umbraco-Cache-Keys` header |
+| **Where the keys go** | Each content item's `properties.cacheKeys`, in the JSON body and the OpenAPI schema | An `X-Umbraco-Cache-Keys` header, also in the OpenAPI schema |
 | **Responses with keys** | Content items, including each item in a listing | Content and media, and [your own APIs](/your-apis) |
 | **Listings** | A `childKeys` property on the listing page's document type | `children-`, `type-` and `search-` keys, with no setup |
 | **Keys per response** | No limit | At most 128, then one [stored set](/keys#limits) |
@@ -27,7 +27,7 @@ Last checked on 9 November 2026, against CacheKeys 1.2.0.
 
 ## CacheKeys
 
-CacheKeys is small and stores nothing. It turns pickers, blocks, relations and media into `content-` and `media-` keys, and runs on Umbraco 16. Its keys sit in the JSON body and the OpenAPI schema, so a typed client sees them, every item in a listing carries its own, and they work with anything that reads JSON, such as [nuxt-multi-cache](https://nuxt-multi-cache.dulnan.net/). Its resolver is public, so your own code can ask for any item's keys. For one server and a frontend you are happy to write purge code for, it can be all you need.
+CacheKeys is small and stores nothing. It turns pickers, blocks, relations and media into `content-` and `media-` keys, and runs on Umbraco 16. Every item in a listing carries its own keys, and they work with anything that reads JSON, such as [nuxt-multi-cache](https://nuxt-multi-cache.dulnan.net/). Its resolver is public, so your own code can ask for any item's keys. For one server and a frontend you are happy to write purge code for, it can be all you need.
 
 What it leaves to you:
 
