@@ -8,7 +8,7 @@
          CI overrides it to test the lowest release and the newest of each major. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
     <!-- The sample site runs a fixed, patched release rather than the lowest the range allows. -->
-    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.8.1</SampleUmbracoVersion>
+    <SampleUmbracoVersion Condition="'$(SampleUmbracoVersion)' == ''">17.7.1</SampleUmbracoVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- Build time only: fails the build when the public C# API differs from the PublicAPI.*.txt
