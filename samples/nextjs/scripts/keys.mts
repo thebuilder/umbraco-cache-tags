@@ -270,8 +270,26 @@ async function fetchKeys({ path, culture, headers }: Request) {
   };
 }
 
+// A response waits 200 ms for its key set to be stored, and carries its items' types when the write
+// takes longer; the write still finishes, and a later response carries the set. A busy runner's first
+// write to SQL Server can take that long, so a check that expects a set asks a few more times before
+// it fails. A set that is never stored still fails it.
+const setAttempts = 5;
+const setRetryDelayMs = 500;
+
+async function fetchExpected(expected: Check) {
+  let response = await fetchKeys(expected);
+  const set = expected.exactly?.find((key) => key.startsWith("set-"));
+  const missingSet = () => set !== undefined && response.status === 200 && !response.keys?.includes(set);
+  for (let attempt = 1; attempt < setAttempts && missingSet(); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, setRetryDelayMs));
+    response = await fetchKeys(expected);
+  }
+  return response;
+}
+
 async function check(expected: Check): Promise<Outcome> {
-  const { status, keys } = await fetchKeys(expected);
+  const { status, keys } = await fetchExpected(expected);
   const lines: string[] = [];
   if (status !== 200) {
     return { ok: false, lines: [`answered ${status}`] };

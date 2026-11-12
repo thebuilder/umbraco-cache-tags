@@ -51,6 +51,25 @@ start() {
   done
 }
 
+# Winter market is the last item the example seeders create and publish, so once a server serves it
+# the seeding is done. A first start on a CI runner seeds in about a minute.
+seeded() {
+  local url="$1" server="$2" deadline=$((SECONDS + 240))
+  echo "Waiting for $server to seed the example site"
+  until [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'Accept-Language: en-US' \
+    "$url/umbraco/delivery/api/v2/content/item/e0000000-0000-0000-0000-000000000026" || true)" == 200 ]]; do
+    if ! kill -0 "$(cat "$out/$server.pid")" 2>/dev/null; then
+      echo "$server stopped; see $out/$server.log" >&2
+      exit 1
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "$server did not seed the example site within 240 seconds; see $out/$server.log" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+}
+
 if [[ "${1:-}" == "stop" ]]; then
   stop
   exit 0
@@ -65,7 +84,11 @@ rm -rf "$out/a" "$out/b"
 dotnet publish "$here/../TheBuilder.CacheTags.Example" -c Release -o "$out/a" --nologo -v q
 cp -R "$out/a" "$out/b"
 
-# A installs and seeds the database on its first start; B joins once it is up.
+# A installs and seeds the database on its first start; B joins once A has finished seeding. A
+# answers before its seeding is done (the seeders run once the application has started), and a B
+# that started then would find Winter market missing and seed the same items alongside A: one of
+# them then fails on a duplicate key or an unpublished parent, and that server stalls or stops.
 start a 5320
+seeded "http://localhost:5320" a
 start b 5321
 echo "Both servers are up."
