@@ -80,7 +80,7 @@ const features = [
       title="Cache every response,"
       accent="purge only what changed."
       description="Every Delivery API response tells your frontend which keys it covers. When an editor publishes, Umbraco purges exactly those keys, once every server has the change."
-      compatibility="Umbraco CMS 17.4 or later · .NET 10"
+      compatibility={cacheTagsPackage.compatibility}
     >
       <HeroParticles slot="background" logo="/logo-mark.svg" />
       <Fragment slot="actions">

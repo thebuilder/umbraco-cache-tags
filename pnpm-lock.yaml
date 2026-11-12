@@ -13,8 +13,8 @@ importers:
   apps/docs:
     dependencies:
       '@thebuilder/umbraco-docs':
-        specifier: ^1.8.0
-        version: 1.8.0(@types/node@26.6.6)(blume@2.2.7(@shikijs/themes@4.6.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.11.0)(csstype@3.2.3)(prettier@3.9.10)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))(yaml@2.9.1))(vgpu@0.6.0)
+        specifier: ^1.9.0
+        version: 1.9.0(@types/node@26.6.6)(blume@2.2.7(@shikijs/themes@4.6.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.11.0)(csstype@3.2.3)(prettier@3.9.10)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))(yaml@2.9.1))(vgpu@0.6.0)
       blume:
         specifier: ^2.2.7
         version: 2.2.7(@shikijs/themes@4.6.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.11.0)(csstype@3.2.3)(prettier@3.9.10)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))(yaml@2.9.1)
@@ -1399,8 +1399,8 @@ packages:
       csstype:
         optional: true
 
-  '@thebuilder/umbraco-docs@1.8.0':
-    resolution: {integrity: sha512-+z6tIFOFBJXsV5qumbENuu/5pzE78djqDRPPop2KNcFjjqVkev1g7AAuATtMERh8wtbHknDKYQyKlkT8A7jaUA==}
+  '@thebuilder/umbraco-docs@1.9.0':
+    resolution: {integrity: sha512-wQoV+bm7cJhFrKCMBCQBISNntp3It0yKRG6wIakZC7F/ffO+/Hs55A4biaUtsFfO69yTSK8s338BwoEyI4Znxg==}
     engines: {node: '>=22.12'}
     hasBin: true
     peerDependencies:
@@ -5689,7 +5689,7 @@ snapshots:
       - preact
       - react
 
-  '@thebuilder/umbraco-docs@1.8.0(@types/node@26.6.6)(blume@2.2.7(@shikijs/themes@4.6.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.11.0)(csstype@3.2.3)(prettier@3.9.10)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))(yaml@2.9.1))(vgpu@0.6.0)':
+  '@thebuilder/umbraco-docs@1.9.0(@types/node@26.6.6)(blume@2.2.7(@shikijs/themes@4.6.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.11.0)(csstype@3.2.3)(prettier@3.9.10)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))(yaml@2.9.1))(vgpu@0.6.0)':
     dependencies:
       gray-matter: 4.0.3
       sharp: 0.35.5(@types/node@26.6.6)
