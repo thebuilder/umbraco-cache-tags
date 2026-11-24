@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using TheBuilder.CacheTags.Configuration;
@@ -11,6 +12,7 @@ namespace TheBuilder.CacheTags.ManagementApi;
 ///     What the targets API answers. Public only because the controller's constructor takes it; its
 ///     members are internal, so nothing outside the package can implement or call it.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public interface ICacheTagsTargets
 {
     internal TargetsView List();

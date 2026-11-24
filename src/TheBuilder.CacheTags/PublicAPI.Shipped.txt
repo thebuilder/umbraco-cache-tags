@@ -1,1 +1,83 @@
 #nullable enable
+TheBuilder.CacheTags.CacheTaggedAttribute
+TheBuilder.CacheTags.CacheTaggedAttribute.CacheTaggedAttribute() -> void
+TheBuilder.CacheTags.Composition.CacheTagsComposer
+TheBuilder.CacheTags.Composition.CacheTagsComposer.CacheTagsComposer() -> void
+TheBuilder.CacheTags.Composition.CacheTagsComposer.Compose(Umbraco.Cms.Core.DependencyInjection.IUmbracoBuilder! builder) -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.AllowPrivateNetworkTargets.get -> bool
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.AllowPrivateNetworkTargets.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.CacheTagsOptions() -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.get -> bool
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.Enabled.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.HeaderName.get -> string!
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.HeaderName.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyPrefix.get -> string!
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeyPrefix.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeySets.get -> bool
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.KeySets.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxHeaderKeys.get -> int
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.MaxHeaderKeys.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.Targets.get -> System.Collections.Generic.Dictionary<string!, TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions!>!
+TheBuilder.CacheTags.Configuration.CacheTagsOptions.Targets.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.CacheTagsTargetOptions() -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.get -> bool
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Enabled.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.get -> System.Collections.Generic.Dictionary<string!, string!>!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Headers.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Roots.get -> System.Collections.Generic.List<System.Guid>!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Roots.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.get -> string!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Secret.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Settings.get -> System.Collections.Generic.Dictionary<string!, string!>!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Settings.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Type.get -> string!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Type.set -> void
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Url.get -> string!
+TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions.Url.set -> void
+TheBuilder.CacheTags.Delivery.IPurgeTarget
+TheBuilder.CacheTags.Delivery.IPurgeTarget.SendAsync(TheBuilder.CacheTags.Delivery.PurgeRequest! request, TheBuilder.CacheTags.Configuration.CacheTagsTargetOptions! target, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+TheBuilder.CacheTags.Delivery.IPurgeTarget.Type.get -> string!
+TheBuilder.CacheTags.Delivery.PurgeRequest
+TheBuilder.CacheTags.Delivery.PurgeRequest.ChangeId.get -> System.Guid
+TheBuilder.CacheTags.Delivery.PurgeRequest.ChangeId.init -> void
+TheBuilder.CacheTags.Delivery.PurgeRequest.Expire.get -> System.Collections.Generic.IReadOnlyList<string!>!
+TheBuilder.CacheTags.Delivery.PurgeRequest.Expire.init -> void
+TheBuilder.CacheTags.Delivery.PurgeRequest.Id.get -> System.Guid
+TheBuilder.CacheTags.Delivery.PurgeRequest.Id.init -> void
+TheBuilder.CacheTags.Delivery.PurgeRequest.PurgeRequest() -> void
+TheBuilder.CacheTags.Delivery.PurgeRequest.Stale.get -> System.Collections.Generic.IReadOnlyList<string!>!
+TheBuilder.CacheTags.Delivery.PurgeRequest.Stale.init -> void
+TheBuilder.CacheTags.Delivery.PurgeRequest.TargetName.get -> string!
+TheBuilder.CacheTags.Delivery.PurgeRequest.TargetName.init -> void
+TheBuilder.CacheTags.ICacheTagsChanges
+TheBuilder.CacheTags.ICacheTagsChanges.Applied(string! signal) -> void
+TheBuilder.CacheTags.ICacheTagsChanges.Record(System.Collections.Generic.IEnumerable<string!>! keys, string? waitFor = null, string? reason = null) -> System.Guid
+TheBuilder.CacheTags.ICacheTagsResponse
+TheBuilder.CacheTags.ICacheTagsResponse.Add(params string![]! keys) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsChangesController
+TheBuilder.CacheTags.ManagementApi.CacheTagsChangesController.CacheTagsChangesController(TheBuilder.CacheTags.ManagementApi.ICacheTagsChangeLog! changeLog) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsChangesController.Changes(int take = 20, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.CacheTagsKeySetsController
+TheBuilder.CacheTags.ManagementApi.CacheTagsKeySetsController.CacheTagsKeySetsController(TheBuilder.CacheTags.ManagementApi.ICacheTagsKeySets! keySets) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsKeySetsController.KeySets(string! key) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.CacheTagsPurgesController(TheBuilder.CacheTags.ICacheTagsChanges! changes, TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox! outbox, Umbraco.Cms.Core.Security.IBackOfficeSecurityAccessor! security) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Discard(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purge(string![]! keys) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Purges(string! state = "Dead", int take = 50) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsPurgesController.Retry(System.Guid id) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Add(System.Text.Json.JsonElement body) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.CacheTagsTargetsController(TheBuilder.CacheTags.ManagementApi.ICacheTagsTargets! targets) -> void
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Delete(string! name) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.List() -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.SetRoots(string! name, System.Guid[]! roots) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Test(System.Text.Json.JsonElement body, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Mvc.IActionResult!>!
+TheBuilder.CacheTags.ManagementApi.CacheTagsTargetsController.Update(string! name, System.Text.Json.JsonElement body) -> Microsoft.AspNetCore.Mvc.IActionResult!
+TheBuilder.CacheTags.ManagementApi.ICacheTagsChangeLog
+TheBuilder.CacheTags.ManagementApi.ICacheTagsKeySets
+TheBuilder.CacheTags.ManagementApi.ICacheTagsOutbox
+TheBuilder.CacheTags.ManagementApi.ICacheTagsTargets
+const TheBuilder.CacheTags.Configuration.CacheTagsOptions.SectionName = "CacheTags" -> string!

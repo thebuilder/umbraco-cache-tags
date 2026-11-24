@@ -13,6 +13,6 @@ export const cacheTagsPackage = defineUmbracoPackage({
   },
   logo: "/logo-mark.svg",
   compatibility: { umbraco: ">=17.4 <19", dotnet: ">=10" },
-  status: "preview",
+  status: "stable",
   categories: ["Headless", "Developer Tools"],
 });

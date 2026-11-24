@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
 
@@ -7,6 +8,7 @@ namespace TheBuilder.CacheTags.ManagementApi;
 ///     What the backoffice's Changes view reads. Public only because the controller's constructor takes it; its
 ///     members are internal, so nothing outside the package can implement or call it.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public interface ICacheTagsChangeLog
 {
     internal Task<IReadOnlyList<ChangeEntry>> ChangesAsync(int take, CancellationToken cancellationToken);

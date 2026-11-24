@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -32,6 +33,7 @@ public sealed class CacheTagsKeySetsController(ICacheTagsKeySets keySets) : Cont
 ///     What the Cache box reads about key sets. Public only because the controller's constructor takes it; its
 ///     members are internal, so nothing outside the package can implement or call it.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public interface ICacheTagsKeySets
 {
     internal int CountOf(string itemKey);

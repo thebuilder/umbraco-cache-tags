@@ -18,7 +18,7 @@ Every cacheable response carries its cache keys in a header. Your frontend tags 
 Needs Umbraco CMS 17.4 through 18.x on .NET 10, with the Delivery API enabled.
 
 ```sh
-dotnet add package TheBuilder.CacheTags --prerelease
+dotnet add package TheBuilder.CacheTags
 ```
 
 Then point the package at your frontend's purge webhook:
