@@ -331,8 +331,7 @@ The delivery worker and the heartbeat log an error and carry on, so neither stop
 that fail validation at start stop the site; settings that become invalid on a reload of
 appsettings are logged once, and the last valid settings stay in use until they are fixed.
 
-Heartbeats and acks go through `IAckTransport`, which keeps them in the database by default. A site
-can replace it.
+Heartbeats and acks go through the internal `IAckTransport`, which keeps them in the database.
 
 A server that has just started applies other servers' changes only once Umbraco's instruction job
 first runs, about a minute after start; a change made in that minute waits for it (or the ack

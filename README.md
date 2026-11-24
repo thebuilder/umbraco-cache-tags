@@ -9,7 +9,7 @@
   and purge exactly the right ones once every server has applied a change.
 </p>
 
-[![NuGet version](https://img.shields.io/nuget/vpre/TheBuilder.CacheTags)](https://www.nuget.org/packages/TheBuilder.CacheTags)
+[![NuGet version](https://img.shields.io/nuget/v/TheBuilder.CacheTags)](https://www.nuget.org/packages/TheBuilder.CacheTags)
 [![Umbraco Marketplace](https://img.shields.io/badge/Umbraco-Marketplace-3544b1)](https://marketplace.umbraco.com/package/thebuilder.cachetags)
 [![License](https://img.shields.io/github/license/thebuilder/umbraco-cache-tags)](https://github.com/thebuilder/umbraco-cache-tags/blob/main/LICENSE)
 
@@ -28,14 +28,14 @@ purge.
 - **See each change go out.** Under **Settings > Advanced > Cache tags**, follow each change to
   its purges, and purge by hand.
 
-The package is a preview. It supports Umbraco 17.4 and later, Umbraco 18 included, on .NET 10.
+Cache Tags supports Umbraco 17.4 and later, Umbraco 18 included, on .NET 10.
 
 ## Getting started
 
 1. Install the package in your Umbraco site:
 
    ```sh
-   dotnet add package TheBuilder.CacheTags --prerelease
+   dotnet add package TheBuilder.CacheTags
    ```
 
 2. Tag your frontend's cache entries with the keys in each response's `X-Umbraco-Cache-Keys`

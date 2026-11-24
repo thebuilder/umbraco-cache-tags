@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using TheBuilder.CacheTags.Delivery;
 using TheBuilder.CacheTags.Ledger;
 using TheBuilder.CacheTags.Storage;
@@ -5,6 +6,7 @@ using TheBuilder.CacheTags.Storage;
 namespace TheBuilder.CacheTags.ManagementApi;
 
 /// <summary>The purge outbox, for the Management API: what failed, and sending it again or setting it aside.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public interface ICacheTagsOutbox
 {
     internal IReadOnlyList<Purge> Purges(string state, int take);

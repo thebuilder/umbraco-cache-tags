@@ -2,11 +2,11 @@ namespace TheBuilder.CacheTags.Delivery;
 
 /// <summary>
 ///     How servers tell each other they are running and have applied a change. The default keeps
-///     both in the Umbraco database, so every server needs write access to the package's tables; a
-///     site can register its own (for example over Redis) instead. Registered as a singleton and
-///     called from several threads at once.
+///     both in the Umbraco database, so every server needs write access to the package's tables.
+///     Registered as a singleton and called from several threads at once. Internal: a public seam for
+///     another transport (Redis, say) can come later without breaking anyone.
 /// </summary>
-public interface IAckTransport
+internal interface IAckTransport
 {
     /// <summary>Records that <paramref name="server" /> is running, and since when.</summary>
     Task HeartbeatAsync(string server, DateTime firstSeenUtc, DateTime nowUtc, CancellationToken cancellationToken = default);
@@ -37,13 +37,13 @@ public interface IAckTransport
 /// <param name="Server">The server's identity for this process.</param>
 /// <param name="FirstSeenUtc">When this process started.</param>
 /// <param name="LastSeenUtc">Its latest heartbeat.</param>
-public sealed record ServerPresence(string Server, DateTime FirstSeenUtc, DateTime LastSeenUtc);
+internal sealed record ServerPresence(string Server, DateTime FirstSeenUtc, DateTime LastSeenUtc);
 
 /// <summary>One server's acknowledgement of a change.</summary>
 /// <param name="Server">The server.</param>
 /// <param name="AckedUtc">When it applied the change.</param>
 /// <param name="IndexedUtc">When its Delivery API index had the change, for a change whose listings wait for it.</param>
-public sealed record ServerAck(string Server, DateTime AckedUtc, DateTime? IndexedUtc);
+internal sealed record ServerAck(string Server, DateTime AckedUtc, DateTime? IndexedUtc);
 
 /// <summary>Reading acknowledgements by change.</summary>
 internal static class ServerAcks
