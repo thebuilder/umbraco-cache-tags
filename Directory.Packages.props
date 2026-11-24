@@ -6,7 +6,8 @@
     <!-- The Umbraco versions the package supports. 17.4.0 is the floor: it added the Delivery API
          output cache eviction and the resolved-items stash the package relies on.
          Umbraco 17 and 18 run on .NET 10, Umbraco 19 on .NET 11 only, so each target framework gets
-         its own range. CI overrides it to test the lowest release and the newest of each major. -->
+         its own range. CI overrides it to test the lowest release and the newest of each major; an
+         override covers every target framework, so pass -p:TargetFrameworks=<tfm> with it. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == '' and '$(TargetFramework)' == 'net11.0'">[19.0.0-rc1,20.0.0)</UmbracoVersion>
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
     <!-- The OpenAPI generator the Umbraco being built against brings: Swashbuckle up to 17,

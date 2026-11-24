@@ -60,7 +60,8 @@ internal sealed class LedgerPruneJob(
         }
 
         DateTime cutoff = time.GetUtcNow().UtcDateTime - Retention;
-        await transport.PruneAsync(cutoff);
+        await transport.PruneAsync(cutoff, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         ledger.Prune(cutoff);
         PruneKeySets(time.GetUtcNow().UtcDateTime);
     }

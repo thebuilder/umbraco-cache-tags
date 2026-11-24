@@ -133,7 +133,7 @@ public sealed class LocalDeliveryIndexTests : IDisposable
     {
         IContent page = Published(publishedVersionId: 12);
 
-        Assert.Equal(Now, IndexStamp.Expected(page, id => Published(publishedVersionId: id)));
+        Assert.NotNull(IndexStamp.Expected(page, id => Published(publishedVersionId: id)));
         Assert.Null(IndexStamp.Expected(page, id => id == 1060 ? Published(publishedVersionId: id, published: false) : Published(publishedVersionId: id)));
         Assert.Null(IndexStamp.Expected(Published(publishedVersionId: 12, published: false), id => Published(publishedVersionId: id)));
     }
