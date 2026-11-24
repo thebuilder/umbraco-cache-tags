@@ -1,3 +1,4 @@
+#if !NET11_0_OR_GREATER
 using System.Globalization;
 using Examine;
 using Examine.Search;
@@ -11,7 +12,11 @@ using Umbraco.Extensions;
 
 namespace TheBuilder.CacheTags.Delivery;
 
-/// <summary>This server's Delivery API content index, as listings query it.</summary>
+/// <summary>
+///     This server's Delivery API content index, as listings query it: Examine's
+///     <c>DeliveryApiContentIndex</c> on Umbraco 17 and 18. Umbraco 19 replaced it with Umbraco Search
+///     (LocalDeliveryIndex.Search.cs).
+/// </summary>
 internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentService contentService, PackageDatabase database, IOptionsMonitor<DeliveryApiSettings> deliveryApi)
 {
     /// <summary>The Delivery API content index (<c>Constants.UmbracoIndexes.DeliveryApiContentIndexName</c>).</summary>
@@ -26,7 +31,9 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
     ///     left of a content type alias it renamed. Without the index (the Delivery API is off), nothing
     ///     can wait for it.
     /// </summary>
-    public bool Has(Change change)
+    public Task<bool> HasAsync(Change change, CancellationToken cancellationToken) => Task.FromResult(Has(change));
+
+    private bool Has(Change change)
     {
         if (examine.TryGetIndex(IndexName, out IIndex index) is false)
         {
@@ -65,3 +72,4 @@ internal sealed class LocalDeliveryIndex(IExamineManager examine, IContentServic
         return IndexCheck.HasIndexed(state, documents);
     }
 }
+#endif

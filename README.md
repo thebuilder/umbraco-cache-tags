@@ -28,7 +28,7 @@ purge.
 - **See each change go out.** Under **Settings > Advanced > Cache tags**, follow each change to
   its purges, and purge by hand.
 
-Cache Tags supports Umbraco 17.4 and later, Umbraco 18 included, on .NET 10.
+Cache Tags supports Umbraco CMS 17.4 through 19.x: Umbraco 17 and 18 on .NET 10, Umbraco 19 on .NET 11.
 
 ## Getting started
 

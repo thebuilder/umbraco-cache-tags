@@ -1,6 +1,6 @@
 # Agents
 
-`TheBuilder.CacheTags` is one NuGet package for Umbraco 17 and 18 (.NET 10): it tags Delivery API
+`TheBuilder.CacheTags` is one NuGet package for Umbraco 17 and 18 (.NET 10) and Umbraco 19 (.NET 11): it tags Delivery API
 responses with cache keys and purges the right keys at the frontend once every delivery server has
 applied a change.
 

@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
+#if !NET11_0_OR_GREATER
 using Swashbuckle.AspNetCore.SwaggerGen;
+#endif
 using TheBuilder.CacheTags.Configuration;
 
 namespace TheBuilder.CacheTags.Collection;
@@ -13,17 +15,20 @@ namespace TheBuilder.CacheTags.Collection;
 /// <summary>
 ///     Documents the keys header on every response <see cref="CacheKeyResultFilter" /> tags, in the
 ///     OpenAPI documents Umbraco generates, so a typed client sees it. Umbraco 17 generates them with
-///     Swashbuckle and Umbraco 18 with Microsoft.AspNetCore.OpenApi. Only the one the site has is
-///     configured: the package does not ship either, so the other's types are never loaded.
+///     Swashbuckle and Umbraco 18 and 19 with Microsoft.AspNetCore.OpenApi. Only the one the site has is
+///     configured: the package does not ship either, so the other's types are never loaded. The .NET 11
+///     build is for Umbraco 19 alone, so it leaves Swashbuckle out.
 /// </summary>
 internal static class KeysHeaderDocs
 {
     public static void Register(IServiceCollection services)
     {
+#if !NET11_0_OR_GREATER
         if (Type.GetType("Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions, Swashbuckle.AspNetCore.SwaggerGen") is not null)
         {
             RegisterSwashbuckle(services);
         }
+#endif
 
         if (Type.GetType("Microsoft.AspNetCore.OpenApi.OpenApiOptions, Microsoft.AspNetCore.OpenApi") is not null)
         {
@@ -31,10 +36,12 @@ internal static class KeysHeaderDocs
         }
     }
 
+#if !NET11_0_OR_GREATER
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RegisterSwashbuckle(IServiceCollection services)
         => services.AddOptions<SwaggerGenOptions>().Configure<IOptionsMonitor<CacheTagsOptions>>(
             (options, settings) => options.AddOperationFilterInstance(SwashbuckleKeysHeader.Create(settings)));
+#endif
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RegisterAspNetCoreOpenApi(IServiceCollection services)
@@ -70,6 +77,7 @@ internal static class KeysHeaderDocs
     }
 }
 
+#if !NET11_0_OR_GREATER
 /// <summary>
 ///     The keys header in Umbraco 17's OpenAPI documents, which Swashbuckle generates. A proxy of
 ///     Swashbuckle's <see cref="IOperationFilter" /> rather than a class that implements it: Umbraco loads
@@ -100,10 +108,12 @@ internal class SwashbuckleKeysHeader : DispatchProxy
     }
 }
 
+#endif
+
 /// <summary>
-///     The keys header in Umbraco 18's OpenAPI documents, which Microsoft.AspNetCore.OpenApi generates.
+///     The keys header in Umbraco 18 and 19's OpenAPI documents, which Microsoft.AspNetCore.OpenApi generates.
 ///     A transformer delegate rather than a class that implements its interface, for the same reason
-///     as <see cref="SwashbuckleKeysHeader" /> on Umbraco 17.
+///     as <c>SwashbuckleKeysHeader</c> on Umbraco 17.
 /// </summary>
 internal sealed class AspNetCoreOpenApiKeysHeader(IOptionsMonitor<CacheTagsOptions> options)
 {

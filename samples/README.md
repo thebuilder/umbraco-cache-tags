@@ -2,7 +2,7 @@
 
 Two sites to check TheBuilder.CacheTags end to end:
 
-- `TheBuilder.CacheTags.Example`: an Umbraco 17 site (SQLite) that installs itself and seeds a site
+- `TheBuilder.CacheTags.Example`: an Umbraco 17 site (SQLite, or Umbraco 19 on request, see below) that installs itself and seeds a site
   with nested sections, blocks, media folders and culture-variant pages on first start. It serves the
   Delivery API on http://localhost:5320.
 - `nextjs`: a Next.js 16 frontend that renders that content from the Delivery API, caches each
@@ -21,6 +21,13 @@ Needs the .NET 10 SDK.
 
 ```bash
 dotnet run --project samples/TheBuilder.CacheTags.Example
+```
+
+To run it on Umbraco 19 instead, which needs the .NET 11 SDK, name the release. Start from a fresh
+database (see below), since an Umbraco 17 database is upgraded and cannot go back:
+
+```bash
+dotnet run --project samples/TheBuilder.CacheTags.Example -p:SampleUmbracoVersion=19.0.0-rc2
 ```
 
 The first start creates `umbraco/Data/Umbraco.sqlite.db` and seeds the content. Every start also adds

@@ -34,16 +34,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        umbraco-version:
-          - 17.4.0
-          - 17.*
-          - 18.*
+        include:
+          - umbraco-version: 17.4.0
+            framework: net10.0
+          - umbraco-version: 17.*
+            framework: net10.0
+          - umbraco-version: 18.*
+            framework: net10.0
+          # Umbraco 19 runs on .NET 11 only, and replaces Examine with Umbraco Search. The prerelease
+          # wildcard picks up release candidates until 19.0.0 ships.
+          - umbraco-version: 19.*-*
+            framework: net11.0
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       # Central package management, so there is no lock file to key on: the versions all
       # live in Directory.Packages.props and the projects decide which to reference.
@@ -58,7 +67,8 @@ jobs:
       - name: Test
         env:
           UMBRACO_VERSION: ${{ matrix.umbraco-version }}
-        run: dotnet test tests/TheBuilder.CacheTags.Tests -c Release "-p:UmbracoVersion=$UMBRACO_VERSION"
+          FRAMEWORK: ${{ matrix.framework }}
+        run: dotnet test tests/TheBuilder.CacheTags.Tests -c Release "-p:TargetFrameworks=$FRAMEWORK" "-p:UmbracoVersion=$UMBRACO_VERSION"
 
   # The documentation site, so a page that does not build fails the change that broke it rather
   # than the next deploy. The build also draws the Open Graph cards and the favicon from the logo.
@@ -190,8 +200,21 @@ jobs:
         include:
           - name: one server
             output-cache: "false"
+            umbraco: ""
+            framework: net10.0
           - name: output cache on
             output-cache: "true"
+            umbraco: ""
+            framework: net10.0
+          # Umbraco 19, where listings come from Umbraco Search. It does not fail the change yet: on
+          # 19.0.0-rc2, two publishes of one item in quick succession (case 11 and its undo) can leave
+          # Umbraco Search's published index on the first, so that change waits out the index timeout.
+          - name: Umbraco 19
+            output-cache: "false"
+            umbraco: 19.0.0-rc2
+            framework: net11.0
+            experimental: true
+    continue-on-error: ${{ matrix.experimental == true }}
     # A healthy run takes 6 to 7 minutes. The slow steps have limits of their own (the waits below,
     # and timeout-minutes on the steps after them), so a stalled step fails, rather than the whole job
     # being cancelled, and the thread dump and logs still run inside these 20 minutes.
@@ -207,7 +230,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -230,8 +255,16 @@ jobs:
         working-directory: samples/nextjs
         run: pnpm install --frozen-lockfile
 
+      # The sample's own Umbraco release, or the one the matrix names (and its framework).
       - name: Build the Umbraco sample
-        run: dotnet build samples/TheBuilder.CacheTags.Example -c Release
+        env:
+          SAMPLE_UMBRACO_VERSION: ${{ matrix.umbraco }}
+        run: |
+          arguments=(samples/TheBuilder.CacheTags.Example -c Release)
+          if [[ -n "$SAMPLE_UMBRACO_VERSION" ]]; then
+            arguments+=("-p:SampleUmbracoVersion=$SAMPLE_UMBRACO_VERSION")
+          fi
+          dotnet build "${arguments[@]}"
 
       # It installs itself into a new SQLite database and seeds the content on the first start.
       # Development, for the settings the sample runs with locally (its application URL).
@@ -248,8 +281,9 @@ jobs:
           # out of the run.
           Umbraco__CMS__Global__DatabaseServerMessenger__TimeBetweenSyncOperations: "01:00:00"
           Umbraco__CMS__DeliveryApi__OutputCache__Enabled: ${{ matrix.output-cache }}
+          FRAMEWORK: ${{ matrix.framework }}
         run: |
-          nohup dotnet bin/Release/net10.0/TheBuilder.CacheTags.Example.dll > "$RUNNER_TEMP/umbraco.log" 2>&1 &
+          nohup dotnet "bin/Release/$FRAMEWORK/TheBuilder.CacheTags.Example.dll" > "$RUNNER_TEMP/umbraco.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/umbraco.pid"
 
       # The Next.js listing pages cache an empty listing for an hour, so nothing fetches them before
@@ -343,7 +377,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -442,7 +478,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - uses: actions/setup-node@v4
         with:
@@ -517,6 +555,7 @@ jobs:
           manifest="staticwebassets/App_Plugins/TheBuilder.CacheTags/umbraco-package.json"
 
           for entry in README.md LICENSE icon.png lib/net10.0/TheBuilder.CacheTags.dll lib/net10.0/TheBuilder.CacheTags.xml \
+            lib/net11.0/TheBuilder.CacheTags.dll lib/net11.0/TheBuilder.CacheTags.xml \
             "$manifest" staticwebassets/App_Plugins/TheBuilder.CacheTags/cache-tags.js; do
             grep -Fqx "$entry" <<< "$entries" || { echo "The package is missing $entry." >&2; exit 1; }
           done
@@ -525,13 +564,16 @@ jobs:
           grep -Fq "<version>$PACKAGE_VERSION</version>" <<< "$nuspec"
           # The Marketplace lists packages from nuget.org by this tag.
           grep -Fq "umbraco-marketplace" <<< "$nuspec"
-          # Every Umbraco dependency carries the range Directory.Packages.props declares, not one
-          # release or a floating version. The nuspec writes [17.4.0,19.0.0) as [17.4.0, 19.0.0).
-          range="$(dotnet msbuild src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj -getProperty:UmbracoVersion)"
-          range="${range/,/, }"
-          for dependency in Umbraco.Cms.Api.Common Umbraco.Cms.Api.Management Umbraco.Cms.Web.Common; do
-            grep -Fq "<dependency id=\"$dependency\" version=\"$range\"" <<< "$nuspec" \
-              || { echo "$dependency does not depend on $range." >&2; exit 1; }
+          # Every Umbraco dependency carries the range Directory.Packages.props declares for each target
+          # framework, not one release or a floating version. The nuspec writes [17.4.0,19.0.0) as
+          # [17.4.0, 19.0.0).
+          for framework in net10.0 net11.0; do
+            range="$(dotnet msbuild src/TheBuilder.CacheTags/TheBuilder.CacheTags.csproj -getProperty:UmbracoVersion "-p:TargetFramework=$framework")"
+            range="${range/,/, }"
+            for dependency in Umbraco.Cms.Api.Common Umbraco.Cms.Api.Management Umbraco.Cms.Web.Common; do
+              grep -Fq "<dependency id=\"$dependency\" version=\"$range\"" <<< "$nuspec" \
+                || { echo "$dependency does not depend on $range for $framework." >&2; exit 1; }
+            done
           done
           if [[ -n "$RELEASE_TAG" ]]; then
             grep -Fq "<releaseNotes>$RELEASES_URL/$RELEASE_TAG</releaseNotes>" <<< "$nuspec"

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
     <PackageId>TheBuilder.CacheTags</PackageId>
     <Product>Cache Tags for Umbraco</Product>
@@ -32,8 +32,10 @@
          Umbraco 17 brings Swashbuckle and Umbraco 18 Microsoft.AspNetCore.OpenApi, so a site has
          one of them from Umbraco and the package ships neither. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Condition="'$(UmbracoOpenApi)' == 'Swashbuckle'" PrivateAssets="all" ExcludeAssets="runtime;build;buildTransitive;analyzers" />
-    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Condition="'$(UmbracoOpenApi)' == 'AspNetCore'" PrivateAssets="all" ExcludeAssets="runtime;build;analyzers" />
-    <!-- Security floors for dependencies inherited from the supported Umbraco range. -->
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Condition="'$(UmbracoOpenApi)' == 'AspNetCore' and '$(TargetFramework)' == 'net10.0'" PrivateAssets="all" ExcludeAssets="runtime;build;analyzers" />
+  </ItemGroup>
+  <!-- Security floors for dependencies inherited from Umbraco 17 and 18. Umbraco 19 already requires newer versions. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />

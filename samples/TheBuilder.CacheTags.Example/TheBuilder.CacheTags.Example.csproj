@@ -3,6 +3,11 @@
        See ../README.md. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- Umbraco 19 runs on .NET 11 only: -p:SampleUmbracoVersion=19.0.0-rc2 runs the sample on it. -->
+    <TargetFramework Condition="$(SampleUmbracoVersion.StartsWith('19'))">net11.0</TargetFramework>
+    <!-- The .NET 11 SDK's static asset compression fails on Umbraco 19's backoffice assets
+         ("Endpoints not found for related asset"), and a local sample has no need for it. -->
+    <CompressionEnabled Condition="'$(TargetFramework)' == 'net11.0'">false</CompressionEnabled>
     <UserSecretsId>TheBuilder.CacheTags.Example</UserSecretsId>
     <IsPackable>false</IsPackable>
     <BuildInParallel>false</BuildInParallel>
@@ -10,7 +15,9 @@
   <ItemGroup>
     <PackageReference Include="Umbraco.Cms" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
-    <!-- Lift Umbraco's vulnerable transitive versions; see Directory.Packages.props. -->
+  </ItemGroup>
+  <!-- Lift Umbraco 17's vulnerable transitive versions; see Directory.Packages.props. Umbraco 19 brings newer ones. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="MessagePack" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
