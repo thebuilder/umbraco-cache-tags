@@ -9,6 +9,9 @@
          its own range. CI overrides it to test the lowest release and the newest of each major; an
          override covers every target framework, so pass -p:TargetFrameworks=<tfm> with it. -->
     <UmbracoVersion Condition="'$(UmbracoVersion)' == '' and '$(TargetFramework)' == 'net11.0'">[19.0.0-rc1,20.0.0)</UmbracoVersion>
+    <!-- Umbraco 19 is only out as a release candidate, so the net11.0 range starts at one, which NuGet
+         warns about for a stable package. Remove this with the move to 19.0.0. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
     <UmbracoVersion Condition="'$(UmbracoVersion)' == ''">[17.4.0,19.0.0)</UmbracoVersion>
     <!-- The OpenAPI generator the Umbraco being built against brings: Swashbuckle up to 17,
          Microsoft.AspNetCore.OpenApi from 18. The .NET 10 build documents its header for both, so
