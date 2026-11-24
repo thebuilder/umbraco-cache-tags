@@ -1,4 +1,5 @@
 import { docsTheme } from "@thebuilder/umbraco-docs";
+import { pageflock } from "@thebuilder/umbraco-docs/analytics";
 import { defineConfig } from "blume";
 import { vercel } from "blume/analytics";
 import { custom, filesystem } from "blume/sources";
@@ -47,7 +48,7 @@ export default defineConfig({
     // Disable Blume's generated /og routes so it cannot overwrite them.
     og: { enabled: false },
   },
-  analytics: [vercel()],
+  analytics: [vercel(), pageflock("cache-tags-thebuilder-dk")],
   // The docs family's shared accent and fonts, so every package site looks alike.
   theme: { ...docsTheme },
   agents: {
