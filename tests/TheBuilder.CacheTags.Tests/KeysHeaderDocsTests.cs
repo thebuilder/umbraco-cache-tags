@@ -112,12 +112,19 @@ public sealed class KeysHeaderDocsTests
     }
 
     // Each generator in a method of its own, so the one this Umbraco release lacks is never loaded.
+    // The .NET 11 build is for Umbraco 19, which has no Swashbuckle to compile against.
+#if NET11_0_OR_GREATER
+    private static void AddSwashbuckle(IServiceCollection services) => throw new PlatformNotSupportedException("Umbraco 19 has no Swashbuckle.");
+
+    private static void UseSwashbuckle(IApplicationBuilder app) => throw new PlatformNotSupportedException("Umbraco 19 has no Swashbuckle.");
+#else
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void AddSwashbuckle(IServiceCollection services)
         => services.AddSwaggerGen(options => options.SwaggerDoc("delivery", new Microsoft.OpenApi.OpenApiInfo { Title = "Delivery", Version = "v1" }));
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void UseSwashbuckle(IApplicationBuilder app) => app.UseSwagger();
+#endif
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void AddAspNetCoreOpenApi(IServiceCollection services) => services.AddOpenApi("delivery");

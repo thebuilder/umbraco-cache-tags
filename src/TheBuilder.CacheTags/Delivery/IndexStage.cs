@@ -82,10 +82,15 @@ internal sealed class IndexStage(
     /// <summary>The changes this server acknowledged that its index now has: their listing responses are evicted here, and they are recorded as indexed.</summary>
     private async Task<IReadOnlySet<Guid>> IndexHereAsync(IReadOnlyList<LedgerEntry> indexing, IReadOnlyDictionary<Guid, IReadOnlyList<ServerAck>> acks, CancellationToken cancellationToken)
     {
-        var indexed = indexing
-            .Where(change => acks.AcknowledgedBy(change.Id).Contains(identity.Name) && acks.IndexedBy(change.Id).Contains(identity.Name) is false)
-            .Where(change => index.Has(change.Change))
-            .ToList();
+        var indexed = new List<LedgerEntry>();
+        foreach (LedgerEntry change in indexing.Where(change => acks.AcknowledgedBy(change.Id).Contains(identity.Name) && acks.IndexedBy(change.Id).Contains(identity.Name) is false))
+        {
+            if (await index.HasAsync(change.Change, cancellationToken))
+            {
+                indexed.Add(change);
+            }
+        }
+
         if (indexed.Count == 0)
         {
             return new HashSet<Guid>();

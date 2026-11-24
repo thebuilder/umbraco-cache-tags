@@ -36,4 +36,19 @@ internal static class IndexCheck
         => state is null
             ? documents.Count == 0
             : documents.Count > 0 && documents.All(document => document.State == state);
+
+    /// <summary>
+    ///     Umbraco Search's version of <see cref="HasIndexed(string?, IReadOnlyCollection{IndexedDocument})" />,
+    ///     from what a search can count rather than the documents themselves: the index has a batch of
+    ///     items once no document is left of the items it should not hold, none of the others is built
+    ///     from an older state, and each of them has a document built from its state now.
+    /// </summary>
+    /// <param name="expected">Each item, with the state it should be indexed in, or <c>null</c> for none.</param>
+    /// <param name="leftover">How many documents the index has of the items it should hold none of.</param>
+    /// <param name="stale">How many documents of the other items were built from another state.</param>
+    /// <param name="current">The items with a document built from their state now.</param>
+    public static bool HasIndexed(IReadOnlyDictionary<Guid, string?> expected, long leftover, long stale, IReadOnlySet<Guid> current)
+        => leftover == 0
+            && stale == 0
+            && expected.Where(item => item.Value is not null).All(item => current.Contains(item.Key));
 }

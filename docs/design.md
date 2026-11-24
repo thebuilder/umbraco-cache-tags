@@ -318,6 +318,16 @@ The server where a change happens plans it as keys, in `PurgePlanner`:
    server that acknowledged the change has, or after 5 minutes, one server
    queues the listing purge, which sends the plan's listing keys again. Media listings walk the media cache, and other type changes
    and site-wide changes purge as a whole, so those do not wait.
+
+   On Umbraco 19 the index is Umbraco Search's published content index (`Umb_PublishedContent`),
+   read through `ISearcher`, so it works with any search provider. The Delivery API hands its index
+   handlers to Umbraco Search, so the stamp reaches every culture's document there too. It is built
+   from the published state only (published version and cultures, path, sort order), because that
+   index is not updated for a draft save, and hashed into one token, because a provider may analyze
+   a keyword field it was not told about. That index holds an item only where it can be routed
+   (published, with every ancestor published in a culture they share), and holds the content types
+   the Delivery API skips too. A type filter's alias becomes the type's key when the Delivery API
+   queries, so a renamed content type has nothing to wait for there.
 5. **Outbox.** Any server sends due purges, signed, with leases so each is sent by one server at a
    time. Each lease runs 30 seconds from when the purge is claimed, just before it is sent, so slow
    sends before it do not leave it expired, and a purge is claimed only while it is due, so a server

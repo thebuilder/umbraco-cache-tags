@@ -34,11 +34,25 @@ internal sealed class LedgerPruneJob(
 
     public TimeSpan Delay => TimeSpan.FromMinutes(5);
 
+    // Umbraco's own default. Umbraco 19 dropped the interface's default members, so every job states them.
+    public TimeSpan IgnoredDelay => TimeSpan.FromMinutes(1);
+
     public ServerRole[] ServerRoles => [ServerRole.Single, ServerRole.SchedulingPublisher];
 
+#if NET11_0_OR_GREATER
+    public event EventHandler? PeriodChanged { add { } remove { } }
+
+    public event EventHandler? IgnoredDelayChanged { add { } remove { } }
+#else
     public event EventHandler PeriodChanged { add { } remove { } }
 
-    public async Task RunJobAsync()
+    public event EventHandler IgnoredDelayChanged { add { } remove { } }
+
+    // Umbraco 17 and 18 still declare the overload without a token, and Umbraco 19 removed it.
+    public Task RunJobAsync() => RunJobAsync(CancellationToken.None);
+#endif
+
+    public async Task RunJobAsync(CancellationToken cancellationToken)
     {
         if (database.IsInstalled() is false)
         {
@@ -46,7 +60,8 @@ internal sealed class LedgerPruneJob(
         }
 
         DateTime cutoff = time.GetUtcNow().UtcDateTime - Retention;
-        await transport.PruneAsync(cutoff);
+        await transport.PruneAsync(cutoff, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         ledger.Prune(cutoff);
         PruneKeySets(time.GetUtcNow().UtcDateTime);
     }

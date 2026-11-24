@@ -12,7 +12,7 @@ export const cacheTagsPackage = defineUmbracoPackage({
     github: "https://github.com/thebuilder/umbraco-cache-tags",
   },
   logo: "/logo-mark.svg",
-  compatibility: { umbraco: ">=17.4 <19", dotnet: ">=10" },
+  compatibility: { umbraco: ">=17.4 <20", dotnet: ">=10" },
   status: "stable",
   categories: ["Headless", "Developer Tools"],
 });
