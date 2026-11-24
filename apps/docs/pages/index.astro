@@ -15,7 +15,7 @@ import { cacheTagsPackage } from "../umbraco-package";
 const ecosystemPackages = await loadUmbracoPackages();
 
 const { config } = data;
-const installCommand = "dotnet add package TheBuilder.CacheTags --prerelease";
+const installCommand = "dotnet add package TheBuilder.CacheTags";
 const repoUrl = cacheTagsPackage.links.github;
 const nugetUrl = cacheTagsPackage.links.nuget;
 const marketplaceUrl = cacheTagsPackage.links.marketplace;
