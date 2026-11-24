@@ -11,7 +11,7 @@ Every cacheable response carries its cache keys in a header. Your frontend tags 
 - Waits until every Umbraco server has applied a change before purging, and purges listings again once every server's Delivery API index has it, so the frontend never refetches the old version.
 - Sends purges as a signed webhook, to Cloudflare's purge API, or to a target of your own.
 - Tags your site's own API responses too, and purges them when your data changes.
-- Shows each change, its purges and what every key covers under **Settings > Advanced > Cache tags**, and on every document's Info tab.
+- Shows each change and its purges under **Settings > Advanced > Cache tags**, lets you purge by hand there, and adds a Purge button to every document and media item's Info tab.
 
 ## Install
 
