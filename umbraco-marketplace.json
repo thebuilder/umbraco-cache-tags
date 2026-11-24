@@ -23,12 +23,12 @@
       "Caption": "Follow each change from publish to purge: the keys it planned, the servers that applied it, and every purge it sent."
     },
     {
-      "ImageUrl": "https://raw.githubusercontent.com/thebuilder/umbraco-cache-tags/refs/heads/main/apps/docs/content/screenshots/lookup.png",
-      "Caption": "Search for an item, a path or a key to see which cached responses include it."
+      "ImageUrl": "https://raw.githubusercontent.com/thebuilder/umbraco-cache-tags/refs/heads/main/apps/docs/content/screenshots/purge.png",
+      "Caption": "Purge an item, a stored set or your own keys by hand, or everything at once."
     },
     {
       "ImageUrl": "https://raw.githubusercontent.com/thebuilder/umbraco-cache-tags/refs/heads/main/apps/docs/content/screenshots/info.png",
-      "Caption": "See on every document's Info tab which served responses include it, and purge it by hand."
+      "Caption": "Every document and media item's Info tab shows its cache key, with a button to purge it."
     }
   ],
   "Tags": [
